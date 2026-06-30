@@ -1,0 +1,168 @@
+"""The reusable learner<->tutor conversation loop.
+
+`run_conversation` powers both a fresh root investigation and a re-investigation
+branch (which simply passes a different opening message for the learner and some
+extra context for the tutor). It returns structured turns + cost; persistence is
+handled by the knowledge tree, not here.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+
+from .backend import ClaudeSession
+from .personas import (
+    LEARNER_SYSTEM,
+    TUTOR_SYSTEM,
+    feedback_message,
+    first_learner_message,
+)
+from .render import Renderer
+
+
+# --------------------------------------------------------------------------- #
+# Parsing the learner's structured turn
+# --------------------------------------------------------------------------- #
+def extract_turn(text: str) -> dict:
+    """Pull the learner's {thinking, new_term, action, confidence, done} object
+    out of its reply, tolerating code fences or stray prose around the JSON."""
+    s = text.strip()
+    if s.startswith("```"):
+        s = re.sub(r"^```[a-zA-Z]*\n?", "", s)
+        s = re.sub(r"\n?```$", "", s).strip()
+
+    start = s.find("{")
+    if start != -1:
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(start, len(s)):
+            ch = s[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+            else:
+                if ch == '"':
+                    in_str = True
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            obj = json.loads(s[start : i + 1])
+                            obj.setdefault("thinking", "")
+                            obj.setdefault("new_term", None)
+                            obj.setdefault("action", "")
+                            obj.setdefault("confidence", None)
+                            obj.setdefault("done", False)
+                            return obj
+                        except json.JSONDecodeError:
+                            break
+
+    # Fallback: treat the whole reply as the action so the loop keeps going.
+    return {
+        "thinking": "",
+        "new_term": None,
+        "action": text.strip(),
+        "confidence": None,
+        "done": False,
+        "_unparsed": True,
+    }
+
+
+def clean_term(value) -> str:
+    """Normalise the learner's new_term: treat null/none/empty as no term."""
+    if not isinstance(value, str):
+        return ""
+    v = value.strip()
+    return "" if v.lower() in ("", "null", "none", "n/a") else v
+
+
+# --------------------------------------------------------------------------- #
+# Result container
+# --------------------------------------------------------------------------- #
+@dataclass
+class ConversationResult:
+    turns: list = field(default_factory=list)  # {turn, thinking, new_term, action, confidence, done, tutor}
+    cost: float = 0.0
+    final_confidence: object = None
+
+
+# --------------------------------------------------------------------------- #
+# The loop
+# --------------------------------------------------------------------------- #
+def run_conversation(
+    topic: str,
+    *,
+    learner_first_msg: str | None = None,
+    tutor_extra_system: str = "",
+    max_turns: int = 20,
+    learner_model: str = "sonnet",
+    tutor_model: str = "sonnet",
+    timeout: int = 300,
+    renderer: Renderer | None = None,
+) -> ConversationResult:
+    r = renderer or Renderer(color=True)
+
+    learner = ClaudeSession(
+        system_prompt=LEARNER_SYSTEM, model=learner_model, exclude_dynamic=True, timeout=timeout
+    )
+    tutor_system = TUTOR_SYSTEM + (f"\n\n{tutor_extra_system}" if tutor_extra_system else "")
+    tutor = ClaudeSession(
+        system_prompt=tutor_system, model=tutor_model, exclude_dynamic=True, timeout=timeout
+    )
+
+    result = ConversationResult()
+    message = learner_first_msg or first_learner_message(topic)
+
+    for turn in range(1, max_turns + 1):
+        r.status(f"turn {turn}: learner is thinking…")
+        learner_reply = learner.send(message)
+        data = extract_turn(learner_reply.text)
+        r.clear_status()
+
+        thinking = (data.get("thinking") or "").strip()
+        new_term = clean_term(data.get("new_term"))
+        action = (data.get("action") or "").strip()
+        confidence = data.get("confidence")
+        done = bool(data.get("done"))
+
+        r.learner(turn, thinking, new_term, action, confidence)
+
+        record = {
+            "turn": turn,
+            "thinking": thinking,
+            "new_term": new_term,
+            "action": action,
+            "confidence": confidence,
+            "done": done,
+            "tutor": "",
+        }
+
+        if not action:
+            result.turns.append(record)
+            break
+
+        r.status(f"turn {turn}: claude is answering…")
+        tutor_reply = tutor.send(action)
+        r.clear_status()
+        r.tutor(tutor_reply.text)
+
+        record["tutor"] = tutor_reply.text
+        result.turns.append(record)
+        if confidence is not None:
+            result.final_confidence = confidence
+
+        if done:
+            break
+        message = feedback_message(tutor_reply.text)
+
+    result.cost = learner.total_cost + tutor.total_cost
+    return result

@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# User data & generated exports (trees are personal; HTML/MD are regenerable)
+knowledge/
+
+# Stray C/C++ artifacts not part of this Python project
+*.exe
+*.cpp
