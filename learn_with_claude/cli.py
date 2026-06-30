@@ -8,11 +8,18 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from pathlib import Path
 
 from .backend import ClaudeError
 from .render import prepare_console
 from .repl import Shell
+
+# A stable per-user home for knowledge trees, so the global `learn` command keeps
+# all trees in one place regardless of which directory you launch it from.
+# Override with --dir or the LEARN_DIR environment variable.
+DEFAULT_DIR = os.environ.get("LEARN_DIR") or str(Path.home() / ".learn-with-claude" / "knowledge")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,7 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-m", "--model", default="sonnet", help="Model for both personas (default: sonnet).")
     p.add_argument("--learner-model", default=None, help="Override the learner's model.")
     p.add_argument("--tutor-model", default=None, help="Override the tutor's model.")
-    p.add_argument("-d", "--dir", default="knowledge", help="Knowledge directory (default: ./knowledge).")
+    p.add_argument("-d", "--dir", default=None,
+                   help=f"Knowledge directory (default: $LEARN_DIR or {DEFAULT_DIR}).")
     p.add_argument("--width", type=int, default=66,
                    help="Terminal wrap width for readability (default: 66, dyslexia-friendly).")
     p.add_argument("--line-spacing", type=int, default=1, choices=[1, 2],
@@ -45,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     prepare_console()
 
     shell = Shell(
-        knowledge_dir=args.dir,
+        knowledge_dir=args.dir or DEFAULT_DIR,
         color=not args.no_color,
         max_turns=args.max_turns,
         learner_model=args.learner_model or args.model,

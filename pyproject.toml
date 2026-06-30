@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "learn-with-claude"
+version = "0.1.0"
+description = "Simulate a human learner exploring a topic with Claude as a branchable tree of knowledge"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+learn = "learn_with_claude.cli:main"
+
+[tool.setuptools]
+packages = ["learn_with_claude"]

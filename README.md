@@ -26,12 +26,40 @@ Each tree is a single portable file. Share what you've learned by copying the fi
 - The **`claude` CLI** installed and logged in (this tool shells out to it). Verify
   with `claude --version`. No `ANTHROPIC_API_KEY` needed; it reuses your auth.
 
+## Install (the `learn` command)
+
+To launch from any terminal by just typing `learn`:
+
+**Windows (one-liner):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+This drops a `learn` launcher into `~/.local/bin` (cmd, PowerShell, and Git Bash
+all pick it up) pointing at this repo. Open a new terminal and run `learn`.
+
+**Or via pip** (any OS — gives a `learn` entry point + `python -m learn_with_claude`):
+
+```bash
+pip install -e .
+```
+
+> On Microsoft Store Python the pip Scripts dir often isn't on PATH; if `learn`
+> isn't found after `pip install`, use `install.ps1` or `python -m learn_with_claude`.
+
+Trees are stored in `~/.learn-with-claude/knowledge` by default (so the global
+command keeps everything in one place). Override with `--dir` or the `LEARN_DIR`
+environment variable.
+
 ## Quick start
 
 ```bash
-python learn.py                       # open the interactive knowledge shell
-python learn.py "what a hash table is" # start a tree, then drop into the shell
-python learn.py "hash tables" --once   # start a tree and exit (non-interactive)
+learn                       # open the interactive knowledge shell
+learn "what a hash table is" # start a tree, then drop into the shell
+learn "hash tables" --once   # start a tree and exit (non-interactive)
+
+# without installing, the equivalent is:  python learn.py [topic]
 ```
 
 ## The shell
@@ -112,8 +140,11 @@ A **knowledge tree** is one file: `knowledge/<topic>.know.json`.
 ## Project layout
 
 ```
-learn.py                      # entry point
+learn.py                      # entry point (python learn.py ...)
+install.ps1                   # installs the global `learn` command into ~/.local/bin
+pyproject.toml                # packaging + `learn` console-script entry point
 learn_with_claude/
+  __main__.py                 # enables `python -m learn_with_claude`
   backend.py                  # ClaudeSession — wraps `claude -p`, resumes by session id
   personas.py                 # learner/tutor prompts + root & branch message templates
   simulator.py                # run_conversation() — the reusable learner<->tutor loop
