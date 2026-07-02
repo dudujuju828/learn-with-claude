@@ -13,11 +13,12 @@ import re
 from dataclasses import dataclass, field
 
 from .backend import ClaudeSession
+from .diagrams import DIAGRAM_TOOL, excalidraw_mcp_config
 from .personas import (
     LEARNER_SYSTEM,
-    TUTOR_SYSTEM,
     feedback_message,
     first_learner_message,
+    tutor_system,
 )
 from .render import Renderer
 
@@ -104,19 +105,34 @@ def run_conversation(
     learner_first_msg: str | None = None,
     tutor_extra_system: str = "",
     max_turns: int = 20,
-    learner_model: str = "sonnet",
-    tutor_model: str = "sonnet",
+    learner_model: str = "claude-sonnet-5",
+    tutor_model: str = "claude-sonnet-5",
+    effort: str = "xhigh",
+    vault: str | None = None,
     timeout: int = 300,
     renderer: Renderer | None = None,
 ) -> ConversationResult:
     r = renderer or Renderer(color=True)
 
     learner = ClaudeSession(
-        system_prompt=LEARNER_SYSTEM, model=learner_model, exclude_dynamic=True, timeout=timeout
+        system_prompt=LEARNER_SYSTEM,
+        model=learner_model,
+        effort=effort,
+        exclude_dynamic=True,
+        timeout=timeout,
     )
-    tutor_system = TUTOR_SYSTEM + (f"\n\n{tutor_extra_system}" if tutor_extra_system else "")
+    mcp_config = excalidraw_mcp_config(vault) if vault else None
+    tutor_prompt = tutor_system(diagrams=mcp_config is not None)
+    if tutor_extra_system:
+        tutor_prompt += f"\n\n{tutor_extra_system}"
     tutor = ClaudeSession(
-        system_prompt=tutor_system, model=tutor_model, exclude_dynamic=True, timeout=timeout
+        system_prompt=tutor_prompt,
+        model=tutor_model,
+        effort=effort,
+        exclude_dynamic=True,
+        timeout=timeout,
+        mcp_config=mcp_config,
+        allowed_tools=[DIAGRAM_TOOL] if mcp_config else None,
     )
 
     result = ConversationResult()

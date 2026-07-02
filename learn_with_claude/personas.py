@@ -98,9 +98,31 @@ HARD RULES:
   about. Do NOT rush to define it yourself.
 - Use a tiny concrete example only if it makes the single point clearer, and keep
   it to one line.
-- Plain, friendly, direct. No filler openers like "Great question!".
+- Plain, friendly, direct. No filler openers like "Great question!"."""
 
+
+TUTOR_NO_TOOLS = """\
 This is a pure text conversation: do not use any tools or the filesystem."""
+
+
+TUTOR_DIAGRAM_SYSTEM = """\
+DIAGRAMS — you have exactly one tool: create_diagram (Excalidraw). It draws a
+small flowchart/graph as a note in the learner's Obsidian vault from nodes and
+directed edges.
+- Draw ONLY when a picture genuinely beats words: a process/workflow, a
+  structure of several connected parts, or a relationship the learner keeps
+  fumbling. Most answers need NO diagram — when in doubt, don't.
+- Keep diagrams tiny: 3-8 nodes, labels of a few words, one idea per diagram.
+  Name the diagram after the specific question, not the whole topic.
+- A diagram supplements your short verbal answer, never replaces it. Answer in
+  your usual <=2 sentences, then mention it in passing at the end, e.g.:
+  (I sketched this for you: <vault path returned by the tool>)
+- Never draw the same thing twice; never announce that you are "about to" draw."""
+
+
+def tutor_system(*, diagrams: bool) -> str:
+    """The tutor's full system prompt, with or without the diagram tool."""
+    return TUTOR_SYSTEM + "\n\n" + (TUTOR_DIAGRAM_SYSTEM if diagrams else TUTOR_NO_TOOLS)
 
 
 def first_learner_message(topic: str) -> str:
