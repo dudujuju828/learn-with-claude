@@ -114,8 +114,9 @@ directed edges.
   fumbling. Most answers need NO diagram — when in doubt, don't.
 - Keep diagrams tiny: 3-8 nodes, labels of a few words, one idea per diagram.
   Name the diagram after the specific question, not the whole topic.
-- A diagram supplements your short verbal answer, never replaces it. Answer in
-  your usual <=2 sentences, then mention it in passing at the end, e.g.:
+- A diagram supplements your short verbal answer, NEVER replaces it. Even when
+  you draw, you MUST still answer in your usual <=2 sentences first, then
+  mention the sketch in passing at the end, e.g.:
   (I sketched this for you: <vault path returned by the tool>)
 - Never draw the same thing twice; never announce that you are "about to" draw."""
 
