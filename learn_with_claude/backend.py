@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 
 # Resolve the claude executable once. On this machine it is a native .EXE, so it
@@ -38,10 +39,23 @@ class ClaudeSession:
         Fully *overrides* claude-code's default system prompt (``--system-prompt``).
         Used to install a clean persona with none of the coding-agent baggage.
     model:
-        Model alias or full id (e.g. ``"sonnet"``, ``"opus"``, ``"claude-opus-4-8"``).
+        Model alias or full id (e.g. ``"sonnet"``, ``"opus"``, ``"claude-sonnet-5"``).
+    effort:
+        Reasoning effort for the session (``low``/``medium``/``high``/``xhigh``/``max``).
     exclude_dynamic:
         Strip the dynamic system-prompt sections (env, dir listing, CLAUDE.md …)
         so the persona stays clean and reproducible.
+    mcp_config:
+        Optional MCP server config (the ``{"mcpServers": ...}`` dict) made
+        available to this persona. Regardless of this value the session runs
+        with ``--strict-mcp-config``, so the user's globally registered MCP
+        servers never leak into a persona.
+    allowed_tools:
+        Tool names to pre-approve (``--allowedTools``), e.g. MCP tools from
+        `mcp_config` — required in ``-p`` mode, where nobody can click "allow".
+    builtin_tools:
+        Value for ``--tools``. Personas are conversational, so the default is
+        ``""`` — no filesystem/bash access.
     """
 
     def __init__(
@@ -49,13 +63,31 @@ class ClaudeSession:
         *,
         system_prompt: str | None = None,
         model: str = "sonnet",
+        effort: str | None = None,
         exclude_dynamic: bool = True,
         timeout: int = 300,
+        mcp_config: dict | None = None,
+        allowed_tools: list[str] | None = None,
+        builtin_tools: str = "",
     ) -> None:
         self.system_prompt = system_prompt
         self.model = model
+        self.effort = effort
         self.exclude_dynamic = exclude_dynamic
         self.timeout = timeout
+        self.allowed_tools = allowed_tools or []
+        self.builtin_tools = builtin_tools
+
+        # The claude CLI mis-parses inline-JSON --mcp-config on Windows (flags
+        # after it get dropped), so always hand it a real file.
+        self._mcp_config_path: str | None = None
+        if mcp_config:
+            f = tempfile.NamedTemporaryFile(
+                "w", suffix=".mcp.json", prefix="learn-", delete=False, encoding="utf-8"
+            )
+            json.dump(mcp_config, f)
+            f.close()
+            self._mcp_config_path = f.name
 
         self.session_id: str | None = None
         self.total_cost: float = 0.0
@@ -63,6 +95,9 @@ class ClaudeSession:
 
     def send(self, message: str) -> Reply:
         """Send one message and return the tutor/learner's reply."""
+        # Every send is a fresh claude process, so session-level flags (model,
+        # effort, tool surface, MCP servers) must be repeated on every call —
+        # only the conversation itself is carried over via --resume.
         cmd = [
             CLAUDE_EXE,
             "-p",
@@ -71,7 +106,16 @@ class ClaudeSession:
             "json",
             "--model",
             self.model,
+            "--tools",
+            self.builtin_tools,
+            "--strict-mcp-config",
         ]
+        if self.effort:
+            cmd += ["--effort", self.effort]
+        if self._mcp_config_path:
+            cmd += ["--mcp-config", self._mcp_config_path]
+        if self.allowed_tools:
+            cmd += ["--allowedTools", ",".join(self.allowed_tools)]
 
         if self.session_id is None:
             # First turn: install the persona / system prompt.
