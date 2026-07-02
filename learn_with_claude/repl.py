@@ -34,7 +34,8 @@ commands:
 
 class Shell:
     def __init__(self, knowledge_dir="knowledge", *, color=True, max_turns=20,
-                 learner_model="sonnet", tutor_model="sonnet", timeout=300,
+                 learner_model="claude-sonnet-5", tutor_model="claude-sonnet-5",
+                 effort="xhigh", vault=None, timeout=300,
                  width=66, line_spacing=1) -> None:
         self.dir = Path(knowledge_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -42,6 +43,8 @@ class Shell:
         self.max_turns = max_turns
         self.learner_model = learner_model
         self.tutor_model = tutor_model
+        self.effort = effort
+        self.vault = vault
         self.timeout = timeout
         self.kb: KnowledgeTree | None = None
 
@@ -108,7 +111,8 @@ class Shell:
         self.r.section(f"new tree: {topic}", f"learner={self.learner_model} tutor={self.tutor_model}")
         result = run_conversation(
             topic, max_turns=self.max_turns, learner_model=self.learner_model,
-            tutor_model=self.tutor_model, timeout=self.timeout, renderer=self.r,
+            tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+            timeout=self.timeout, renderer=self.r,
         )
         kb.add_root(topic, result, learner_model=self.learner_model, tutor_model=self.tutor_model)
         kb.save()
@@ -153,7 +157,8 @@ class Shell:
         result = run_conversation(
             focus or "deeper dive", learner_first_msg=learner_msg, tutor_extra_system=tutor_ctx,
             max_turns=self.max_turns, learner_model=self.learner_model,
-            tutor_model=self.tutor_model, timeout=self.timeout, renderer=self.r,
+            tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+            timeout=self.timeout, renderer=self.r,
         )
 
         label = focus or self._derive_label(result, bt["tutor"])
