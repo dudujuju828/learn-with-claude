@@ -18,6 +18,8 @@ Accessibility choices (per British Dyslexia Association style guidance):
     a time (line boxes are enumerated with the Range API);
   * an optional "invert on step" effect: each arrow-key ruler step flips the
     page to its inverse colours and back (a strong visual pacing cue);
+  * a "focus line" mode (typoscope): everything except the line under the
+    ruler is masked out, via a huge opaque box-shadow around the ruler band;
   * click-to-read-aloud via the browser's built-in speech synthesis;
   * all settings persist in localStorage across reloads.
 """
@@ -70,7 +72,7 @@ p{{max-width:var(--measure); margin:.5rem 0;}}
 a{{color:var(--ans);}}
 .muted{{color:var(--muted);}}
 .toolbar{{
-  position:sticky; top:0; z-index:5; background:var(--bg);
+  position:sticky; top:0; z-index:50; background:var(--bg);
   border-bottom:1px solid var(--line); padding:.7rem 0; margin-bottom:1.4rem;
   display:flex; gap:.5rem; flex-wrap:wrap; align-items:center;
 }}
@@ -106,6 +108,9 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
   background:rgba(255,205,50,.16); border-top:2px solid rgba(226,164,26,.55);
   border-bottom:2px solid rgba(226,164,26,.55); pointer-events:none; z-index:40;}}
 .ruler-on #ruler{{display:block;}}
+/* Focus mode: a huge opaque shadow around the full-width ruler band masks
+   everything above and below it, leaving only the current line visible. */
+.mask-on #ruler{{box-shadow:0 0 0 200vmax var(--bg);}}
 /* Applied to <html>: the root element is exempt from filter's containing-block
    rule, so the fixed toolbar and ruler keep their viewport positioning. */
 .inverted{{filter:invert(1) hue-rotate(180deg);}}
@@ -117,7 +122,8 @@ _SCRIPT = """\
 <script>
 const root = document.documentElement, body = document.body;
 const DEFAULTS = {font:'OpenDyslexic', fs:18, lh:1.75, ls:0.02, ws:0.07,
-                  theme:'cream', sent:false, ruler:false, speak:false, inv:false};
+                  theme:'cream', sent:false, ruler:false, speak:false, inv:false,
+                  mask:false};
 const S = Object.assign({}, DEFAULTS);
 const THEMES = {
   cream:{bg:'#fbf6ea', card:'#fffdf6', fg:'#2c2620', line:'#e7dcc7', muted:'#6f6657',
@@ -137,6 +143,7 @@ const THEMES = {
          termbg:'#3a2f37', termline:'#5c4653', prebg:'#32352f'}
 };
 function apply(){
+  if(!S.ruler) S.mask = false;  // focus mode only makes sense with the ruler
   const t = THEMES[S.theme] || THEMES.cream;
   const v = {font:S.font, fs:S.fs+'px', lh:S.lh, ls:S.ls+'em', ws:S.ws+'em',
              bg:t.bg, card:t.card, fg:t.fg, line:t.line, muted:t.muted,
@@ -145,6 +152,7 @@ function apply(){
   for(const k in v) root.style.setProperty('--'+k, v[k]);
   body.classList.toggle('sent-lines', S.sent);
   body.classList.toggle('ruler-on', S.ruler);
+  body.classList.toggle('mask-on', S.mask);
   body.classList.toggle('speak-on', S.speak);
   if(!S.ruler){
     keyNav = false;
@@ -155,11 +163,16 @@ function apply(){
   if(!S.speak && window.speechSynthesis) speechSynthesis.cancel();
   document.getElementById('font').value = S.font;
   document.getElementById('theme').value = S.theme;
-  for(const [id, on] of [['sent-btn',S.sent],['ruler-btn',S.ruler],['speak-btn',S.speak],['inv-btn',S.inv]])
+  for(const [id, on] of [['sent-btn',S.sent],['ruler-btn',S.ruler],['mask-btn',S.mask],
+                         ['speak-btn',S.speak],['inv-btn',S.inv]])
     document.getElementById(id).classList.toggle('on', on);
   try{ localStorage.setItem('lwc-a11y', JSON.stringify(S)); }catch(err){}
 }
-function setS(k, v){ S[k] = v; apply(); }
+function setS(k, v){
+  S[k] = v;
+  if(k === 'mask' && v) S.ruler = true;  // focus mode brings the ruler with it
+  apply();
+}
 function bump(k, d, min, max){
   S[k] = Math.min(max, Math.max(min, Math.round((S[k] + d) * 1000) / 1000));
   apply();
@@ -402,6 +415,9 @@ def tree_to_html(tree) -> str:
         '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
         'title="A tinted band that follows your mouse — press the arrow keys '
         'to step it line by line">🖍 reading ruler</button>'
+        '<button id="mask-btn" class="tog" onclick="setS(\'mask\', !S.mask)" '
+        'title="Hide everything except the line under the reading ruler '
+        '(turns the ruler on)">🕶 focus line</button>'
         '<button id="inv-btn" class="tog" onclick="setS(\'inv\', !S.inv)" '
         'title="Flip the page colours to their inverse on every ruler step '
         '(arrow keys), and back on the next">🌓 invert on step</button>'
