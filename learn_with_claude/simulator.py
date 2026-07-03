@@ -16,8 +16,10 @@ from .backend import ClaudeSession
 from .diagrams import DIAGRAM_TOOL, excalidraw_mcp_config
 from .personas import (
     LEARNER_SYSTEM,
+    NEXT_CONCEPT_SYSTEM,
     feedback_message,
     first_learner_message,
+    next_concept_message,
     tutor_system,
 )
 from .render import Renderer, space_sentences
@@ -26,46 +28,55 @@ from .render import Renderer, space_sentences
 # --------------------------------------------------------------------------- #
 # Parsing the learner's structured turn
 # --------------------------------------------------------------------------- #
-def extract_turn(text: str) -> dict:
-    """Pull the learner's {thinking, new_term, action, confidence, done} object
-    out of its reply, tolerating code fences or stray prose around the JSON."""
-    s = text.strip()
+def first_json_object(text: str) -> "dict | None":
+    """Extract the first balanced JSON object from a reply, tolerating code
+    fences or stray prose around it. Returns None if nothing parses."""
+    s = (text or "").strip()
     if s.startswith("```"):
         s = re.sub(r"^```[a-zA-Z]*\n?", "", s)
         s = re.sub(r"\n?```$", "", s).strip()
 
     start = s.find("{")
-    if start != -1:
-        depth = 0
-        in_str = False
-        esc = False
-        for i in range(start, len(s)):
-            ch = s[i]
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-            else:
-                if ch == '"':
-                    in_str = True
-                elif ch == "{":
-                    depth += 1
-                elif ch == "}":
-                    depth -= 1
-                    if depth == 0:
-                        try:
-                            obj = json.loads(s[start : i + 1])
-                            obj.setdefault("thinking", "")
-                            obj.setdefault("new_term", None)
-                            obj.setdefault("action", "")
-                            obj.setdefault("confidence", None)
-                            obj.setdefault("done", False)
-                            return obj
-                        except json.JSONDecodeError:
-                            break
+    if start == -1:
+        return None
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(s)):
+        ch = s[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(s[start : i + 1])
+                    except json.JSONDecodeError:
+                        return None
+    return None
+
+
+def extract_turn(text: str) -> dict:
+    """Pull the learner's {thinking, new_term, action, confidence, done} object
+    out of its reply."""
+    obj = first_json_object(text)
+    if isinstance(obj, dict):
+        obj.setdefault("thinking", "")
+        obj.setdefault("new_term", None)
+        obj.setdefault("action", "")
+        obj.setdefault("confidence", None)
+        obj.setdefault("done", False)
+        return obj
 
     # Fallback: treat the whole reply as the action so the loop keeps going.
     return {
@@ -183,3 +194,32 @@ def run_conversation(
 
     result.cost = learner.total_cost + tutor.total_cost
     return result
+
+
+# --------------------------------------------------------------------------- #
+# Choosing the next concept (for `full` sessions)
+# --------------------------------------------------------------------------- #
+def pick_next_concept(
+    root_topic: str,
+    covered: list,
+    recap: str,
+    *,
+    model: str = "claude-sonnet-5",
+    effort: str = "xhigh",
+    timeout: int = 300,
+) -> "tuple[dict | None, float]":
+    """One-shot tutor call: review the session recap and choose the next
+    related concept worth exploring. Returns (pick, cost) where pick is
+    {"concept", "opening_question", "reason"} or None if unparseable."""
+    session = ClaudeSession(
+        system_prompt=NEXT_CONCEPT_SYSTEM,
+        model=model,
+        effort=effort,
+        exclude_dynamic=True,
+        timeout=timeout,
+    )
+    reply = session.send(next_concept_message(root_topic, covered, recap))
+    pick = first_json_object(reply.text)
+    if not isinstance(pick, dict) or not str(pick.get("concept") or "").strip():
+        return None, session.total_cost
+    return pick, session.total_cost

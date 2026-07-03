@@ -191,6 +191,66 @@ def branch_learner_message(
     )
 
 
+NEXT_CONCEPT_SYSTEM = """\
+You are a tutor planning a learning session. You will be shown a recap of the
+investigations a learner has completed so far on a root topic. Choose the ONE
+next concept most worth exploring — the natural next step that builds directly
+on what they just learned and deepens their grasp of the root topic.
+
+RULES:
+- It must BUILD ON what was covered — connect to it, don't jump somewhere
+  random.
+- Do NOT repeat a concept already explored (you'll see the list).
+- Vary the angle. The first investigation usually answered "what is X", so
+  prefer a different kind of question: why it works that way, how it behaves
+  in practice, when/where you'd actually use it, what happens if you do it
+  wrong, how it compares to the obvious alternative, or a common pitfall.
+- Keep the concept label short (2-6 words). The opening question must be one
+  natural, curious question a learner would really ask.
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"concept": "<short label>",
+ "opening_question": "<the one question that kicks off the investigation>",
+ "reason": "<one sentence: why this is the best next step>"}"""
+
+
+def next_concept_message(root_topic: str, covered: list, recap: str) -> str:
+    done = "\n".join(f"  - {c}" for c in covered)
+    return (
+        f'The learner is building up an understanding of: "{root_topic}".\n\n'
+        f"Concepts already explored (do not repeat these):\n{done}\n\n"
+        f"Recap of the conversations so far:\n{recap}\n\n"
+        "Pick the ONE best next concept and output the JSON object now."
+    )
+
+
+def followup_learner_message(root_topic: str, recap: str, concept: str, opening_question: str) -> str:
+    """Opening message for the learner on a follow-up investigation of a `full`
+    session: seeded with everything covered so far and the tutor-chosen concept."""
+    question_clause = (
+        f'What made you curious is this question: "{opening_question}"\n\n' if opening_question else ""
+    )
+    return (
+        f'You have ALREADY been learning about "{root_topic}".\n\n'
+        f"Recap of what you covered so far:\n{recap}\n\n"
+        f'The next thing you want to explore is: "{concept}".\n'
+        f"{question_clause}"
+        "Investigate it your way — one scoped step at a time as always, building "
+        "on what you already know instead of re-asking it.\n\n"
+        "Produce your FIRST turn now." + CONTRACT_REMINDER
+    )
+
+
+def followup_tutor_context(recap: str, concept: str) -> str:
+    """Extra tutor system context for a follow-up investigation."""
+    return (
+        "CONTEXT — the learner has ALREADY covered the following, so do NOT "
+        "re-explain these basics; build on them:\n"
+        f"{recap}\n"
+        f'They are now moving on to a related concept: "{concept}"'
+    )
+
+
 def branch_tutor_context(digest: str, branch_a: str) -> str:
     """Extra context appended to the tutor's system prompt for a branch, so it
     doesn't re-explain basics the learner already covered."""

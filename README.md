@@ -82,6 +82,7 @@ learn (what a hash table is) › branch 1 2 collisions
 | command | what it does |
 | --- | --- |
 | `new <topic>` | start a new tree and run the root investigation |
+| `full <topic>` | like `new`, but after each investigation the tutor reviews what was covered and picks the **next best related concept** (a why/how/when-style angle, not another "what is") for the learner to explore — you end up with 4 linked investigations in one tree, so the exported map is a small tour of the topic |
 | `branch <node> <turn> [focus]` | re-investigate that node's tutor answer at `<turn>`, going deeper. `[focus]` steers what to dig into; omit it and the learner picks. |
 | `tree` | show the current tree |
 | `show <node>` | replay a node's full conversation |

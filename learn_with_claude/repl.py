@@ -8,13 +8,24 @@ from pathlib import Path
 
 from .backend import ClaudeError
 from .knowledge import KnowledgeTree, conversation_digest, one_line, slug
-from .personas import branch_learner_message, branch_tutor_context
+from .personas import (
+    branch_learner_message,
+    branch_tutor_context,
+    followup_learner_message,
+    followup_tutor_context,
+)
 from .render import Renderer
-from .simulator import run_conversation
+from .simulator import pick_next_concept, run_conversation
+
+# A `full` session = the root investigation + this many tutor-chosen follow-ups.
+FULL_FOLLOWUPS = 3
 
 HELP = """\
 commands:
   new <topic>              start a new knowledge tree (runs the root investigation)
+  full <topic>             like 'new', then the tutor reviews the conversation and
+                           picks the next best related concept to explore — repeated
+                           so the tree ends up with 4 linked investigations
   branch <node> <turn> [focus]
                            re-investigate node's tutor answer at <turn>, going deeper.
                            optional [focus] steers what to dig into; else the learner picks.
@@ -77,6 +88,7 @@ class Shell:
         arg = parts[1] if len(parts) > 1 else ""
         handlers = {
             "new": self.cmd_new, "learn": self.cmd_new,
+            "full": self.cmd_full,
             "branch": self.cmd_branch, "dig": self.cmd_branch,
             "tree": self.cmd_tree, "show": self.cmd_show,
             "open": self.cmd_open, "list": self.cmd_list, "ls": self.cmd_list,
@@ -119,6 +131,66 @@ class Shell:
         self.kb = kb
         self.r.ok(f"saved → {kb.path}")
         self._print_tree()
+
+    def cmd_full(self, topic: str) -> None:
+        topic = topic.strip()
+        if not topic:
+            self.r.warn("usage: full <topic>")
+            return
+        self.cmd_new(topic)
+        if self.kb is None:
+            return
+        for _ in range(FULL_FOLLOWUPS):
+            if not self._explore_next():
+                break
+        self.r.ok(f"full session done: {len(self.kb.nodes)} investigations "
+                  f"(export html for the map)")
+
+    def _explore_next(self) -> bool:
+        """One `full`-session step: the tutor reviews everything covered so far,
+        picks the next related concept, and the learner investigates it."""
+        kb = self.kb
+        order = sorted(kb.nodes)
+        covered = [kb.nodes[i].label for i in order]
+        recap = "\n".join(
+            f"[{kb.nodes[i].label}]\n{conversation_digest(kb.nodes[i].turns)}" for i in order
+        )
+
+        self.r.status("tutor is choosing the next concept…")
+        pick, pick_cost = pick_next_concept(
+            kb.root_topic, covered, recap,
+            model=self.tutor_model, effort=self.effort, timeout=self.timeout,
+        )
+        self.r.clear_status()
+        if pick is None:
+            self.r.warn("the tutor couldn't pick a next concept — stopping here")
+            return False
+        concept = one_line(str(pick.get("concept")), 60)
+        question = one_line(str(pick.get("opening_question") or ""), 200)
+        reason = one_line(str(pick.get("reason") or ""), 120)
+
+        self.r.section(f"next: {concept}", reason)
+        if question:
+            self.r.info(f'  opening question: "{question}"')
+        result = run_conversation(
+            concept,
+            learner_first_msg=followup_learner_message(kb.root_topic, recap, concept, question),
+            tutor_extra_system=followup_tutor_context(recap, concept),
+            max_turns=self.max_turns, learner_model=self.learner_model,
+            tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+            timeout=self.timeout, renderer=self.r,
+        )
+        result.cost += pick_cost  # the picker call belongs to this node
+
+        prev = kb.nodes[order[-1]]  # chain onto the latest investigation
+        node = kb.add_branch(
+            prev.id, len(prev.turns) or 1, "", concept, result,
+            learner_model=self.learner_model, tutor_model=self.tutor_model,
+        )
+        kb.save()
+        self.r.ok(f"added node [{node.id}] '{concept}'  →  {kb.path}")
+        self._print_tree()
+        return True
 
     def cmd_branch(self, arg: str) -> None:
         if not self._require_kb():
