@@ -10,10 +10,12 @@ Accessibility choices (per British Dyslexia Association style guidance):
   * left-aligned (never justified), no italics, generous whitespace;
   * toolbar controls for text size, line spacing (up to ~4x), letter spacing
     and word spacing;
-  * a "sentence per line" toggle: every sentence starts on its own line
-    (sentence boundaries are pre-marked at export with invisible <span
-    class="sbr"> markers the toggle turns into line breaks);
-  * a reading ruler (tinted band that follows the mouse to keep your place);
+  * a "sentence per line" toggle: every sentence starts on its own line (each
+    sentence is wrapped at export in a <span class="sent"> the toggle turns
+    into a block);
+  * a reading ruler (tinted band that follows the mouse to keep your place),
+    steerable with the left/right arrow keys to highlight and step through
+    sentences one at a time;
   * click-to-read-aloud via the browser's built-in speech synthesis;
   * all settings persist in localStorage across reloads.
 """
@@ -96,7 +98,9 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
 .conf{{color:var(--muted); font-weight:normal; font-size:.85em;}}
 .grp{{display:inline-flex; align-items:center; gap:.3rem; margin-right:.3rem;}}
 .toolbar .tog.on{{border-color:var(--ans); box-shadow:inset 0 0 0 2px var(--ans); font-weight:bold;}}
-.sent-lines span.sbr{{display:block; height:.6em;}}
+.sent-lines .sent{{display:block; margin:0 0 .6em;}}
+.sent-lines p .sent:last-child{{margin-bottom:0;}}
+.sent-focus{{background:rgba(255,205,50,.35); border-radius:.25rem;}}
 #ruler{{position:fixed; left:0; right:0; top:40%; height:2.6em; display:none;
   background:rgba(255,205,50,.16); border-top:2px solid rgba(226,164,26,.55);
   border-bottom:2px solid rgba(226,164,26,.55); pointer-events:none; z-index:40;}}
@@ -138,6 +142,10 @@ function apply(){
   body.classList.toggle('sent-lines', S.sent);
   body.classList.toggle('ruler-on', S.ruler);
   body.classList.toggle('speak-on', S.speak);
+  if(!S.ruler){
+    keyNav = false; sentIdx = -1; clearSentFocus();
+    document.getElementById('ruler').style.height = '';
+  }
   if(!S.speak && window.speechSynthesis) speechSynthesis.cancel();
   document.getElementById('font').value = S.font;
   document.getElementById('theme').value = S.theme;
@@ -151,13 +159,50 @@ function bump(k, d, min, max){
   apply();
 }
 function resetS(){ Object.assign(S, DEFAULTS); apply(); }
+
+// Reading-ruler sentence navigation: arrow keys step the highlight through the
+// exported <span class="sent"> sentences; moving the mouse (a real move, not a
+// jiggle) hands the ruler back to mouse-following.
+let sents = null, sentIdx = -1, keyNav = false, mx = 0, my = 0;
+function sentEls(){ return sents || (sents = Array.from(document.querySelectorAll('.sent'))); }
+function clearSentFocus(){
+  document.querySelectorAll('.sent-focus').forEach(x => x.classList.remove('sent-focus'));
+}
+function stepSent(d){
+  const list = sentEls();
+  if(!list.length) return;
+  if(sentIdx < 0){  // first press: start at the first sentence on screen
+    sentIdx = list.findIndex(s => s.getBoundingClientRect().bottom > 0);
+    if(sentIdx < 0) sentIdx = 0;
+  } else {
+    sentIdx = Math.min(list.length - 1, Math.max(0, sentIdx + d));
+  }
+  const el = list[sentIdx];
+  clearSentFocus();
+  el.classList.add('sent-focus');
+  el.scrollIntoView({block:'center'});
+  const r = document.getElementById('ruler'), b = el.getBoundingClientRect();
+  r.style.top = (b.top - 4) + 'px';
+  r.style.height = (b.height + 8) + 'px';
+  keyNav = true;
+}
 document.addEventListener('mousemove', e => {
   if(!S.ruler) return;
+  if(keyNav){
+    if(Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 24) return;
+    keyNav = false;
+    clearSentFocus();
+    document.getElementById('ruler').style.height = '';
+  }
+  mx = e.clientX; my = e.clientY;
   const r = document.getElementById('ruler');
   r.style.top = (e.clientY - r.offsetHeight / 2) + 'px';
 });
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && window.speechSynthesis) speechSynthesis.cancel();
+  if(!S.ruler || e.target.closest('select, input, textarea, button')) return;
+  if(e.key === 'ArrowRight'){ e.preventDefault(); stepSent(1); }
+  else if(e.key === 'ArrowLeft'){ e.preventDefault(); stepSent(-1); }
 });
 document.addEventListener('click', e => {
   if(!S.speak || !window.speechSynthesis) return;
@@ -181,29 +226,43 @@ def _esc(s: str) -> str:
     return _html.escape(s or "")
 
 
-# Sentence boundaries are marked at export with a \x00 placeholder (inserted
-# before HTML-escaping, replaced by the span after), so the "sentence per line"
-# toolbar toggle can turn every boundary into a line break with pure CSS.
+# Sentence boundaries are marked with a \x00 placeholder (inserted before
+# HTML-escaping), then each sentence is wrapped in <span class="sent">. That
+# lets CSS put every sentence on its own line ("sentence per line" toggle) and
+# lets JS step the reading ruler sentence by sentence with the arrow keys.
 # Unlike render.space_sentences this also accepts lowercase sentence starts,
 # because the learner deliberately types in casual lowercase.
 _SENT_GAP = re.compile(r"(?<=[.!?])([\"')\]]*)\s+(?=[A-Za-z0-9\"'(\[])")
-_SBR = '<span class="sbr"> </span>'
+
+
+def _mark(s: str) -> str:
+    return _SENT_GAP.sub("\\1\x00", s or "")
+
+
+def _wrap_sents(inner: str) -> str:
+    """Wrap each \x00-separated sentence of rendered inline HTML in a span."""
+    parts = [p for p in inner.split("\x00") if p.strip()]
+    return " ".join(f'<span class="sent">{p}</span>' for p in parts) or inner
 
 
 def _esc_sent(s: str) -> str:
-    """Escape text and wrap each sentence boundary in a toggleable marker."""
-    return _esc(_SENT_GAP.sub("\\1\x00", s or "")).replace("\x00", _SBR)
+    """Escape text and wrap each of its sentences in a navigable span."""
+    return _wrap_sents(_esc(_mark(s)))
 
 
 def _inline_md(seg: str) -> str:
     paras = [p.strip() for p in re.split(r"\n\s*\n", seg or "") if p.strip()]
     out = []
     for p in paras:
-        p = _esc(_SENT_GAP.sub("\\1\x00", p))
-        p = re.sub(r"`([^`]+)`", r"<code>\1</code>", p)
-        p = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", p)
-        out.append("<p>" + p.replace("\n", "<br>") + "</p>")
-    return "".join(out).replace("\x00", _SBR) or "<p></p>"
+        p = _esc(_mark(p))
+        # Neutralise markers inside code/bold so a sentence span never splits
+        # an open tag (restore the space the marker replaced).
+        p = re.sub(r"`([^`]+)`",
+                   lambda m: "<code>" + m.group(1).replace("\x00", " ") + "</code>", p)
+        p = re.sub(r"\*\*([^*]+)\*\*",
+                   lambda m: "<strong>" + m.group(1).replace("\x00", " ") + "</strong>", p)
+        out.append("<p>" + _wrap_sents(p.replace("\n", "<br>")) + "</p>")
+    return "".join(out) or "<p></p>"
 
 
 def _md_lite(text: str) -> str:
@@ -315,7 +374,8 @@ def tree_to_html(tree) -> str:
         '<button id="sent-btn" class="tog" onclick="setS(\'sent\', !S.sent)" '
         'title="Start every sentence on its own line">↵ sentence per line</button>'
         '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
-        'title="A tinted band that follows your mouse, to keep your place">🖍 reading ruler</button>'
+        'title="A tinted band that follows your mouse — press the ←/→ arrow keys '
+        'to step it sentence by sentence">🖍 reading ruler</button>'
         '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
         'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
         '<button onclick="resetS()" title="Back to the default settings">reset</button>'
