@@ -130,6 +130,12 @@ reached there and descends a new chain of unknowns from that point.
 
 ## Accessibility (dyslexia-friendly)
 
+**Sentence spacing** — tutor answers are reflowed so every sentence sits in its own
+paragraph with an empty line between them, which makes each line much easier to track.
+This is enforced twice: the tutor is prompted to write that way, and the text is
+normalised in code anyway, so terminal output, the HTML export, and the markdown
+export all get it — including trees saved before this feature existed.
+
 **In the terminal** — a program can't change the terminal's *font* (that's a setting
 in your terminal emulator), but the layout is tuned for readability: short ~64-char
 lines, sentence case (never ALL CAPS), high-contrast body text in your terminal's own
