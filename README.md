@@ -158,8 +158,8 @@ The toolbar also has:
   help many dyslexic readers);
 - **↵ sentence per line** — every sentence starts on its own line, across all blocks;
 - **🖍 reading ruler** — a tinted band that follows your mouse to keep your place; the
-  **←/→ arrow keys** snap it to sentences and step through them one at a time, with
-  the current sentence highlighted (move the mouse to take back free control);
+  **arrow keys** (←/→ or ↑/↓) snap it to the text and step it one line at a time,
+  scrolling as needed (move the mouse to take back free control);
 - **🔊 read aloud** — click any block of text to hear it via the browser's built-in
   speech synthesis (Esc stops it);
 - a **reset** button, and all settings persist across reloads (localStorage).

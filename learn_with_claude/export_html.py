@@ -14,8 +14,8 @@ Accessibility choices (per British Dyslexia Association style guidance):
     sentence is wrapped at export in a <span class="sent"> the toggle turns
     into a block);
   * a reading ruler (tinted band that follows the mouse to keep your place),
-    steerable with the left/right arrow keys to highlight and step through
-    sentences one at a time;
+    steerable with the arrow keys to step through the text one visual line at
+    a time (line boxes are enumerated with the Range API);
   * click-to-read-aloud via the browser's built-in speech synthesis;
   * all settings persist in localStorage across reloads.
 """
@@ -100,7 +100,6 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
 .toolbar .tog.on{{border-color:var(--ans); box-shadow:inset 0 0 0 2px var(--ans); font-weight:bold;}}
 .sent-lines .sent{{display:block; margin:0 0 .6em;}}
 .sent-lines p .sent:last-child{{margin-bottom:0;}}
-.sent-focus{{background:rgba(255,205,50,.35); border-radius:.25rem;}}
 #ruler{{position:fixed; left:0; right:0; top:40%; height:2.6em; display:none;
   background:rgba(255,205,50,.16); border-top:2px solid rgba(226,164,26,.55);
   border-bottom:2px solid rgba(226,164,26,.55); pointer-events:none; z-index:40;}}
@@ -143,9 +142,10 @@ function apply(){
   body.classList.toggle('ruler-on', S.ruler);
   body.classList.toggle('speak-on', S.speak);
   if(!S.ruler){
-    keyNav = false; sentIdx = -1; clearSentFocus();
+    keyNav = false;
     document.getElementById('ruler').style.height = '';
   }
+  lines = null; lineIdx = -1;  // any setting change may have reflowed the text
   if(!S.speak && window.speechSynthesis) speechSynthesis.cancel();
   document.getElementById('font').value = S.font;
   document.getElementById('theme').value = S.theme;
@@ -160,30 +160,48 @@ function bump(k, d, min, max){
 }
 function resetS(){ Object.assign(S, DEFAULTS); apply(); }
 
-// Reading-ruler sentence navigation: arrow keys step the highlight through the
-// exported <span class="sent"> sentences; moving the mouse (a real move, not a
-// jiggle) hands the ruler back to mouse-following.
-let sents = null, sentIdx = -1, keyNav = false, mx = 0, my = 0;
-function sentEls(){ return sents || (sents = Array.from(document.querySelectorAll('.sent'))); }
-function clearSentFocus(){
-  document.querySelectorAll('.sent-focus').forEach(x => x.classList.remove('sent-focus'));
-}
-function stepSent(d){
-  const list = sentEls();
-  if(!list.length) return;
-  if(sentIdx < 0){  // first press: start at the first sentence on screen
-    sentIdx = list.findIndex(s => s.getBoundingClientRect().bottom > 0);
-    if(sentIdx < 0) sentIdx = 0;
-  } else {
-    sentIdx = Math.min(list.length - 1, Math.max(0, sentIdx + d));
+// Reading-ruler line navigation: arrow keys step the ruler one *visual* line
+// at a time. Wrapped lines aren't elements, so the rendered line boxes are
+// enumerated with the Range API (one client rect per line box) and rects that
+// share a top are merged (a line broken into several text nodes by <code> or
+// <strong> yields several rects). Moving the mouse (a real move, not a jiggle)
+// hands the ruler back to mouse-following.
+let lines = null, lineIdx = -1, keyNav = false, mx = 0, my = 0;
+function lineList(){
+  if(lines) return lines;
+  const buckets = {};
+  const walker = document.createTreeWalker(document.querySelector('.wrap'), NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for(let n = walker.nextNode(); n; n = walker.nextNode()){
+    if(!n.nodeValue.trim() || n.parentElement.closest('.toolbar')) continue;
+    range.selectNodeContents(n);
+    for(const r of range.getClientRects()){
+      if(r.height < 4 || r.width < 2) continue;
+      const top = r.top + scrollY, bottom = r.bottom + scrollY;
+      const key = Math.round(top / 5);
+      const b = buckets[key] || buckets[key + 1] || buckets[key - 1];
+      if(b){ b.top = Math.min(b.top, top); b.bottom = Math.max(b.bottom, bottom); }
+      else buckets[key] = {top: top, bottom: bottom};
+    }
   }
-  const el = list[sentIdx];
-  clearSentFocus();
-  el.classList.add('sent-focus');
-  el.scrollIntoView({block:'center'});
-  const r = document.getElementById('ruler'), b = el.getBoundingClientRect();
-  r.style.top = (b.top - 4) + 'px';
-  r.style.height = (b.height + 8) + 'px';
+  lines = Object.values(buckets).sort((a, b) => a.top - b.top);
+  return lines;
+}
+function stepLine(d){
+  const list = lineList();
+  if(!list.length) return;
+  if(lineIdx < 0){  // first press: start at the first line on screen
+    lineIdx = list.findIndex(l => l.bottom > scrollY + 8);
+    if(lineIdx < 0) lineIdx = 0;
+  } else {
+    lineIdx = Math.min(list.length - 1, Math.max(0, lineIdx + d));
+  }
+  const ln = list[lineIdx];
+  if(ln.top < scrollY + 70 || ln.bottom > scrollY + innerHeight - 70)
+    scrollTo({top: Math.max(0, (ln.top + ln.bottom) / 2 - innerHeight / 2)});
+  const r = document.getElementById('ruler');
+  r.style.top = (ln.top - scrollY - 3) + 'px';
+  r.style.height = (ln.bottom - ln.top + 6) + 'px';
   keyNav = true;
 }
 document.addEventListener('mousemove', e => {
@@ -191,18 +209,18 @@ document.addEventListener('mousemove', e => {
   if(keyNav){
     if(Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 24) return;
     keyNav = false;
-    clearSentFocus();
     document.getElementById('ruler').style.height = '';
   }
   mx = e.clientX; my = e.clientY;
   const r = document.getElementById('ruler');
   r.style.top = (e.clientY - r.offsetHeight / 2) + 'px';
 });
+addEventListener('resize', () => { lines = null; lineIdx = -1; });
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && window.speechSynthesis) speechSynthesis.cancel();
   if(!S.ruler || e.target.closest('select, input, textarea, button')) return;
-  if(e.key === 'ArrowRight'){ e.preventDefault(); stepSent(1); }
-  else if(e.key === 'ArrowLeft'){ e.preventDefault(); stepSent(-1); }
+  if(e.key === 'ArrowRight' || e.key === 'ArrowDown'){ e.preventDefault(); stepLine(1); }
+  else if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){ e.preventDefault(); stepLine(-1); }
 });
 document.addEventListener('click', e => {
   if(!S.speak || !window.speechSynthesis) return;
@@ -374,8 +392,8 @@ def tree_to_html(tree) -> str:
         '<button id="sent-btn" class="tog" onclick="setS(\'sent\', !S.sent)" '
         'title="Start every sentence on its own line">↵ sentence per line</button>'
         '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
-        'title="A tinted band that follows your mouse — press the ←/→ arrow keys '
-        'to step it sentence by sentence">🖍 reading ruler</button>'
+        'title="A tinted band that follows your mouse — press the arrow keys '
+        'to step it line by line">🖍 reading ruler</button>'
         '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
         'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
         '<button onclick="resetS()" title="Back to the default settings">reset</button>'
