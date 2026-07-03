@@ -3,7 +3,9 @@ branching, and importing trees of knowledge."""
 
 from __future__ import annotations
 
+import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from .backend import ClaudeError
@@ -14,11 +16,14 @@ from .personas import (
     followup_learner_message,
     followup_tutor_context,
 )
-from .render import Renderer
+from .render import Renderer, SilentRenderer
 from .simulator import pick_next_concept, run_conversation
 
 # A `full` session = the root investigation + this many tutor-chosen follow-ups.
 FULL_FOLLOWUPS = 3
+
+# How many `many` investigations run at the same time.
+MANY_WORKERS = 4
 
 HELP = """\
 commands:
@@ -26,6 +31,9 @@ commands:
   full <topic>             like 'new', then the tutor reviews the conversation and
                            picks the next best related concept to explore — repeated
                            so the tree ends up with 4 linked investigations
+  many "<q1>", "<q2>", ... run one 'new' investigation per quoted question, all in
+                           parallel; each conversation replays as it finishes and
+                           is saved as its own tree
   branch <node> <turn> [focus]
                            re-investigate node's tutor answer at <turn>, going deeper.
                            optional [focus] steers what to dig into; else the learner picks.
@@ -88,7 +96,7 @@ class Shell:
         arg = parts[1] if len(parts) > 1 else ""
         handlers = {
             "new": self.cmd_new, "learn": self.cmd_new,
-            "full": self.cmd_full,
+            "full": self.cmd_full, "many": self.cmd_many,
             "branch": self.cmd_branch, "dig": self.cmd_branch,
             "tree": self.cmd_tree, "show": self.cmd_show,
             "open": self.cmd_open, "list": self.cmd_list, "ls": self.cmd_list,
@@ -131,6 +139,69 @@ class Shell:
         self.kb = kb
         self.r.ok(f"saved → {kb.path}")
         self._print_tree()
+
+    def cmd_many(self, arg: str) -> None:
+        topics = re.findall(r'"([^"]+)"', arg)
+        if not topics:  # tolerate unquoted, comma-separated questions
+            topics = [t.strip() for t in arg.split(",") if t.strip()]
+        if not topics:
+            self.r.warn('usage: many "question one", "question two", ...')
+            return
+        if len(topics) == 1:
+            self.cmd_new(topics[0])
+            return
+
+        self.r.section(f"many: {len(topics)} investigations in parallel",
+                       f"learner={self.learner_model} tutor={self.tutor_model}")
+        for i, t in enumerate(topics, 1):
+            self.r.info(f"  {i}. {t}")
+
+        silent = SilentRenderer()
+
+        def worker(topic: str):
+            return run_conversation(
+                topic, max_turns=self.max_turns, learner_model=self.learner_model,
+                tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+                timeout=self.timeout, renderer=silent,
+            )
+
+        trees: dict[str, KnowledgeTree] = {}
+        total, done = len(topics), 0
+        with ThreadPoolExecutor(max_workers=min(MANY_WORKERS, total)) as pool:
+            futures = {pool.submit(worker, t): t for t in topics}
+            self.r.status(f"0/{total} done — investigating in parallel…")
+            try:
+                for fut in as_completed(futures):
+                    topic = futures[fut]
+                    done += 1
+                    self.r.clear_status()
+                    try:
+                        result = fut.result()
+                    except ClaudeError as exc:
+                        self.r.warn(f'"{one_line(topic, 50)}" failed: {exc}')
+                    else:
+                        kb = KnowledgeTree(topic, path=self._unique_path(topic))
+                        node = kb.add_root(topic, result, learner_model=self.learner_model,
+                                           tutor_model=self.tutor_model)
+                        kb.save()
+                        trees[topic] = kb
+                        self.r.replay(node, f"finished {done}/{total}")
+                        self.r.ok(f"saved → {kb.path}")
+                    if done < total:
+                        self.r.status(f"{done}/{total} done — still investigating…")
+            except KeyboardInterrupt:
+                self.r.clear_status()
+                self.r.warn("interrupted — queued investigations cancelled; the ones "
+                            "already running must finish their conversation first")
+                pool.shutdown(cancel_futures=True)
+
+        for t in topics:  # open the first question's tree (in the order given)
+            if t in trees:
+                self.kb = trees[t]
+                break
+        self.r.ok(f"many done: {len(trees)}/{total} trees saved"
+                  + (f"  ·  open tree: '{one_line(self.kb.root_topic, 40)}'" if trees else ""))
+        self.cmd_list("")
 
     def cmd_full(self, topic: str) -> None:
         topic = topic.strip()

@@ -182,3 +182,21 @@ class Renderer:
                          t.get("action", ""), t.get("confidence"))
             if t.get("tutor"):
                 self.tutor(t["tutor"])
+
+
+class SilentRenderer(Renderer):
+    """A Renderer that prints nothing — for investigations running in parallel,
+    whose conversations are replayed once they finish (live output from several
+    conversations at once would interleave)."""
+
+    def status(self, msg: str) -> None:
+        pass
+
+    def clear_status(self) -> None:
+        pass
+
+    def learner(self, *args, **kwargs) -> None:
+        pass
+
+    def tutor(self, *args, **kwargs) -> None:
+        pass
