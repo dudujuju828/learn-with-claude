@@ -18,8 +18,10 @@ Accessibility choices (per British Dyslexia Association style guidance):
     a time (line boxes are enumerated with the Range API);
   * an optional "invert on step" effect: each arrow-key ruler step flips the
     page to its inverse colours and back (a strong visual pacing cue);
-  * a "focus line" mode (typoscope): everything except the line under the
-    ruler is masked out, via a huge opaque box-shadow around the ruler band;
+  * a "focus line" mode (typoscope): everything except the current line is
+    masked out, via a huge opaque box-shadow around the (full-width) ruler
+    band. It works standalone — the band itself is invisible and the revealed
+    line acts as the implicit ruler — or combined with the ruler's amber tint;
   * click-to-read-aloud via the browser's built-in speech synthesis;
   * all settings persist in localStorage across reloads.
 """
@@ -107,10 +109,13 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
 #ruler{{position:fixed; left:0; right:0; top:40%; height:2.6em; display:none;
   background:rgba(255,205,50,.16); border-top:2px solid rgba(226,164,26,.55);
   border-bottom:2px solid rgba(226,164,26,.55); pointer-events:none; z-index:40;}}
-.ruler-on #ruler{{display:block;}}
+.ruler-on #ruler, .mask-on #ruler{{display:block;}}
 /* Focus mode: a huge opaque shadow around the full-width ruler band masks
-   everything above and below it, leaving only the current line visible. */
+   everything above and below it, leaving only the current line visible. On its
+   own the band is invisible — the revealed line IS the ruler; combine with the
+   ruler toggle to also tint the line amber. */
 .mask-on #ruler{{box-shadow:0 0 0 200vmax var(--bg);}}
+.mask-on:not(.ruler-on) #ruler{{background:transparent; border-color:transparent;}}
 /* Applied to <html>: the root element is exempt from filter's containing-block
    rule, so the fixed toolbar and ruler keep their viewport positioning. */
 .inverted{{filter:invert(1) hue-rotate(180deg);}}
@@ -142,8 +147,11 @@ const THEMES = {
          think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
          termbg:'#3a2f37', termline:'#5c4653', prebg:'#32352f'}
 };
+// The ruler machinery (band element, mouse-follow, arrow keys) is active when
+// either the visible ruler or focus-line mode is on — focus mode is just the
+// ruler with an invisible band and a masking shadow.
+function rulerActive(){ return S.ruler || S.mask; }
 function apply(){
-  if(!S.ruler) S.mask = false;  // focus mode only makes sense with the ruler
   const t = THEMES[S.theme] || THEMES.cream;
   const v = {font:S.font, fs:S.fs+'px', lh:S.lh, ls:S.ls+'em', ws:S.ws+'em',
              bg:t.bg, card:t.card, fg:t.fg, line:t.line, muted:t.muted,
@@ -154,11 +162,11 @@ function apply(){
   body.classList.toggle('ruler-on', S.ruler);
   body.classList.toggle('mask-on', S.mask);
   body.classList.toggle('speak-on', S.speak);
-  if(!S.ruler){
+  if(!rulerActive()){
     keyNav = false;
     document.getElementById('ruler').style.height = '';
   }
-  if(!S.ruler || !S.inv) root.classList.remove('inverted');
+  if(!rulerActive() || !S.inv) root.classList.remove('inverted');
   lines = null; lineIdx = -1;  // any setting change may have reflowed the text
   if(!S.speak && window.speechSynthesis) speechSynthesis.cancel();
   document.getElementById('font').value = S.font;
@@ -168,11 +176,7 @@ function apply(){
     document.getElementById(id).classList.toggle('on', on);
   try{ localStorage.setItem('lwc-a11y', JSON.stringify(S)); }catch(err){}
 }
-function setS(k, v){
-  S[k] = v;
-  if(k === 'mask' && v) S.ruler = true;  // focus mode brings the ruler with it
-  apply();
-}
+function setS(k, v){ S[k] = v; apply(); }
 function bump(k, d, min, max){
   S[k] = Math.min(max, Math.max(min, Math.round((S[k] + d) * 1000) / 1000));
   apply();
@@ -225,7 +229,7 @@ function stepLine(d){
   keyNav = true;
 }
 document.addEventListener('mousemove', e => {
-  if(!S.ruler) return;
+  if(!rulerActive()) return;
   if(keyNav){
     if(Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 24) return;
     keyNav = false;
@@ -239,7 +243,7 @@ document.addEventListener('mousemove', e => {
 addEventListener('resize', () => { lines = null; lineIdx = -1; });
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape' && window.speechSynthesis) speechSynthesis.cancel();
-  if(!S.ruler || e.target.closest('select, input, textarea, button')) return;
+  if(!rulerActive() || e.target.closest('select, input, textarea, button')) return;
   if(e.key === 'ArrowRight' || e.key === 'ArrowDown'){ e.preventDefault(); stepLine(1); }
   else if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){ e.preventDefault(); stepLine(-1); }
 });
@@ -416,8 +420,9 @@ def tree_to_html(tree) -> str:
         'title="A tinted band that follows your mouse — press the arrow keys '
         'to step it line by line">🖍 reading ruler</button>'
         '<button id="mask-btn" class="tog" onclick="setS(\'mask\', !S.mask)" '
-        'title="Hide everything except the line under the reading ruler '
-        '(turns the ruler on)">🕶 focus line</button>'
+        'title="Hide everything except the current line — follow the mouse or '
+        'step with the arrow keys; add the reading ruler if you also want the '
+        'line tinted">🕶 focus line</button>'
         '<button id="inv-btn" class="tog" onclick="setS(\'inv\', !S.inv)" '
         'title="Flip the page colours to their inverse on every ruler step '
         '(arrow keys), and back on the next">🌓 invert on step</button>'
