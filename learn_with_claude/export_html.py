@@ -16,6 +16,8 @@ Accessibility choices (per British Dyslexia Association style guidance):
   * a reading ruler (tinted band that follows the mouse to keep your place),
     steerable with the arrow keys to step through the text one visual line at
     a time (line boxes are enumerated with the Range API);
+  * an optional "invert on step" effect: each arrow-key ruler step flips the
+    page to its inverse colours and back (a strong visual pacing cue);
   * click-to-read-aloud via the browser's built-in speech synthesis;
   * all settings persist in localStorage across reloads.
 """
@@ -104,6 +106,9 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
   background:rgba(255,205,50,.16); border-top:2px solid rgba(226,164,26,.55);
   border-bottom:2px solid rgba(226,164,26,.55); pointer-events:none; z-index:40;}}
 .ruler-on #ruler{{display:block;}}
+/* Applied to <html>: the root element is exempt from filter's containing-block
+   rule, so the fixed toolbar and ruler keep their viewport positioning. */
+.inverted{{filter:invert(1) hue-rotate(180deg);}}
 .speak-on .block, .speak-on h1, .speak-on h2, .speak-on .term{{cursor:pointer;}}
 .reading{{outline:3px solid var(--ans); outline-offset:4px; border-radius:.4rem;}}
 </style>"""
@@ -112,7 +117,7 @@ _SCRIPT = """\
 <script>
 const root = document.documentElement, body = document.body;
 const DEFAULTS = {font:'OpenDyslexic', fs:18, lh:1.75, ls:0.02, ws:0.07,
-                  theme:'cream', sent:false, ruler:false, speak:false};
+                  theme:'cream', sent:false, ruler:false, speak:false, inv:false};
 const S = Object.assign({}, DEFAULTS);
 const THEMES = {
   cream:{bg:'#fbf6ea', card:'#fffdf6', fg:'#2c2620', line:'#e7dcc7', muted:'#6f6657',
@@ -145,11 +150,12 @@ function apply(){
     keyNav = false;
     document.getElementById('ruler').style.height = '';
   }
+  if(!S.ruler || !S.inv) root.classList.remove('inverted');
   lines = null; lineIdx = -1;  // any setting change may have reflowed the text
   if(!S.speak && window.speechSynthesis) speechSynthesis.cancel();
   document.getElementById('font').value = S.font;
   document.getElementById('theme').value = S.theme;
-  for(const [id, on] of [['sent-btn',S.sent],['ruler-btn',S.ruler],['speak-btn',S.speak]])
+  for(const [id, on] of [['sent-btn',S.sent],['ruler-btn',S.ruler],['speak-btn',S.speak],['inv-btn',S.inv]])
     document.getElementById(id).classList.toggle('on', on);
   try{ localStorage.setItem('lwc-a11y', JSON.stringify(S)); }catch(err){}
 }
@@ -202,6 +208,7 @@ function stepLine(d){
   const r = document.getElementById('ruler');
   r.style.top = (ln.top - scrollY - 3) + 'px';
   r.style.height = (ln.bottom - ln.top + 6) + 'px';
+  if(S.inv) root.classList.toggle('inverted');
   keyNav = true;
 }
 document.addEventListener('mousemove', e => {
@@ -210,6 +217,7 @@ document.addEventListener('mousemove', e => {
     if(Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 24) return;
     keyNav = false;
     document.getElementById('ruler').style.height = '';
+    root.classList.remove('inverted');
   }
   mx = e.clientX; my = e.clientY;
   const r = document.getElementById('ruler');
@@ -394,6 +402,9 @@ def tree_to_html(tree) -> str:
         '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
         'title="A tinted band that follows your mouse — press the arrow keys '
         'to step it line by line">🖍 reading ruler</button>'
+        '<button id="inv-btn" class="tog" onclick="setS(\'inv\', !S.inv)" '
+        'title="Flip the page colours to their inverse on every ruler step '
+        '(arrow keys), and back on the next">🌓 invert on step</button>'
         '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
         'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
         '<button onclick="resetS()" title="Back to the default settings">reset</button>'

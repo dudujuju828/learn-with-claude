@@ -161,6 +161,8 @@ The toolbar also has:
 - **🖍 reading ruler** — a tinted band that follows your mouse to keep your place; the
   **arrow keys** (←/→ or ↑/↓) snap it to the text and step it one line at a time,
   scrolling as needed (move the mouse to take back free control);
+- **🌓 invert on step** — optionally flip the page to its inverse colours on every
+  ruler step and back on the next, a strong pacing cue that each press landed;
 - **🔊 read aloud** — click any block of text to hear it via the browser's built-in
   speech synthesis (Esc stops it);
 - a **reset** button, and all settings persist across reloads (localStorage).
