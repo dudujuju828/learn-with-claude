@@ -220,8 +220,10 @@ function stepLine(d){
     lineIdx = Math.min(list.length - 1, Math.max(0, lineIdx + d));
   }
   const ln = list[lineIdx];
-  if(ln.top < scrollY + 70 || ln.bottom > scrollY + innerHeight - 70)
-    scrollTo({top: Math.max(0, (ln.top + ln.bottom) / 2 - innerHeight / 2)});
+  // Teleprompter: keep the current line centred; the text scrolls under the
+  // band. The browser clamps at the document edges, and the band placement
+  // below uses the post-scroll scrollY, so it lands on the line either way.
+  scrollTo({top: Math.max(0, (ln.top + ln.bottom) / 2 - innerHeight / 2)});
   const r = document.getElementById('ruler');
   r.style.top = (ln.top - scrollY - 3) + 'px';
   r.style.height = (ln.bottom - ln.top + 6) + 'px';

@@ -160,7 +160,8 @@ The toolbar also has:
 - **↵ sentence per line** — every sentence starts on its own line, across all blocks;
 - **🖍 reading ruler** — a tinted band that follows your mouse to keep your place; the
   **arrow keys** (←/→ or ↑/↓) snap it to the text and step it one line at a time,
-  scrolling as needed (move the mouse to take back free control);
+  auto-scrolling so the current line stays centred on screen, teleprompter-style
+  (move the mouse to take back free control);
 - **🕶 focus line** — hides *everything* except the current line (like a typoscope
   card over the page); works with both mouse-following and arrow-key stepping. It
   stands alone — no yellow band, the revealed line is the implicit ruler — or turn
