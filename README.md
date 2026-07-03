@@ -144,11 +144,23 @@ italics, and generous spacing. Tune it with `--width` and `--line-spacing 2`.
 
 **In the export** — `export html` writes a self-contained page that actually uses a
 dyslexia-friendly *typeface*, with an in-page toolbar to switch between **OpenDyslexic /
-Lexend / Atkinson Hyperlegible / Comic Sans / system**, plus text-size and line-spacing
-controls. The page uses a cream background with dark-but-not-black text, 1.75 line-height,
-extra letter/word spacing, a ~64-character measure, left alignment, and a clickable map of
-the tree. Fonts load from web CDNs with offline fallbacks to Comic Sans / Verdana (both
-dyslexia-friendly), so it degrades gracefully without a connection.
+Lexend / Atkinson Hyperlegible / Comic Sans / system**. The page uses a cream background
+with dark-but-not-black text, 1.75 line-height, extra letter/word spacing, a ~64-character
+measure, left alignment, and a clickable map of the tree. Fonts load from web CDNs with
+offline fallbacks to Comic Sans / Verdana (both dyslexia-friendly), so it degrades
+gracefully without a connection.
+
+The toolbar also has:
+
+- **text size** and **line spacing** (up to ~4× — very airy), **letter spacing** and
+  **word spacing** controls;
+- **colour themes** — cream, soft blue, soft green, grey, and dark (tinted backgrounds
+  help many dyslexic readers);
+- **↵ sentence per line** — every sentence starts on its own line, across all blocks;
+- **🖍 reading ruler** — a tinted band that follows your mouse to keep your place;
+- **🔊 read aloud** — click any block of text to hear it via the browser's built-in
+  speech synthesis (Esc stops it);
+- a **reset** button, and all settings persist across reloads (localStorage).
 
 ```
 learn (...) › export html        # → knowledge/<topic>.html

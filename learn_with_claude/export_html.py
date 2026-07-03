@@ -3,10 +3,19 @@
 Accessibility choices (per British Dyslexia Association style guidance):
   * dyslexia-friendly typefaces with an in-page switcher — OpenDyslexic, Lexend,
     Atkinson Hyperlegible, Comic Sans — plus a system fallback;
-  * cream background and dark-but-not-black text (avoids harsh contrast glare);
+  * cream background and dark-but-not-black text (avoids harsh contrast glare),
+    plus alternative colour themes (soft blue / soft green / grey / dark) since
+    tinted backgrounds help many dyslexic readers;
   * large text, 1.7 line-height, extra letter/word spacing, ~64-char measure;
   * left-aligned (never justified), no italics, generous whitespace;
-  * adjustable text size and line spacing via the toolbar.
+  * toolbar controls for text size, line spacing (up to ~4x), letter spacing
+    and word spacing;
+  * a "sentence per line" toggle: every sentence starts on its own line
+    (sentence boundaries are pre-marked at export with invisible <span
+    class="sbr"> markers the toggle turns into line breaks);
+  * a reading ruler (tinted band that follows the mouse to keep your place);
+  * click-to-read-aloud via the browser's built-in speech synthesis;
+  * all settings persist in localStorage across reloads.
 """
 
 from __future__ import annotations
@@ -40,14 +49,15 @@ _HEAD = """\
 :root{{
   --bg:#fbf6ea; --fg:#2c2620; --muted:#6f6657; --line:#e7dcc7; --card:#fffdf6;
   --think:#8a6d12; --ask:#1c6b46; --ans:#1b4f86; --term:#8a2b6b;
-  --fs:18px; --lh:1.75; --measure:64ch;
+  --term-bg:#f7e6f1; --term-line:#e8cbe0; --pre-bg:#f3ecda;
+  --fs:18px; --lh:1.75; --ls:.02em; --ws:.07em; --measure:64ch;
 }}
 *{{box-sizing:border-box}}
 body{{
   margin:0; background:var(--bg); color:var(--fg);
   font-family:var(--font,'OpenDyslexic'),'Lexend','Atkinson Hyperlegible','Comic Sans MS',Verdana,Tahoma,sans-serif;
   font-size:var(--fs); line-height:var(--lh);
-  letter-spacing:.02em; word-spacing:.07em; text-align:left;
+  letter-spacing:var(--ls); word-spacing:var(--ws); text-align:left;
 }}
 .wrap{{max-width:calc(var(--measure) + 7rem); margin:0 auto; padding:1rem 1.25rem 6rem;}}
 h1{{font-size:1.7rem; line-height:1.3;}}
@@ -79,25 +89,91 @@ a{{color:var(--ans);}}
 .block.think .label{{color:var(--think);}} .block.think{{border-color:var(--think);}}
 .block.ask .label{{color:var(--ask);}} .block.ask{{border-color:var(--ask);}}
 .block.ans .label{{color:var(--ans);}} .block.ans{{border-color:var(--ans);}}
-.term{{display:inline-block; background:#f7e6f1; color:var(--term);
-  border:1px solid #e8cbe0; border-radius:.45rem; padding:.12rem .55rem; font-weight:bold; margin:.2rem 0 1rem;}}
-pre{{background:#f3ecda; border:1px solid var(--line); border-radius:.55rem; padding:.85rem; overflow:auto; line-height:1.5;}}
+.term{{display:inline-block; background:var(--term-bg); color:var(--term);
+  border:1px solid var(--term-line); border-radius:.45rem; padding:.12rem .55rem; font-weight:bold; margin:.2rem 0 1rem;}}
+pre{{background:var(--pre-bg); border:1px solid var(--line); border-radius:.55rem; padding:.85rem; overflow:auto; line-height:1.5;}}
 code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.95em; letter-spacing:0;}}
 .conf{{color:var(--muted); font-weight:normal; font-size:.85em;}}
+.grp{{display:inline-flex; align-items:center; gap:.3rem; margin-right:.3rem;}}
+.toolbar .tog.on{{border-color:var(--ans); box-shadow:inset 0 0 0 2px var(--ans); font-weight:bold;}}
+.sent-lines span.sbr{{display:block; height:.6em;}}
+#ruler{{position:fixed; left:0; right:0; top:40%; height:2.6em; display:none;
+  background:rgba(255,205,50,.16); border-top:2px solid rgba(226,164,26,.55);
+  border-bottom:2px solid rgba(226,164,26,.55); pointer-events:none; z-index:40;}}
+.ruler-on #ruler{{display:block;}}
+.speak-on .block, .speak-on h1, .speak-on h2, .speak-on .term{{cursor:pointer;}}
+.reading{{outline:3px solid var(--ans); outline-offset:4px; border-radius:.4rem;}}
 </style>"""
 
 _SCRIPT = """\
 <script>
-const root = document.documentElement;
-function setFont(v){ root.style.setProperty('--font', v); }
-function bumpSize(d){
-  const cur = parseFloat(getComputedStyle(root).getPropertyValue('--fs')) || 18;
-  root.style.setProperty('--fs', Math.min(28, Math.max(14, cur + d)) + 'px');
+const root = document.documentElement, body = document.body;
+const DEFAULTS = {font:'OpenDyslexic', fs:18, lh:1.75, ls:0.02, ws:0.07,
+                  theme:'cream', sent:false, ruler:false, speak:false};
+const S = Object.assign({}, DEFAULTS);
+const THEMES = {
+  cream:{bg:'#fbf6ea', card:'#fffdf6', fg:'#2c2620', line:'#e7dcc7', muted:'#6f6657',
+         think:'#8a6d12', ask:'#1c6b46', ans:'#1b4f86', term:'#8a2b6b',
+         termbg:'#f7e6f1', termline:'#e8cbe0', prebg:'#f3ecda'},
+  blue: {bg:'#e9f1f9', card:'#f6fafd', fg:'#22303c', line:'#cfdfec', muted:'#5c6f80',
+         think:'#7a6210', ask:'#176546', ans:'#175a94', term:'#7d2a62',
+         termbg:'#f0e2ec', termline:'#dcc3d4', prebg:'#dfeaf3'},
+  green:{bg:'#ecf4e9', card:'#f8fbf6', fg:'#26302a', line:'#d4e3cd', muted:'#5f7160',
+         think:'#7a6210', ask:'#186a3b', ans:'#1b5e86', term:'#7d2a62',
+         termbg:'#eee3ea', termline:'#d9c4d2', prebg:'#e2ecdc'},
+  grey: {bg:'#e9e9e7', card:'#f5f5f3', fg:'#26262a', line:'#d2d2cf', muted:'#63635f',
+         think:'#77620f', ask:'#1a6244', ans:'#1a5583', term:'#7d2a62',
+         termbg:'#ece1e8', termline:'#d6c2d0', prebg:'#dededa'},
+  dark: {bg:'#20221f', card:'#2a2d29', fg:'#e9e4da', line:'#44483f', muted:'#a9a294',
+         think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
+         termbg:'#3a2f37', termline:'#5c4653', prebg:'#32352f'}
+};
+function apply(){
+  const t = THEMES[S.theme] || THEMES.cream;
+  const v = {font:S.font, fs:S.fs+'px', lh:S.lh, ls:S.ls+'em', ws:S.ws+'em',
+             bg:t.bg, card:t.card, fg:t.fg, line:t.line, muted:t.muted,
+             think:t.think, ask:t.ask, ans:t.ans, term:t.term,
+             'term-bg':t.termbg, 'term-line':t.termline, 'pre-bg':t.prebg};
+  for(const k in v) root.style.setProperty('--'+k, v[k]);
+  body.classList.toggle('sent-lines', S.sent);
+  body.classList.toggle('ruler-on', S.ruler);
+  body.classList.toggle('speak-on', S.speak);
+  if(!S.speak && window.speechSynthesis) speechSynthesis.cancel();
+  document.getElementById('font').value = S.font;
+  document.getElementById('theme').value = S.theme;
+  for(const [id, on] of [['sent-btn',S.sent],['ruler-btn',S.ruler],['speak-btn',S.speak]])
+    document.getElementById(id).classList.toggle('on', on);
+  try{ localStorage.setItem('lwc-a11y', JSON.stringify(S)); }catch(err){}
 }
-function bumpLine(d){
-  const cur = parseFloat(getComputedStyle(root).getPropertyValue('--lh')) || 1.75;
-  root.style.setProperty('--lh', Math.min(2.4, Math.max(1.3, cur + d)).toFixed(2));
+function setS(k, v){ S[k] = v; apply(); }
+function bump(k, d, min, max){
+  S[k] = Math.min(max, Math.max(min, Math.round((S[k] + d) * 1000) / 1000));
+  apply();
 }
+function resetS(){ Object.assign(S, DEFAULTS); apply(); }
+document.addEventListener('mousemove', e => {
+  if(!S.ruler) return;
+  const r = document.getElementById('ruler');
+  r.style.top = (e.clientY - r.offsetHeight / 2) + 'px';
+});
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape' && window.speechSynthesis) speechSynthesis.cancel();
+});
+document.addEventListener('click', e => {
+  if(!S.speak || !window.speechSynthesis) return;
+  if(e.target.closest('.toolbar, a')) return;
+  const blk = e.target.closest('.block, h1, h2, .term, .crumb');
+  if(!blk) return;
+  speechSynthesis.cancel();
+  document.querySelectorAll('.reading').forEach(x => x.classList.remove('reading'));
+  const u = new SpeechSynthesisUtterance(blk.innerText);
+  u.rate = 0.95;
+  u.onend = u.onerror = () => blk.classList.remove('reading');
+  blk.classList.add('reading');
+  speechSynthesis.speak(u);
+});
+try{ Object.assign(S, JSON.parse(localStorage.getItem('lwc-a11y') || '{}')); }catch(err){}
+apply();
 </script>"""
 
 
@@ -105,12 +181,29 @@ def _esc(s: str) -> str:
     return _html.escape(s or "")
 
 
+# Sentence boundaries are marked at export with a \x00 placeholder (inserted
+# before HTML-escaping, replaced by the span after), so the "sentence per line"
+# toolbar toggle can turn every boundary into a line break with pure CSS.
+# Unlike render.space_sentences this also accepts lowercase sentence starts,
+# because the learner deliberately types in casual lowercase.
+_SENT_GAP = re.compile(r"(?<=[.!?])([\"')\]]*)\s+(?=[A-Za-z0-9\"'(\[])")
+_SBR = '<span class="sbr"> </span>'
+
+
+def _esc_sent(s: str) -> str:
+    """Escape text and wrap each sentence boundary in a toggleable marker."""
+    return _esc(_SENT_GAP.sub("\\1\x00", s or "")).replace("\x00", _SBR)
+
+
 def _inline_md(seg: str) -> str:
-    seg = _esc(seg)
-    seg = re.sub(r"`([^`]+)`", r"<code>\1</code>", seg)
-    seg = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", seg)
-    paras = [p.strip() for p in re.split(r"\n\s*\n", seg) if p.strip()]
-    return "".join("<p>" + p.replace("\n", "<br>") + "</p>" for p in paras) or "<p></p>"
+    paras = [p.strip() for p in re.split(r"\n\s*\n", seg or "") if p.strip()]
+    out = []
+    for p in paras:
+        p = _esc(_SENT_GAP.sub("\\1\x00", p))
+        p = re.sub(r"`([^`]+)`", r"<code>\1</code>", p)
+        p = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", p)
+        out.append("<p>" + p.replace("\n", "<br>") + "</p>")
+    return "".join(out).replace("\x00", _SBR) or "<p></p>"
 
 
 def _md_lite(text: str) -> str:
@@ -133,13 +226,13 @@ def _turn_html(t: dict) -> str:
     if t.get("thinking"):
         parts.append(
             '<div class="block think"><div class="label">💭 Thinking to myself</div>'
-            f'<p>{_esc(t["thinking"])}</p></div>'
+            f'<p>{_esc_sent(t["thinking"])}</p></div>'
         )
     if t.get("new_term"):
         parts.append(f'<div class="term">🔍 New word I hit: {_esc(t["new_term"])}</div>')
     parts.append(
         '<div class="block ask"><div class="label">🙋 I ask Claude</div>'
-        f'<p>{_esc(t["action"])}</p></div>'
+        f'<p>{_esc_sent(t["action"])}</p></div>'
     )
     if t.get("tutor"):
         parts.append(
@@ -191,18 +284,41 @@ def tree_to_html(tree) -> str:
 
     toolbar = (
         '<div class="toolbar">'
-        '<label for="font">Font</label>'
-        '<select id="font" onchange="setFont(this.value)">'
+        '<span class="grp"><label for="font">Font</label>'
+        '<select id="font" onchange="setS(\'font\', this.value)">'
         '<option value="OpenDyslexic">OpenDyslexic</option>'
         '<option value="Lexend">Lexend</option>'
         '<option value="Atkinson Hyperlegible">Atkinson Hyperlegible</option>'
         '<option value="Comic Sans MS">Comic Sans</option>'
         '<option value="system-ui">System</option>'
-        "</select>"
-        '<button onclick="bumpSize(2)" title="Bigger text">A+</button>'
-        '<button onclick="bumpSize(-2)" title="Smaller text">A−</button>'
-        '<button onclick="bumpLine(0.15)" title="More line spacing">↕ more</button>'
-        '<button onclick="bumpLine(-0.15)" title="Less line spacing">↕ less</button>'
+        "</select></span>"
+        '<span class="grp"><label for="theme">Colours</label>'
+        '<select id="theme" onchange="setS(\'theme\', this.value)">'
+        '<option value="cream">Cream</option>'
+        '<option value="blue">Soft blue</option>'
+        '<option value="green">Soft green</option>'
+        '<option value="grey">Grey</option>'
+        '<option value="dark">Dark</option>'
+        "</select></span>"
+        '<span class="grp"><label>Text</label>'
+        '<button onclick="bump(\'fs\', -2, 14, 40)" title="Smaller text">A−</button>'
+        '<button onclick="bump(\'fs\', 2, 14, 40)" title="Bigger text">A+</button></span>'
+        '<span class="grp"><label>Lines</label>'
+        '<button onclick="bump(\'lh\', -0.25, 1.3, 4)" title="Less space between lines">−</button>'
+        '<button onclick="bump(\'lh\', 0.25, 1.3, 4)" title="More space between lines">+</button></span>'
+        '<span class="grp"><label>Letters</label>'
+        '<button onclick="bump(\'ls\', -0.02, 0, 0.2)" title="Less space between letters">−</button>'
+        '<button onclick="bump(\'ls\', 0.02, 0, 0.2)" title="More space between letters">+</button></span>'
+        '<span class="grp"><label>Words</label>'
+        '<button onclick="bump(\'ws\', -0.05, 0, 0.5)" title="Less space between words">−</button>'
+        '<button onclick="bump(\'ws\', 0.05, 0, 0.5)" title="More space between words">+</button></span>'
+        '<button id="sent-btn" class="tog" onclick="setS(\'sent\', !S.sent)" '
+        'title="Start every sentence on its own line">↵ sentence per line</button>'
+        '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
+        'title="A tinted band that follows your mouse, to keep your place">🖍 reading ruler</button>'
+        '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
+        'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
+        '<button onclick="resetS()" title="Back to the default settings">reset</button>'
         "</div>"
     )
 
@@ -221,6 +337,7 @@ def tree_to_html(tree) -> str:
         + "</div>"
         + "".join(sections)
         + "</div>"
+        + '<div id="ruler"></div>'
         + _SCRIPT
         + "</body></html>"
     )
