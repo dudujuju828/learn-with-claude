@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+from .render import space_sentences
+
 FORMAT = "learn-with-claude/knowledge-tree"
 VERSION = 1
 
@@ -261,7 +263,7 @@ class KnowledgeTree:
                 out.append(f"🙋 **I ask Claude:** {t['action']}")
                 out.append("")
                 if t.get("tutor"):
-                    out.append(f"📘 **Claude answers:** {t['tutor']}")
+                    out.append(f"📘 **Claude answers:** {space_sentences(t['tutor'])}")
                     out.append("")
             out.append("---")
             out.append("")

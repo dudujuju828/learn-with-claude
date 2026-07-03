@@ -6,6 +6,8 @@ Design choices that help (within what a terminal program can control):
   * high-contrast body text (the terminal's own default colour), with colour used
     only on labels and a left "gutter" bar so each block is a clear visual chunk;
   * generous blank-line spacing between blocks and turns;
+  * tutor answers reflowed to one sentence per paragraph, blank line between
+    sentences (see `space_sentences`);
   * no italics, no low-contrast dim body text.
 The actual *font* is a terminal setting we can't change here — use the HTML export
 for a dyslexic typeface.
@@ -14,8 +16,25 @@ for a dyslexic typeface.
 from __future__ import annotations
 
 import os
+import re
 import sys
 import textwrap
+
+# A sentence end (. ! ?), optionally followed by closing quotes/brackets, then
+# whitespace, then something that looks like a new sentence starting.
+_SENTENCE_GAP = re.compile(r"(?<=[.!?])([\"')\]]*)\s+(?=[A-Z0-9\"'(\[])")
+_CODE_FENCE = re.compile(r"(```[^\n]*\n.*?(?:```|\Z))", re.S)
+
+
+def space_sentences(text: str) -> str:
+    """Reflow prose so every sentence sits in its own paragraph with a blank
+    line between them — much easier to track for dyslexic readers. Fenced code
+    blocks are left untouched. Idempotent, so it is safe to apply both when a
+    reply is recorded and again when old saved trees are re-displayed."""
+    parts = _CODE_FENCE.split(text or "")
+    for i in range(0, len(parts), 2):  # even indices are prose between fences
+        parts[i] = _SENTENCE_GAP.sub(r"\1\n\n", parts[i])
+    return "".join(parts).strip()
 
 
 class Palette:
@@ -118,6 +137,7 @@ class Renderer:
         self._emit_block("🙋 I ask Claude", wrap_paragraphs(action, self.width - 2), c.green)
 
     def tutor(self, text: str) -> None:
+        text = space_sentences(text)
         self._emit_block("📘 Claude answers", wrap_paragraphs(text, self.width - 2), self.c.blue)
 
     # --- shell chrome ----------------------------------------------------

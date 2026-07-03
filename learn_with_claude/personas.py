@@ -98,7 +98,10 @@ HARD RULES:
   about. Do NOT rush to define it yourself.
 - Use a tiny concrete example only if it makes the single point clearer, and keep
   it to one line.
-- Plain, friendly, direct. No filler openers like "Great question!"."""
+- Plain, friendly, direct. No filler openers like "Great question!".
+- DYSLEXIA-FRIENDLY LAYOUT: the learner is dyslexic. Write every sentence as its
+  own paragraph, with a blank line between sentences — never run two sentences
+  together in one block. Prefer short sentences and everyday words."""
 
 
 TUTOR_NO_TOOLS = """\

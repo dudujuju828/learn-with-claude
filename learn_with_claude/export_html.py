@@ -14,6 +14,8 @@ from __future__ import annotations
 import html as _html
 import re
 
+from .render import space_sentences
+
 # Google Fonts reliably serves Lexend + Atkinson Hyperlegible; OpenDyslexic is
 # pulled from jsdelivr. If any fail to load, the font stack falls back to
 # Comic Sans / Verdana, which are themselves dyslexia-friendly.
@@ -142,7 +144,7 @@ def _turn_html(t: dict) -> str:
     if t.get("tutor"):
         parts.append(
             '<div class="block ans"><div class="label">📘 Claude answers</div>'
-            f'{_md_lite(t["tutor"])}</div>'
+            f'{_md_lite(space_sentences(t["tutor"]))}</div>'
         )
     parts.append("</div>")
     return "".join(parts)

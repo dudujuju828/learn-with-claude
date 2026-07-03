@@ -20,7 +20,7 @@ from .personas import (
     first_learner_message,
     tutor_system,
 )
-from .render import Renderer
+from .render import Renderer, space_sentences
 
 
 # --------------------------------------------------------------------------- #
@@ -169,16 +169,17 @@ def run_conversation(
         r.status(f"turn {turn}: claude is answering…")
         tutor_reply = tutor.send(action)
         r.clear_status()
-        r.tutor(tutor_reply.text)
+        tutor_text = space_sentences(tutor_reply.text)
+        r.tutor(tutor_text)
 
-        record["tutor"] = tutor_reply.text
+        record["tutor"] = tutor_text
         result.turns.append(record)
         if confidence is not None:
             result.final_confidence = confidence
 
         if done:
             break
-        message = feedback_message(tutor_reply.text)
+        message = feedback_message(tutor_text)
 
     result.cost = learner.total_cost + tutor.total_cost
     return result
