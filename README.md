@@ -172,6 +172,12 @@ The toolbar also has:
   ruler step and back on the next, a strong pacing cue that each press landed;
 - **🔊 read aloud** — click any block of text to hear it via the browser's built-in
   speech synthesis (Esc stops it);
+- **🤖 ask AI** — with the ruler or focus line on a line, press **A** (or the button):
+  a panel opens where you can ask DeepSeek (`deepseek-v4-pro`) about that exact line —
+  on code pages it sends the line plus ~20 lines of surrounding context. Answers come
+  back short and sentence-per-line. The key is read at export time from
+  `DEEPSEEK_API_KEY` or `~/.deepseek_key` and baked into the exported HTML, so **treat
+  exported pages as private** (the `knowledge/` dir is gitignored for this reason);
 - a **reset** button, and all settings persist across reloads (localStorage).
 
 ```

@@ -16,7 +16,7 @@ from __future__ import annotations
 import html as _html
 import re
 
-from .export_html import _HEAD, _SCRIPT, toolbar_html
+from .export_html import _HEAD, _SCRIPT, ai_config_html, toolbar_html
 
 _KEYWORDS = frozenset("""
 alignas alignof and and_eq asm auto bitand bitor bool break case catch char
@@ -119,6 +119,7 @@ def code_to_html(title: str, source: str) -> str:
         + "".join(rows)
         + "</div></div>"
         + '<div id="ruler"></div>'
+        + ai_config_html()
         + _SCRIPT
         + "</body></html>"
     )

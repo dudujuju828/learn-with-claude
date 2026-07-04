@@ -29,9 +29,34 @@ Accessibility choices (per British Dyslexia Association style guidance):
 from __future__ import annotations
 
 import html as _html
+import json
+import os
 import re
+from pathlib import Path
 
 from .render import space_sentences
+
+# "Ask AI": the exported page can query DeepSeek about the highlighted line.
+# The key is read at EXPORT time from the environment or ~/.deepseek_key —
+# never hardcoded here — and baked into the generated HTML so the browser can
+# call the API directly. Exported pages therefore contain the key: keep them
+# private (the knowledge dir is gitignored for this reason).
+DEEPSEEK_MODEL = "deepseek-v4-pro"
+
+
+def _deepseek_key() -> str:
+    key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+    if key:
+        return key
+    try:
+        return (Path.home() / ".deepseek_key").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def ai_config_html() -> str:
+    cfg = {"key": _deepseek_key(), "model": os.environ.get("DEEPSEEK_MODEL", DEEPSEEK_MODEL)}
+    return f"<script>window.AI = {json.dumps(cfg)};</script>"
 
 # Google Fonts reliably serves Lexend + Atkinson Hyperlegible; OpenDyslexic is
 # pulled from jsdelivr. If any fail to load, the font stack falls back to
@@ -111,6 +136,18 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
 .lt{{flex:none; white-space:pre;
   font-family:'Cascadia Code',Consolas,'Courier New',monospace;
   letter-spacing:var(--ls); word-spacing:var(--ws);}}
+/* Ask-AI panel */
+#ask{{position:fixed; left:0; right:0; bottom:0; z-index:60; display:none;
+  background:var(--card); border-top:2px solid var(--line);
+  padding:.7rem 1.2rem 1rem; max-height:45vh; overflow:auto;}}
+.ask-open #ask{{display:block;}}
+#ask-row{{display:flex; gap:.5rem; margin:.5rem 0;}}
+#ask-q{{flex:1; font-family:inherit; font-size:1em; color:var(--fg);
+  background:var(--bg); border:1px solid var(--line); border-radius:.5rem; padding:.45rem .6rem;}}
+#ask button{{font-family:inherit; font-size:.95em; padding:.4rem .8rem; cursor:pointer;
+  background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:.5rem;}}
+#ask-line{{font-family:'Cascadia Code',Consolas,monospace; font-size:.88em;}}
+#ask-a{{white-space:pre-wrap; max-width:var(--measure);}}
 .lt .kw{{color:var(--ans); font-weight:bold;}}
 .lt .str{{color:var(--ask);}}
 .lt .cmt{{color:var(--muted);}}
@@ -140,6 +177,7 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
 _SCRIPT = """\
 <script>
 const root = document.documentElement, body = document.body;
+window.AI = window.AI || {key:'', model:''};  // baked in by the exporter
 const DEFAULTS = {font:'OpenDyslexic', fs:18, lh:1.75, ls:0.02, ws:0.07,
                   theme:'cream', sent:false, ruler:false, speak:false, inv:false,
                   mask:false};
@@ -258,10 +296,100 @@ document.addEventListener('mousemove', e => {
 });
 addEventListener('resize', () => { lines = null; lineIdx = -1; });
 document.addEventListener('keydown', e => {
-  if(e.key === 'Escape' && window.speechSynthesis) speechSynthesis.cancel();
+  if(e.key === 'Escape'){
+    if(window.speechSynthesis) speechSynthesis.cancel();
+    closeAsk();
+  }
   if(!rulerActive() || e.target.closest('select, input, textarea, button')) return;
   if(e.key === 'ArrowRight' || e.key === 'ArrowDown'){ e.preventDefault(); stepLine(1); }
   else if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){ e.preventDefault(); stepLine(-1); }
+  else if(e.key === 'a' || e.key === 'A'){ e.preventDefault(); openAsk(); }
+});
+
+// --- Ask AI (DeepSeek) about the line under the ruler ----------------------
+const askPanel = document.createElement('div');
+askPanel.id = 'ask';
+askPanel.innerHTML =
+  '<div id="ask-line" class="muted"></div>' +
+  '<div id="ask-row">' +
+  '<textarea id="ask-q" rows="2" placeholder="Ask about this line\\u2026 (Enter sends, Esc closes)"></textarea>' +
+  '<button onclick="sendAsk()">Ask</button>' +
+  '<button onclick="closeAsk()" title="Close">\\u2715</button></div>' +
+  '<div id="ask-a"></div>';
+document.body.appendChild(askPanel);
+let askTarget = null;
+
+function currentTarget(){
+  const band = document.getElementById('ruler').getBoundingClientRect();
+  const y = band.top + band.height / 2;
+  const wrap = document.querySelector('.wrap').getBoundingClientRect();
+  for(const fx of [0.25, 0.45, 0.65]){
+    for(const cand of document.elementsFromPoint(wrap.left + wrap.width * fx, y)){
+      const el = cand.closest && (cand.closest('.cl') || cand.closest('.block, h1, h2, .term'));
+      if(el) return el;
+    }
+  }
+  return null;
+}
+function targetInfo(el){
+  if(el.classList.contains('cl')){
+    const all = Array.from(document.querySelectorAll('.cl'));
+    const i = all.indexOf(el);
+    const ctx = all.slice(Math.max(0, i - 20), i + 21)
+      .map(c => c.querySelector('.ln').textContent.padStart(4) + ' | ' + c.querySelector('.lt').innerText)
+      .join('\\n');
+    return {label: 'line ' + el.querySelector('.ln').textContent,
+            focus: el.querySelector('.lt').innerText, context: ctx};
+  }
+  return {label: 'highlighted block', focus: el.innerText, context: ''};
+}
+function openAsk(){
+  askTarget = currentTarget();
+  document.getElementById('ask-line').textContent = askTarget
+    ? targetInfo(askTarget).label + ':  ' + targetInfo(askTarget).focus.trim().slice(0, 120)
+    : 'put the ruler or focus line on a line first, then press A (or the \\ud83e\\udd16 button) again';
+  body.classList.add('ask-open');
+  document.getElementById('ask-q').focus();
+}
+function closeAsk(){ body.classList.remove('ask-open'); }
+async function sendAsk(){
+  const out = document.getElementById('ask-a');
+  const q = document.getElementById('ask-q').value.trim();
+  if(!askTarget){ openAsk(); return; }
+  if(!q) return;
+  if(!AI.key){
+    out.textContent = 'No DeepSeek API key was baked into this export. ' +
+      'Set DEEPSEEK_API_KEY (or ~/.deepseek_key) and re-export the page.';
+    return;
+  }
+  const info = targetInfo(askTarget);
+  out.textContent = '\\ud83e\\udd16 thinking\\u2026';
+  try{
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI.key},
+      body: JSON.stringify({model: AI.model, stream: false, messages: [
+        {role: 'system', content:
+          'You are a patient tutor answering ONE question about one line from a page the user is reading. ' +
+          'The reader is dyslexic: answer in 2-5 short sentences, plain words, and put every sentence ' +
+          'on its own line with a blank line between sentences.'},
+        {role: 'user', content:
+          'Page: ' + document.title + '\\n\\n' +
+          (info.context ? 'Context:\\n' + info.context + '\\n\\n' : '') +
+          'The line I am asking about:\\n' + info.focus + '\\n\\nMy question: ' + q}
+      ]})
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error((data.error && data.error.message) || ('HTTP ' + res.status));
+    out.textContent = data.choices[0].message.content;
+  }catch(err){
+    out.textContent = 'Error: ' + err.message;
+  }
+}
+document.getElementById('ask-q').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendAsk(); }
+  if(e.key === 'Escape') closeAsk();
+  e.stopPropagation();
 });
 document.addEventListener('click', e => {
   if(!S.speak || !window.speechSynthesis) return;
@@ -383,6 +511,8 @@ def toolbar_html() -> str:
         '(arrow keys), and back on the next">🌓 invert on step</button>'
         '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
         'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
+        '<button onclick="openAsk()" title="Ask AI (DeepSeek) about the line under the '
+        'ruler or focus line — shortcut: A">🤖 ask AI</button>'
         '<button onclick="resetS()" title="Back to the default settings">reset</button>'
         "</div>"
     )
@@ -470,6 +600,7 @@ def tree_to_html(tree) -> str:
         + "".join(sections)
         + "</div>"
         + '<div id="ruler"></div>'
+        + ai_config_html()
         + _SCRIPT
         + "</body></html>"
     )
