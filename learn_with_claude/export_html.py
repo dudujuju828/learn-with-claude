@@ -92,7 +92,8 @@ body{{
   font-size:var(--fs); line-height:var(--lh);
   letter-spacing:var(--ls); word-spacing:var(--ws); text-align:left;
 }}
-.wrap{{max-width:calc(var(--measure) + 7rem); margin:0 auto; padding:1rem 1.25rem 6rem;}}
+/* Tall bottom padding so the teleprompter can centre even the last line. */
+.wrap{{max-width:calc(var(--measure) + 7rem); margin:0 auto; padding:1rem 1.25rem 55vh;}}
 h1{{font-size:1.7rem; line-height:1.3;}}
 h2{{font-size:1.3rem; line-height:1.3; margin-top:0;}}
 p{{max-width:var(--measure); margin:.5rem 0;}}
@@ -133,7 +134,7 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
 .cl{{display:flex; padding:0 1rem;}}
 .ln{{flex:none; min-width:3em; text-align:right; padding-right:1.1em;
   color:var(--muted); user-select:none;}}
-.lt{{flex:none; white-space:pre;
+.lt{{flex:1; min-width:0; white-space:pre-wrap; word-break:break-word;
   font-family:'Cascadia Code',Consolas,'Courier New',monospace;
   letter-spacing:var(--ls); word-spacing:var(--ws);}}
 /* Ask-AI panel */
@@ -365,6 +366,7 @@ async function sendAsk(){
     return;
   }
   const info = targetInfo(askTarget);
+  box.value = '';  // clear the question as soon as it is sent
   out.textContent = '\\ud83e\\udd16 thinking\\u2026';
   try{
     const res = await fetch('https://api.deepseek.com/chat/completions', {
