@@ -160,14 +160,13 @@ The toolbar also has:
 - **colour themes** — cream, soft blue, soft green, grey, and dark (tinted backgrounds
   help many dyslexic readers);
 - **↵ sentence per line** — every sentence starts on its own line, across all blocks;
-- **🖍 reading ruler** — a tinted band that follows your mouse to keep your place; the
-  **arrow keys** (←/→ or ↑/↓) snap it to the text and step it one line at a time,
-  auto-scrolling so the current line stays centred on screen, teleprompter-style
-  (move the mouse to take back free control);
+- **🖍 reading ruler** — a tinted band steered **only by the arrow keys** (←/→ or
+  ↑/↓; the mouse never moves it): it snaps to the text and steps one line at a
+  time, auto-scrolling so the current line stays centred, teleprompter-style;
 - **🕶 focus line** — hides *everything* except the current line (like a typoscope
-  card over the page); works with both mouse-following and arrow-key stepping. It
-  stands alone — no yellow band, the revealed line is the implicit ruler — or turn
-  the reading ruler on too if you want the line tinted amber;
+  card over the page), stepped with the same arrow keys. It stands alone — no
+  yellow band, the revealed line is the implicit ruler — or turn the reading ruler
+  on too if you want the line tinted amber;
 - **🌓 invert on step** — optionally flip the page to its inverse colours on every
   ruler step and back on the next, a strong pacing cue that each press landed;
 - **🔊 read aloud** — click any block of text to hear it via the browser's built-in

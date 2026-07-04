@@ -13,9 +13,9 @@ Accessibility choices (per British Dyslexia Association style guidance):
   * a "sentence per line" toggle: every sentence starts on its own line (each
     sentence is wrapped at export in a <span class="sent"> the toggle turns
     into a block);
-  * a reading ruler (tinted band that follows the mouse to keep your place),
-    steerable with the arrow keys to step through the text one visual line at
-    a time (line boxes are enumerated with the Range API);
+  * a reading ruler: a tinted band steered with the arrow keys only (the mouse
+    never moves it), stepping through the text one visual line at a time (line
+    boxes are enumerated with the Range API) with the current line centred;
   * an optional "invert on step" effect: each arrow-key ruler step flips the
     page to its inverse colours and back (a strong visual pacing cue);
   * a "focus line" mode (typoscope): everything except the current line is
@@ -215,10 +215,7 @@ function apply(){
   body.classList.toggle('ruler-on', S.ruler);
   body.classList.toggle('mask-on', S.mask);
   body.classList.toggle('speak-on', S.speak);
-  if(!rulerActive()){
-    keyNav = false;
-    document.getElementById('ruler').style.height = '';
-  }
+  if(!rulerActive()) document.getElementById('ruler').style.height = '';
   if(!rulerActive() || !S.inv) root.classList.remove('inverted');
   lines = null; lineIdx = -1;  // any setting change may have reflowed the text
   if(!S.speak && window.speechSynthesis) speechSynthesis.cancel();
@@ -236,13 +233,12 @@ function bump(k, d, min, max){
 }
 function resetS(){ Object.assign(S, DEFAULTS); apply(); }
 
-// Reading-ruler line navigation: arrow keys step the ruler one *visual* line
-// at a time. Wrapped lines aren't elements, so the rendered line boxes are
-// enumerated with the Range API (one client rect per line box) and rects that
-// share a top are merged (a line broken into several text nodes by <code> or
-// <strong> yields several rects). Moving the mouse (a real move, not a jiggle)
-// hands the ruler back to mouse-following.
-let lines = null, lineIdx = -1, keyNav = false, mx = 0, my = 0;
+// Reading-ruler line navigation: the ruler is steered ONLY by the arrow keys,
+// one *visual* line at a time — the mouse never moves it. Wrapped lines aren't
+// elements, so the rendered line boxes are enumerated with the Range API (one
+// client rect per line box) and rects that share a top are merged (a line
+// broken into several text nodes by <code> or <strong> yields several rects).
+let lines = null, lineIdx = -1;
 function lineList(){
   if(lines) return lines;
   const buckets = {};
@@ -281,20 +277,7 @@ function stepLine(d){
   r.style.top = (ln.top - scrollY - 3) + 'px';
   r.style.height = (ln.bottom - ln.top + 6) + 'px';
   if(S.inv) root.classList.toggle('inverted');
-  keyNav = true;
 }
-document.addEventListener('mousemove', e => {
-  if(!rulerActive()) return;
-  if(keyNav){
-    if(Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 24) return;
-    keyNav = false;
-    document.getElementById('ruler').style.height = '';
-    root.classList.remove('inverted');
-  }
-  mx = e.clientX; my = e.clientY;
-  const r = document.getElementById('ruler');
-  r.style.top = (e.clientY - r.offsetHeight / 2) + 'px';
-});
 addEventListener('resize', () => { lines = null; lineIdx = -1; });
 document.addEventListener('keydown', e => {
   if(e.key === 'Escape'){
@@ -529,12 +512,11 @@ def toolbar_html() -> str:
         '<button id="sent-btn" class="tog" onclick="setS(\'sent\', !S.sent)" '
         'title="Start every sentence on its own line">↵ sentence per line</button>'
         '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
-        'title="A tinted band that follows your mouse — press the arrow keys '
-        'to step it line by line">🖍 reading ruler</button>'
+        'title="A tinted band you steer with the arrow keys, one line at a '
+        'time, keeping the current line centred">🖍 reading ruler</button>'
         '<button id="mask-btn" class="tog" onclick="setS(\'mask\', !S.mask)" '
-        'title="Hide everything except the current line — follow the mouse or '
-        'step with the arrow keys; add the reading ruler if you also want the '
-        'line tinted">🕶 focus line</button>'
+        'title="Hide everything except the current line — step with the arrow '
+        'keys; add the reading ruler if you also want the line tinted">🕶 focus line</button>'
         '<button id="inv-btn" class="tog" onclick="setS(\'inv\', !S.inv)" '
         'title="Flip the page colours to their inverse on every ruler step '
         '(arrow keys), and back on the next">🌓 invert on step</button>'
