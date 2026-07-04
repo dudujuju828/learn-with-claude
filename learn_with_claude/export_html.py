@@ -312,7 +312,7 @@ askPanel.id = 'ask';
 askPanel.innerHTML =
   '<div id="ask-line" class="muted"></div>' +
   '<div id="ask-row">' +
-  '<textarea id="ask-q" rows="2" placeholder="Ask about this line\\u2026 (Enter sends, Esc closes)"></textarea>' +
+  '<textarea id="ask-q" rows="2" placeholder="Ask about this line\\u2026 (Enter sends, Esc closes, Right Shift toggles back to the ruler)"></textarea>' +
   '<button onclick="sendAsk()">Ask</button>' +
   '<button onclick="closeAsk()" title="Close">\\u2715</button></div>' +
   '<div id="ask-a"></div>';
@@ -391,6 +391,27 @@ document.getElementById('ask-q').addEventListener('keydown', e => {
   if(e.key === 'Escape') closeAsk();
   e.stopPropagation();
 });
+
+// Right Shift toggles between ruler control (arrow keys step lines) and the
+// AI question box. Only a BARE tap counts — if any other key is pressed while
+// it is held, it was being used as a normal modifier (capitals, Shift+Enter).
+// Capture phase, so it still sees keys typed inside the textarea.
+let rshiftDown = false, rshiftCombo = false;
+function toggleAskFocus(){
+  const q = document.getElementById('ask-q');
+  if(document.activeElement === q) q.blur();  // back to ruler control
+  else openAsk();                             // (re)capture the line + focus box
+}
+document.addEventListener('keydown', e => {
+  if(e.key === 'Shift' && e.location === 2){ rshiftDown = true; rshiftCombo = false; }
+  else if(rshiftDown) rshiftCombo = true;
+}, true);
+document.addEventListener('keyup', e => {
+  if(e.key === 'Shift' && e.location === 2){
+    if(!rshiftCombo) toggleAskFocus();
+    rshiftDown = false;
+  }
+}, true);
 document.addEventListener('click', e => {
   if(!S.speak || !window.speechSynthesis) return;
   if(e.target.closest('.toolbar, a')) return;
@@ -512,7 +533,8 @@ def toolbar_html() -> str:
         '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
         'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
         '<button onclick="openAsk()" title="Ask AI (DeepSeek) about the line under the '
-        'ruler or focus line — shortcut: A">🤖 ask AI</button>'
+        'ruler or focus line — shortcuts: A opens, Right Shift toggles between the '
+        'ruler and the question box">🤖 ask AI</button>'
         '<button onclick="resetS()" title="Back to the default settings">reset</button>'
         "</div>"
     )
