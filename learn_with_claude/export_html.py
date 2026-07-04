@@ -374,9 +374,13 @@ async function sendAsk(){
       headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + AI.key},
       body: JSON.stringify({model: AI.model, stream: false, messages: [
         {role: 'system', content:
-          'You are a patient tutor answering ONE question about one line from a page the user is reading. ' +
-          'The reader is dyslexic: answer in 2-5 short sentences, plain words, and put every sentence ' +
-          'on its own line with a blank line between sentences.'},
+          'You are a sharp programming tutor answering ONE question about a specific line from a page ' +
+          'the user is reading. Give a complete, technically accurate answer: do NOT simplify the content, ' +
+          'omit relevant detail, or avoid precise terminology - assume a capable reader who wants the real ' +
+          'explanation, and use as many sentences as the question actually needs. ' +
+          'The reader is dyslexic, so only the FORMATTING must adapt: keep each sentence short, put every ' +
+          'sentence on its own line with a blank line between sentences, and prefer several small chunks ' +
+          'over one dense block. Plain text only - no markdown headings or tables.'},
         {role: 'user', content:
           'Page: ' + document.title + '\\n\\n' +
           (info.context ? 'Context:\\n' + info.context + '\\n\\n' : '') +
