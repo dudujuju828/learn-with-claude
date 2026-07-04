@@ -147,7 +147,7 @@ code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.9
 #ask button{{font-family:inherit; font-size:.95em; padding:.4rem .8rem; cursor:pointer;
   background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:.5rem;}}
 #ask-line{{font-family:'Cascadia Code',Consolas,monospace; font-size:.88em;}}
-#ask-a{{white-space:pre-wrap; max-width:var(--measure);}}
+#ask-a{{white-space:pre-wrap; max-width:var(--measure); line-height:1.45;}}
 .lt .kw{{color:var(--ans); font-weight:bold;}}
 .lt .str{{color:var(--ask);}}
 .lt .cmt{{color:var(--muted);}}
@@ -354,7 +354,9 @@ function openAsk(){
 function closeAsk(){ body.classList.remove('ask-open'); }
 async function sendAsk(){
   const out = document.getElementById('ask-a');
-  const q = document.getElementById('ask-q').value.trim();
+  const box = document.getElementById('ask-q');
+  const q = box.value.trim();
+  if(q.toLowerCase() === 'cls'){ out.textContent = ''; box.value = ''; return; }
   if(!askTarget){ openAsk(); return; }
   if(!q) return;
   if(!AI.key){
