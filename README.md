@@ -91,6 +91,7 @@ learn (what a hash table is) › branch 1 2 collisions
 | `list` | list trees in the knowledge dir |
 | `import <path>` | copy an external `.know.json` in and open it |
 | `export [file]` | write the whole tree to a readable markdown file |
+| `seeplusplus <file> [out]` | (alias `spp`) export a C++ source file to the same dyslexia-friendly HTML page — one row per line with line numbers and light theme-aware syntax tinting, and the full reading-aids toolbar: fonts, themes, spacing, arrow-key line stepper, focus line, invert on step, read aloud (click a line) |
 | `save [file]` | save (auto-saves after `new`/`branch`) |
 | `cost` | total spend on the current tree |
 | `help` · `quit` | help / leave |

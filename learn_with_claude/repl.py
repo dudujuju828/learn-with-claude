@@ -44,6 +44,8 @@ commands:
   import <path>            copy an external .know.json into the knowledge dir and open it
   export [md|html] [file]  write the tree to readable markdown, or a dyslexia-friendly
                            HTML page (selectable font, size, line spacing)
+  seeplusplus <file> [out] export a C++ source file to the same dyslexia-friendly
+                           HTML, one row per line, arrow-key line stepper included
   save [file]              save the current tree (auto-saves after new/branch)
   cost                     show total spend on the current tree
   help                     show this help
@@ -101,6 +103,7 @@ class Shell:
             "tree": self.cmd_tree, "show": self.cmd_show,
             "open": self.cmd_open, "list": self.cmd_list, "ls": self.cmd_list,
             "import": self.cmd_import, "export": self.cmd_export,
+            "seeplusplus": self.cmd_seeplusplus, "spp": self.cmd_seeplusplus,
             "save": self.cmd_save, "cost": self.cmd_cost,
             "help": self.cmd_help, "?": self.cmd_help,
         }
@@ -392,6 +395,25 @@ class Shell:
         else:
             path.write_text(self.kb.to_markdown(), encoding="utf-8")
             self.r.ok(f"exported markdown → {path}")
+
+    def cmd_seeplusplus(self, arg: str) -> None:
+        parts = [p.strip('"') for p in re.findall(r'"[^"]+"|\S+', arg)]
+        if not parts:
+            self.r.warn("usage: seeplusplus <file.cpp> [out.html]")
+            return
+        src = Path(parts[0])
+        if not src.is_file():
+            self.r.warn(f"no such file: {src}")
+            return
+        out = Path(parts[1]) if len(parts) > 1 else self.dir / f"{src.stem}.cpp.html"
+        try:
+            source = src.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            self.r.warn(f"could not read {src}: {exc}")
+            return
+        from .export_code import code_to_html
+        out.write_text(code_to_html(src.name, source), encoding="utf-8")
+        self.r.ok(f"exported dyslexia-friendly code view → {out}")
 
     def cmd_save(self, arg: str) -> None:
         if not self._require_kb():

@@ -102,6 +102,20 @@ a{{color:var(--ans);}}
 pre{{background:var(--pre-bg); border:1px solid var(--line); border-radius:.55rem; padding:.85rem; overflow:auto; line-height:1.5;}}
 code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.95em; letter-spacing:0;}}
 .conf{{color:var(--muted); font-weight:normal; font-size:.85em;}}
+/* line-by-line source view (seeplusplus) */
+.code{{background:var(--card); border:1px solid var(--line); border-radius:.9rem;
+  padding:.9rem 0; margin:1.4rem 0; overflow-x:auto;}}
+.cl{{display:flex; padding:0 1rem;}}
+.ln{{flex:none; min-width:3em; text-align:right; padding-right:1.1em;
+  color:var(--muted); user-select:none;}}
+.lt{{flex:none; white-space:pre;
+  font-family:'Cascadia Code',Consolas,'Courier New',monospace;
+  letter-spacing:var(--ls); word-spacing:var(--ws);}}
+.lt .kw{{color:var(--ans); font-weight:bold;}}
+.lt .str{{color:var(--ask);}}
+.lt .cmt{{color:var(--muted);}}
+.lt .num{{color:var(--term);}}
+.lt .pre{{color:var(--think); font-weight:bold;}}
 .grp{{display:inline-flex; align-items:center; gap:.3rem; margin-right:.3rem;}}
 .toolbar .tog.on{{border-color:var(--ans); box-shadow:inset 0 0 0 2px var(--ans); font-weight:bold;}}
 .sent-lines .sent{{display:block; margin:0 0 .6em;}}
@@ -252,7 +266,7 @@ document.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   if(!S.speak || !window.speechSynthesis) return;
   if(e.target.closest('.toolbar, a')) return;
-  const blk = e.target.closest('.block, h1, h2, .term, .crumb');
+  const blk = e.target.closest('.block, .cl, h1, h2, .term, .crumb');
   if(!blk) return;
   speechSynthesis.cancel();
   document.querySelectorAll('.reading').forEach(x => x.classList.remove('reading'));
@@ -322,6 +336,58 @@ def _md_lite(text: str) -> str:
     return "".join(out) or "<p></p>"
 
 
+def toolbar_html() -> str:
+    """The reading-aids toolbar, shared by the tree export and the source-code
+    export (seeplusplus)."""
+    return (
+        '<div class="toolbar">'
+        '<span class="grp"><label for="font">Font</label>'
+        '<select id="font" onchange="setS(\'font\', this.value)">'
+        '<option value="OpenDyslexic">OpenDyslexic</option>'
+        '<option value="Lexend">Lexend</option>'
+        '<option value="Atkinson Hyperlegible">Atkinson Hyperlegible</option>'
+        '<option value="Comic Sans MS">Comic Sans</option>'
+        '<option value="system-ui">System</option>'
+        "</select></span>"
+        '<span class="grp"><label for="theme">Colours</label>'
+        '<select id="theme" onchange="setS(\'theme\', this.value)">'
+        '<option value="cream">Cream</option>'
+        '<option value="blue">Soft blue</option>'
+        '<option value="green">Soft green</option>'
+        '<option value="grey">Grey</option>'
+        '<option value="dark">Dark</option>'
+        "</select></span>"
+        '<span class="grp"><label>Text</label>'
+        '<button onclick="bump(\'fs\', -2, 14, 40)" title="Smaller text">A−</button>'
+        '<button onclick="bump(\'fs\', 2, 14, 40)" title="Bigger text">A+</button></span>'
+        '<span class="grp"><label>Lines</label>'
+        '<button onclick="bump(\'lh\', -0.25, 1.3, 4)" title="Less space between lines">−</button>'
+        '<button onclick="bump(\'lh\', 0.25, 1.3, 4)" title="More space between lines">+</button></span>'
+        '<span class="grp"><label>Letters</label>'
+        '<button onclick="bump(\'ls\', -0.02, 0, 0.2)" title="Less space between letters">−</button>'
+        '<button onclick="bump(\'ls\', 0.02, 0, 0.2)" title="More space between letters">+</button></span>'
+        '<span class="grp"><label>Words</label>'
+        '<button onclick="bump(\'ws\', -0.05, 0, 0.5)" title="Less space between words">−</button>'
+        '<button onclick="bump(\'ws\', 0.05, 0, 0.5)" title="More space between words">+</button></span>'
+        '<button id="sent-btn" class="tog" onclick="setS(\'sent\', !S.sent)" '
+        'title="Start every sentence on its own line">↵ sentence per line</button>'
+        '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
+        'title="A tinted band that follows your mouse — press the arrow keys '
+        'to step it line by line">🖍 reading ruler</button>'
+        '<button id="mask-btn" class="tog" onclick="setS(\'mask\', !S.mask)" '
+        'title="Hide everything except the current line — follow the mouse or '
+        'step with the arrow keys; add the reading ruler if you also want the '
+        'line tinted">🕶 focus line</button>'
+        '<button id="inv-btn" class="tog" onclick="setS(\'inv\', !S.inv)" '
+        'title="Flip the page colours to their inverse on every ruler step '
+        '(arrow keys), and back on the next">🌓 invert on step</button>'
+        '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
+        'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
+        '<button onclick="resetS()" title="Back to the default settings">reset</button>'
+        "</div>"
+    )
+
+
 def _turn_html(t: dict) -> str:
     parts = ['<div class="turn">']
     conf = (f' <span class="conf">· confidence {t["confidence"]}%</span>'
@@ -386,53 +452,7 @@ def tree_to_html(tree) -> str:
     if tree.root_id is not None:
         emit(tree.root_id)
 
-    toolbar = (
-        '<div class="toolbar">'
-        '<span class="grp"><label for="font">Font</label>'
-        '<select id="font" onchange="setS(\'font\', this.value)">'
-        '<option value="OpenDyslexic">OpenDyslexic</option>'
-        '<option value="Lexend">Lexend</option>'
-        '<option value="Atkinson Hyperlegible">Atkinson Hyperlegible</option>'
-        '<option value="Comic Sans MS">Comic Sans</option>'
-        '<option value="system-ui">System</option>'
-        "</select></span>"
-        '<span class="grp"><label for="theme">Colours</label>'
-        '<select id="theme" onchange="setS(\'theme\', this.value)">'
-        '<option value="cream">Cream</option>'
-        '<option value="blue">Soft blue</option>'
-        '<option value="green">Soft green</option>'
-        '<option value="grey">Grey</option>'
-        '<option value="dark">Dark</option>'
-        "</select></span>"
-        '<span class="grp"><label>Text</label>'
-        '<button onclick="bump(\'fs\', -2, 14, 40)" title="Smaller text">A−</button>'
-        '<button onclick="bump(\'fs\', 2, 14, 40)" title="Bigger text">A+</button></span>'
-        '<span class="grp"><label>Lines</label>'
-        '<button onclick="bump(\'lh\', -0.25, 1.3, 4)" title="Less space between lines">−</button>'
-        '<button onclick="bump(\'lh\', 0.25, 1.3, 4)" title="More space between lines">+</button></span>'
-        '<span class="grp"><label>Letters</label>'
-        '<button onclick="bump(\'ls\', -0.02, 0, 0.2)" title="Less space between letters">−</button>'
-        '<button onclick="bump(\'ls\', 0.02, 0, 0.2)" title="More space between letters">+</button></span>'
-        '<span class="grp"><label>Words</label>'
-        '<button onclick="bump(\'ws\', -0.05, 0, 0.5)" title="Less space between words">−</button>'
-        '<button onclick="bump(\'ws\', 0.05, 0, 0.5)" title="More space between words">+</button></span>'
-        '<button id="sent-btn" class="tog" onclick="setS(\'sent\', !S.sent)" '
-        'title="Start every sentence on its own line">↵ sentence per line</button>'
-        '<button id="ruler-btn" class="tog" onclick="setS(\'ruler\', !S.ruler)" '
-        'title="A tinted band that follows your mouse — press the arrow keys '
-        'to step it line by line">🖍 reading ruler</button>'
-        '<button id="mask-btn" class="tog" onclick="setS(\'mask\', !S.mask)" '
-        'title="Hide everything except the current line — follow the mouse or '
-        'step with the arrow keys; add the reading ruler if you also want the '
-        'line tinted">🕶 focus line</button>'
-        '<button id="inv-btn" class="tog" onclick="setS(\'inv\', !S.inv)" '
-        'title="Flip the page colours to their inverse on every ruler step '
-        '(arrow keys), and back on the next">🌓 invert on step</button>'
-        '<button id="speak-btn" class="tog" onclick="setS(\'speak\', !S.speak)" '
-        'title="Then click any block of text to hear it read aloud (Esc stops)">🔊 read aloud</button>'
-        '<button onclick="resetS()" title="Back to the default settings">reset</button>'
-        "</div>"
-    )
+    toolbar = toolbar_html()
 
     meta = (f'<p class="muted">Created {_esc(tree.created)} · {len(tree.nodes)} '
             f'investigations · total cost ${tree.total_cost():.4f}</p>')
