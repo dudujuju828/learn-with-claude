@@ -3,167 +3,309 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#fbf6ea">
 <title>learn with claude</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#fbf6ea; --fg:#2c2620; --muted:#6f6657; --line:#e7dcc7; --card:#fffdf6;
-    --accent:#8a6d1f; --learner:#2f6f8f; --tutor:#4a7a3a; --term-bg:#f7e6f1;
-    --term-fg:#8f3d74; --danger:#a2452f;
+  /* OpenDyslexic loads from CDN with graceful fallback (same source as the
+     CLI's HTML export). */
+  @font-face{
+    font-family:'OpenDyslexic'; font-weight:normal; font-display:swap;
+    src:url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Regular.woff') format('woff');
   }
-  html[data-theme="dark"]{
-    --bg:#211e19; --fg:#e9e2d2; --muted:#a89d86; --line:#403a2f; --card:#2b271f;
-    --accent:#d4b45e; --learner:#7db6d4; --tutor:#93bf7f; --term-bg:#3c2c37;
-    --term-fg:#dfa3c9; --danger:#df8a6f;
+  @font-face{
+    font-family:'OpenDyslexic'; font-weight:bold; font-display:swap;
+    src:url('https://cdn.jsdelivr.net/npm/open-dyslexic@1.0.3/woff/OpenDyslexic-Bold.woff') format('woff');
+  }
+
+  :root{
+    --bg:#fbf6ea; --card:#fffdf6; --fg:#2c2620; --line:#e7dcc7; --muted:#6f6657;
+    --think:#8a6d12; --ask:#1c6b46; --ans:#1b4f86; --term:#8a2b6b;
+    --termbg:#f7e6f1; --prebg:#f3ecda; --danger:#a2452f; --accent:#8a6d1f;
+    --fs:17px; --lh:1.75; --ls:.02em; --ws:.07em;
+    --font:'Lexend';
   }
   *{box-sizing:border-box}
-  html{font-size:17px}
+  html{font-size:var(--fs)}
   body{
     margin:0; background:var(--bg); color:var(--fg);
-    font-family:'Lexend','Atkinson Hyperlegible','Comic Sans MS',Verdana,Tahoma,sans-serif;
-    font-weight:300; line-height:1.75; letter-spacing:.01em; word-spacing:.06em;
+    font-family:var(--font),'Lexend','Atkinson Hyperlegible','Comic Sans MS',Verdana,Tahoma,sans-serif;
+    font-weight:300; line-height:var(--lh);
+    letter-spacing:var(--ls); word-spacing:var(--ws);
   }
   button{
     font-family:inherit; font-size:.88rem; padding:.34rem .7rem; cursor:pointer;
     border:1px solid var(--line); background:var(--card); color:var(--fg);
-    border-radius:.55rem;
+    border-radius:.55rem; letter-spacing:inherit;
   }
   button:hover{border-color:var(--accent)}
+  button:focus-visible,input:focus-visible,select:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px}
   button:disabled{opacity:.45; cursor:default}
   button.primary{border-color:var(--accent); font-weight:400}
-  input[type=text],input[type=password]{
+  button.ghost{border:none; background:none}
+  input[type=text],input[type=password],select{
     font-family:inherit; font-size:1rem; color:var(--fg); background:var(--card);
     border:1px solid var(--line); border-radius:.55rem; padding:.45rem .65rem; width:100%;
   }
-  input:focus{outline:2px solid var(--accent); outline-offset:1px}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none !important; transition:none !important}
+  }
 
   /* ---- login ---- */
   #login{
     position:fixed; inset:0; background:var(--bg); z-index:100;
-    display:flex; align-items:center; justify-content:center;
+    display:flex; align-items:center; justify-content:center; padding:1rem;
   }
   #login .box{
-    background:var(--card); border:1px solid var(--line); border-radius:1rem;
-    padding:2rem 2.2rem; width:min(24rem,90vw);
+    background:var(--card); border:1px solid var(--line); border-radius:1.1rem;
+    padding:2.1rem 2.2rem; width:min(26rem,94vw); text-align:center;
   }
-  #login h1{font-size:1.25rem; font-weight:600; margin:0 0 1rem}
-  #login .err{color:var(--danger); min-height:1.6em; font-size:.9rem}
+  #login .seed{font-size:2.4rem; line-height:1}
+  #login h1{font-size:1.3rem; font-weight:600; margin:.5rem 0 .2rem}
+  #login p.sub{color:var(--muted); font-size:.92rem; margin:.2rem 0 1.3rem}
+  #login input{text-align:center}
+  #login .err{color:var(--danger); min-height:1.7em; font-size:.9rem; margin:.35rem 0}
+  #login button{width:100%; padding:.55rem}
 
   /* ---- layout ---- */
   header{
     position:sticky; top:0; z-index:50; background:var(--bg);
     border-bottom:1px solid var(--line);
-    display:flex; align-items:center; gap:.8rem; padding:.55rem 1rem; flex-wrap:wrap;
+    display:flex; align-items:center; gap:.7rem; padding:.5rem .9rem;
   }
-  header .brand{font-weight:600; font-size:1.02rem; white-space:nowrap}
-  header .treename{color:var(--muted); font-size:.92rem; overflow:hidden;
-    text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:6rem}
-  header .cost{color:var(--muted); font-size:.88rem; white-space:nowrap}
-  #app{display:flex; gap:0; align-items:flex-start}
+  header .brand{font-weight:600; font-size:1rem; white-space:nowrap}
+  header .brand .with{color:var(--muted); font-weight:300}
+  header .treename{color:var(--muted); font-size:.9rem; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:3rem}
+  header .cost{color:var(--muted); font-size:.86rem; white-space:nowrap;
+    font-variant-numeric:tabular-nums}
+  #menubtn{display:none}
+  #app{display:flex; align-items:flex-start}
   aside{
-    width:19rem; flex:none; padding:1rem; border-right:1px solid var(--line);
-    position:sticky; top:3.1rem; max-height:calc(100vh - 3.1rem); overflow:auto;
+    width:19.5rem; flex:none; padding:1rem; border-right:1px solid var(--line);
+    position:sticky; top:3.05rem; max-height:calc(100vh - 3.05rem); overflow:auto;
   }
-  main{flex:1; min-width:0; padding:1.2rem 1.4rem 6rem; max-width:46rem}
+  main{flex:1; min-width:0; padding:1.2rem 1.4rem 7rem; max-width:46rem}
   @media (max-width:900px){
-    #app{flex-direction:column}
-    aside{width:100%; position:static; max-height:none; border-right:none;
-      border-bottom:1px solid var(--line)}
+    #menubtn{display:inline-block}
+    aside{
+      display:none; position:fixed; z-index:70; top:3.05rem; left:0; bottom:0;
+      background:var(--bg); border-right:1px solid var(--line);
+      width:min(19.5rem,86vw); max-height:none; box-shadow:0 0 40px rgba(0,0,0,.25);
+    }
+    body.menu-open aside{display:block}
+    main{padding:1rem .9rem 7rem}
   }
-  h2{font-size:.82rem; font-weight:600; text-transform:lowercase; color:var(--muted);
-    letter-spacing:.06em; margin:1.2rem 0 .45rem}
+  h2{font-size:.8rem; font-weight:600; text-transform:lowercase; color:var(--muted);
+    letter-spacing:.07em; margin:1.25rem 0 .45rem}
   h2:first-child{margin-top:0}
+
+  /* ---- reading panel ---- */
+  #aapanel{
+    display:none; position:fixed; top:3.3rem; right:.7rem; z-index:80;
+    background:var(--card); border:1px solid var(--line); border-radius:.9rem;
+    padding:1rem 1.1rem; width:min(21rem,92vw); box-shadow:0 8px 34px rgba(0,0,0,.18);
+    font-size:.9rem;
+  }
+  #aapanel.open{display:block}
+  #aapanel .row{display:flex; align-items:center; gap:.55rem; margin:.45rem 0}
+  #aapanel .row label{flex:1; color:var(--muted)}
+  #aapanel .row .val{min-width:3.2em; text-align:center; font-variant-numeric:tabular-nums}
+  #aapanel .step{width:2rem; height:2rem; padding:0; border-radius:.5rem; font-size:1rem}
+  #aapanel select{width:11rem; padding:.3rem .4rem; font-size:.9rem}
+  .swatches{display:flex; gap:.5rem; margin:.3rem 0}
+  .swatch{
+    width:2rem; height:2rem; padding:0; border-radius:50%; border:2px solid var(--line);
+  }
+  .swatch.active{border-color:var(--accent); outline:2px solid var(--accent); outline-offset:2px}
+  #aapanel .toggle.on{border-color:var(--accent); background:var(--bg)}
+  #aapanel .foot{display:flex; justify-content:space-between; margin-top:.7rem}
 
   /* ---- sidebar ---- */
   .newrow{display:flex; gap:.45rem; margin-bottom:.45rem}
   .newrow input{flex:1}
   .btnrow{display:flex; gap:.45rem; flex-wrap:wrap}
+  .hint{color:var(--muted); font-size:.8rem; margin:.35rem 0 0}
   #treelist .item{
-    display:flex; align-items:center; gap:.4rem; padding:.28rem .45rem;
-    border-radius:.5rem; cursor:pointer; font-size:.92rem;
+    padding:.34rem .5rem; border-radius:.55rem; cursor:pointer; margin:.15rem 0;
+    border:1px solid transparent;
   }
   #treelist .item:hover{background:var(--card)}
-  #treelist .item.active{background:var(--card); outline:1px solid var(--line)}
-  #treelist .item .lbl{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  #treelist .item .del{border:none; background:none; color:var(--muted); padding:0 .2rem}
+  #treelist .item.active{background:var(--card); border-color:var(--line)}
+  #treelist .item .top{display:flex; align-items:center; gap:.4rem}
+  #treelist .item .lbl{flex:1; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; font-size:.92rem}
+  #treelist .item .meta{color:var(--muted); font-size:.76rem;
+    font-variant-numeric:tabular-nums}
+  #treelist .item .del{border:none; background:none; color:var(--muted);
+    padding:0 .2rem; font-size:.9rem}
   #treelist .item .del:hover{color:var(--danger)}
-  #map{font-size:.9rem; line-height:1.9; overflow-x:auto}
-  #map .noderow{white-space:pre; cursor:pointer; border-radius:.4rem; padding:0 .3rem}
+  #map{font-size:.88rem; line-height:1.9; overflow-x:auto}
+  #map .noderow{white-space:pre; cursor:pointer; border-radius:.45rem; padding:0 .3rem}
   #map .noderow:hover{background:var(--card)}
   #map .noderow.active{background:var(--card); outline:1px solid var(--line)}
-  #map .meta{color:var(--muted); font-size:.82em}
+  #map .noderow .meta{color:var(--muted); font-size:.8em}
+  #map .live{color:var(--accent); animation:pulse 1.2s ease-in-out infinite}
 
   /* ---- conversation ---- */
-  .turn{margin:1.6rem 0}
-  .block{
+  .empty{color:var(--muted); margin-top:2.4rem; max-width:32rem}
+  .empty .seed{font-size:2rem}
+  .empty h3{color:var(--fg); font-weight:600; font-size:1.05rem; margin:.5rem 0 .4rem}
+  .examples{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem}
+  .examples button{font-size:.86rem}
+
+  .nodeinfo{
     background:var(--card); border:1px solid var(--line); border-radius:.9rem;
-    padding: .85rem 1.1rem; margin:.7rem 0; border-left-width:5px;
+    padding:.8rem 1.1rem; color:var(--muted); font-size:.88rem; margin-bottom:1.4rem;
   }
-  .block .who{font-size:.78rem; letter-spacing:.05em; color:var(--muted); margin-bottom:.25rem}
-  .thinking{border-left-color:var(--muted); color:var(--muted); font-size:.94rem}
-  .action{border-left-color:var(--learner)}
-  .tutor-b{border-left-color:var(--tutor)}
-  .tutor-b p{margin:.8em 0}
+  .nodeinfo b{color:var(--fg); font-weight:600; font-size:1.02rem}
+  .nodeinfo .crumb{margin-top:.15rem}
+  .nodeinfo .stats{margin-top:.25rem; font-variant-numeric:tabular-nums}
+
+  .turn{margin:1.9rem 0}
+  .turnhead{display:flex; align-items:center; gap:.7rem;
+    font-size:.78rem; color:var(--muted); letter-spacing:.05em}
+  .confbar{
+    width:5.2rem; height:.44rem; border-radius:.3rem; background:var(--card);
+    border:1px solid var(--line); overflow:hidden; flex:none;
+  }
+  .confbar i{display:block; height:100%; background:var(--ask); opacity:.6}
+  .confnum{font-variant-numeric:tabular-nums}
+  .delta-up{color:var(--ask)} .delta-down{color:var(--danger)}
+
+  .block{
+    background:var(--card); border:1px solid var(--line); border-radius:.95rem;
+    padding:.85rem 1.1rem; margin:.7rem 0; border-left-width:5px;
+    animation:appear .3s ease-out;
+  }
+  @keyframes appear{from{opacity:0; transform:translateY(6px)} to{opacity:1}}
+  .block .who{font-size:.76rem; letter-spacing:.06em; color:var(--muted);
+    margin-bottom:.3rem; display:flex; align-items:center; gap:.45rem; flex-wrap:wrap}
+  .thinking{border-left-color:var(--think); color:var(--muted); font-size:.93rem}
+  .action{border-left-color:var(--ask)}
+  .tutor-b{border-left-color:var(--ans)}
+  .tutor-b p{margin:.85em 0}
   .tutor-b p:first-child{margin-top:0}
   .tutor-b p:last-child{margin-bottom:0}
-  .tutor-b pre{background:var(--bg); border:1px solid var(--line); border-radius:.5rem;
-    padding:.7rem .8rem; overflow-x:auto; line-height:1.5; font-size:.9em}
-  .term{display:inline-block; background:var(--term-bg); color:var(--term-fg);
-    border-radius:.5rem; padding:.05rem .55rem; font-size:.85rem; margin-left:.5rem}
-  .conf{color:var(--muted); font-size:.82rem; margin-left:.5rem}
-  .turnhead{font-size:.8rem; color:var(--muted); letter-spacing:.04em}
-  .branchrow{margin:.2rem 0 0; display:flex; gap:.45rem; align-items:center; flex-wrap:wrap}
+  .tutor-b pre{background:var(--prebg); border:1px solid var(--line); border-radius:.5rem;
+    padding:.7rem .8rem; overflow-x:auto; line-height:1.5; font-size:.9em;
+    letter-spacing:0; word-spacing:0}
+  .term{display:inline-block; background:var(--termbg); color:var(--term);
+    border-radius:.5rem; padding:.02rem .55rem; font-size:.82rem}
+  .speaking{outline:2px solid var(--accent); outline-offset:2px}
+  .donechip{
+    display:inline-block; background:var(--card); border:1px solid var(--ask);
+    color:var(--ask); border-radius:.6rem; padding:.15rem .7rem; font-size:.84rem;
+    margin-top:.3rem;
+  }
+  .branchrow{margin:.25rem 0 0; display:flex; gap:.45rem; align-items:center; flex-wrap:wrap}
   .branchrow input{max-width:18rem; font-size:.88rem; padding:.3rem .5rem}
-  .nodeinfo{color:var(--muted); font-size:.9rem; margin-bottom:1rem}
-  .empty{color:var(--muted); margin-top:2rem}
+  .branchrow .why{color:var(--muted); font-size:.8rem}
+
+  /* live activity block */
+  .pending .who{color:var(--muted)}
+  .dots::after{
+    content:""; display:inline-block; width:1.4em; text-align:left;
+    animation:dots 1.4s steps(4,end) infinite;
+  }
+  @keyframes dots{0%{content:""} 25%{content:"."} 50%{content:".."} 75%{content:"..."}}
+  @keyframes pulse{0%,100%{opacity:.3} 50%{opacity:1}}
 
   /* ---- status bar ---- */
   #statusbar{
     position:fixed; left:0; right:0; bottom:0; z-index:60;
     background:var(--card); border-top:2px solid var(--line);
-    padding:.5rem 1rem; display:none; align-items:center; gap:.9rem; font-size:.92rem;
+    padding:.5rem .9rem; display:none; align-items:center; gap:.8rem; font-size:.9rem;
   }
   #statusbar.on{display:flex}
   #statusbar .dot{width:.6rem; height:.6rem; border-radius:50%; background:var(--accent);
     animation:pulse 1.2s ease-in-out infinite; flex:none}
-  @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
+  #statusbar.err .dot{background:var(--danger); animation:none}
   #statusbar .msg{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  #statusbar .err{color:var(--danger)}
+  #statusbar.err .msg{color:var(--danger); white-space:normal}
 </style>
 </head>
 <body>
 
-<div id="login">
+<div id="login" style="display:none">
   <div class="box">
+    <div class="seed" aria-hidden="true">🌱</div>
     <h1>learn with claude</h1>
+    <p class="sub">watch a simulated learner grow a branchable tree of knowledge, one scoped question at a time</p>
     <form id="loginform">
-      <input id="pw" type="password" placeholder="password" autocomplete="current-password" autofocus>
-      <div class="err" id="loginerr"></div>
+      <input id="pw" type="password" placeholder="password" autocomplete="current-password" aria-label="password">
+      <div class="err" id="loginerr" role="alert"></div>
       <button class="primary" type="submit">log in</button>
     </form>
   </div>
 </div>
 
 <header>
-  <span class="brand">learn <span style="color:var(--muted)">with claude</span></span>
+  <button id="menubtn" class="ghost" aria-label="menu">☰</button>
+  <span class="brand">learn <span class="with">with claude</span></span>
   <span class="treename" id="treename">no tree</span>
-  <span class="cost" id="treecost"></span>
-  <button id="fontminus" title="smaller text">A−</button>
-  <button id="fontplus" title="larger text">A+</button>
-  <button id="themebtn" title="theme">🌓</button>
+  <span class="cost" id="treecost" title="total spend on this tree"></span>
+  <button id="aabtn" title="reading settings" aria-label="reading settings">Aa</button>
   <button id="logoutbtn">log out</button>
 </header>
 
+<div id="aapanel" role="dialog" aria-label="reading settings">
+  <div class="row">
+    <label for="fontsel">typeface</label>
+    <select id="fontsel">
+      <option value="Lexend">Lexend</option>
+      <option value="OpenDyslexic">OpenDyslexic</option>
+      <option value="Atkinson Hyperlegible">Atkinson Hyperlegible</option>
+      <option value="Comic Sans MS">Comic Sans</option>
+      <option value="system-ui">system</option>
+    </select>
+  </div>
+  <div class="row"><label>text size</label>
+    <button class="step" data-pref="fs" data-d="-1" aria-label="smaller text">−</button>
+    <span class="val" id="fsval"></span>
+    <button class="step" data-pref="fs" data-d="1" aria-label="larger text">+</button>
+  </div>
+  <div class="row"><label>line spacing</label>
+    <button class="step" data-pref="lh" data-d="-1" aria-label="tighter lines">−</button>
+    <span class="val" id="lhval"></span>
+    <button class="step" data-pref="lh" data-d="1" aria-label="airier lines">+</button>
+  </div>
+  <div class="row"><label>letter spacing</label>
+    <button class="step" data-pref="ls" data-d="-1" aria-label="tighter letters">−</button>
+    <span class="val" id="lsval"></span>
+    <button class="step" data-pref="ls" data-d="1" aria-label="wider letters">+</button>
+  </div>
+  <div class="row"><label>word spacing</label>
+    <button class="step" data-pref="ws" data-d="-1" aria-label="tighter words">−</button>
+    <span class="val" id="wsval"></span>
+    <button class="step" data-pref="ws" data-d="1" aria-label="wider words">+</button>
+  </div>
+  <div class="row"><label>colours</label></div>
+  <div class="swatches" id="swatches" role="radiogroup" aria-label="colour theme"></div>
+  <div class="row" style="margin-top:.6rem">
+    <label for="speakbtn">🔊 read aloud — click any block to hear it (Esc stops)</label>
+    <button id="speakbtn" class="toggle" role="switch">off</button>
+  </div>
+  <div class="foot">
+    <button id="aareset">reset</button>
+    <button id="aaclose">close</button>
+  </div>
+</div>
+
 <div id="app">
-  <aside>
+  <aside id="sidebar">
     <h2>start</h2>
-    <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is"></div>
+    <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic"></div>
     <div class="btnrow">
       <button class="primary" id="newbtn" title="one investigation">new</button>
       <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
     </div>
+    <p class="hint">“full” runs the root investigation, then the tutor picks 3 more related concepts to explore.</p>
 
     <h2>tree</h2>
     <div id="map"><span style="color:var(--muted)">—</span></div>
@@ -173,21 +315,24 @@
 
     <h2>file</h2>
     <div class="btnrow">
-      <button id="exportjson">save .know.json</button>
-      <button id="exportmd">export md</button>
-      <button id="importbtn">import</button>
+      <button id="exportjson" title="download this tree as a portable .know.json">save .know.json</button>
+      <button id="exportmd" title="download this tree as readable markdown">export md</button>
+      <button id="importbtn" title="open a .know.json from the CLI or another device">import</button>
       <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
     </div>
+    <p class="hint">trees live in this browser. save the file to move one to your PC or the CLI.</p>
   </aside>
 
   <main>
-    <div id="conv"><div class="empty">Start a new tree on the left, or open a saved one.</div></div>
+    <div id="conv"></div>
   </main>
 </div>
 
 <div id="statusbar">
-  <span class="dot"></span>
-  <span class="msg" id="statusmsg"></span>
+  <span class="dot" aria-hidden="true"></span>
+  <span class="msg" id="statusmsg" role="status"></span>
+  <button id="retrybtn" style="display:none">retry</button>
+  <button id="giveupbtn" style="display:none">give up</button>
   <button id="stopbtn">stop after this turn</button>
 </div>
 
@@ -216,6 +361,11 @@ function conversationDigest(turns, upto=null){
   return lines.join("\n") || "  (nothing yet)";
 }
 function fmtConf(v){ return Number.isInteger(v) ? v + "%" : "—"; }
+function fmtCost(v){ return "$" + (v || 0).toFixed(v >= 1 ? 2 : 4); }
+function fmtDate(iso){
+  const d = new Date(iso);
+  return isNaN(d) ? "" : d.toLocaleDateString(undefined, {month: "short", day: "numeric"});
+}
 function nowIso(){ return new Date().toISOString().slice(0, 19); }
 function slug(text){
   const s = String(text||"").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -230,6 +380,119 @@ function download(name, text, mime){
   a.href = URL.createObjectURL(new Blob([text], {type: mime}));
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ------------------------------------------------------------------ */
+/* reading preferences (same aids as the CLI's HTML export)            */
+/* ------------------------------------------------------------------ */
+const THEMES = {
+  cream:{bg:'#fbf6ea', card:'#fffdf6', fg:'#2c2620', line:'#e7dcc7', muted:'#6f6657',
+         think:'#8a6d12', ask:'#1c6b46', ans:'#1b4f86', term:'#8a2b6b',
+         termbg:'#f7e6f1', prebg:'#f3ecda', danger:'#a2452f', accent:'#8a6d1f'},
+  blue: {bg:'#e9f1f9', card:'#f6fafd', fg:'#22303c', line:'#cfdfec', muted:'#5c6f80',
+         think:'#7a6210', ask:'#176546', ans:'#175a94', term:'#7d2a62',
+         termbg:'#f0e2ec', prebg:'#dfeaf3', danger:'#a2452f', accent:'#4a6d8f'},
+  green:{bg:'#ecf4e9', card:'#f8fbf6', fg:'#26302a', line:'#d4e3cd', muted:'#5f7160',
+         think:'#7a6210', ask:'#186a3b', ans:'#1b5e86', term:'#7d2a62',
+         termbg:'#eee3ea', prebg:'#e2ecdc', danger:'#a2452f', accent:'#5a7d4e'},
+  grey: {bg:'#e9e9e7', card:'#f5f5f3', fg:'#26262a', line:'#d2d2cf', muted:'#63635f',
+         think:'#77620f', ask:'#1a6244', ans:'#1a5583', term:'#7d2a62',
+         termbg:'#ece1e8', prebg:'#dededa', danger:'#a2452f', accent:'#6d6d68'},
+  dark: {bg:'#20221f', card:'#2a2d29', fg:'#e9e4da', line:'#44483f', muted:'#a9a294',
+         think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
+         termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e'},
+};
+const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
+                       theme: "cream", speak: false};
+const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
+                    lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
+                    ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
+                    ws: {d: 0.04, min: 0, max: 0.44, fmt: v => v.toFixed(2) + "em"}};
+let prefs = loadPrefs();
+
+function loadPrefs(){
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem("lwc.prefs.v1")) || {}; } catch {}
+  // migrate the v1 UI's separate keys
+  if (!("fs" in p) && localStorage.getItem("lwc.font")) p.fs = +localStorage.getItem("lwc.font");
+  if (!("theme" in p) && localStorage.getItem("lwc.theme") === "dark") p.theme = "dark";
+  return Object.assign({}, PREF_DEFAULTS, p);
+}
+function savePrefs(){ try { localStorage.setItem("lwc.prefs.v1", JSON.stringify(prefs)); } catch {} }
+
+function applyPrefs(){
+  const t = THEMES[prefs.theme] || THEMES.cream;
+  const r = document.documentElement.style;
+  for (const [k, v] of Object.entries(t)) r.setProperty("--" + k, v);
+  r.setProperty("--fs", prefs.fs + "px");
+  r.setProperty("--lh", prefs.lh);
+  r.setProperty("--ls", prefs.ls + "em");
+  r.setProperty("--ws", prefs.ws + "em");
+  r.setProperty("--font", `'${prefs.font}'`);
+  document.querySelector('meta[name="theme-color"]').content = t.bg;
+  // panel widgets
+  $("fontsel").value = prefs.font;
+  $("fsval").textContent = PREF_STEPS.fs.fmt(prefs.fs);
+  $("lhval").textContent = PREF_STEPS.lh.fmt(prefs.lh);
+  $("lsval").textContent = PREF_STEPS.ls.fmt(prefs.ls);
+  $("wsval").textContent = PREF_STEPS.ws.fmt(prefs.ws);
+  const sp = $("speakbtn");
+  sp.textContent = prefs.speak ? "on" : "off";
+  sp.classList.toggle("on", prefs.speak);
+  sp.setAttribute("aria-checked", String(prefs.speak));
+  document.querySelectorAll(".swatch").forEach(b =>
+    b.classList.toggle("active", b.dataset.theme === prefs.theme));
+  savePrefs();
+}
+
+function buildPanel(){
+  $("swatches").innerHTML = Object.entries(THEMES).map(([name, t]) =>
+    `<button class="swatch" data-theme="${name}" role="radio" title="${name}"
+       aria-label="${name} theme" style="background:${t.bg}"></button>`).join("");
+  document.querySelectorAll(".swatch").forEach(b =>
+    b.onclick = () => { prefs.theme = b.dataset.theme; applyPrefs(); });
+  document.querySelectorAll("#aapanel .step").forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.pref, s = PREF_STEPS[k];
+      prefs[k] = Math.min(s.max, Math.max(s.min,
+        Math.round((prefs[k] + s.d * (+b.dataset.d)) * 100) / 100));
+      applyPrefs();
+    };
+  });
+  $("fontsel").onchange = () => { prefs.font = $("fontsel").value; applyPrefs(); };
+  $("speakbtn").onclick = () => {
+    prefs.speak = !prefs.speak; if (!prefs.speak) stopSpeech(); applyPrefs();
+  };
+  $("aareset").onclick = () => { prefs = Object.assign({}, PREF_DEFAULTS); applyPrefs(); };
+  $("aaclose").onclick = closePanel;
+  $("aabtn").onclick = (e) => {
+    e.stopPropagation();
+    $("aapanel").classList.toggle("open");
+  };
+  document.addEventListener("click", (e) => {
+    if (!$("aapanel").contains(e.target) && e.target !== $("aabtn")) closePanel();
+  });
+}
+function closePanel(){ $("aapanel").classList.remove("open"); }
+
+/* ------------------------------------------------------------------ */
+/* read aloud                                                          */
+/* ------------------------------------------------------------------ */
+let speakingEl = null;
+function stopSpeech(){
+  try { speechSynthesis.cancel(); } catch {}
+  if (speakingEl){ speakingEl.classList.remove("speaking"); speakingEl = null; }
+}
+function speakBlock(el){
+  stopSpeech();
+  const clone = el.cloneNode(true);
+  clone.querySelectorAll(".who,button,input").forEach(n => n.remove());
+  const text = clone.textContent.replace(/\s+/g, " ").trim();
+  if (!text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.onend = u.onerror = () => { if (speakingEl === el){ el.classList.remove("speaking"); speakingEl = null; } };
+  speakingEl = el; el.classList.add("speaking");
+  try { speechSynthesis.speak(u); } catch {}
 }
 
 /* ------------------------------------------------------------------ */
@@ -295,6 +558,7 @@ let currentId = null;          // current tree id
 let currentNode = null;        // node id being viewed
 let running = false;
 let stopRequested = false;
+let activity = null;           // {nodeId, kind:"learner"|"tutor"} while waiting on the model
 
 const cur = () => (currentId ? store[currentId] : null);
 
@@ -334,11 +598,22 @@ function tutorHtml(text){
   return html;
 }
 
-function turnHtml(node, t, allowBranch){
-  let h = `<div class="turn" data-turn="${t.turn}">`;
-  h += `<div class="turnhead">turn ${t.turn}`;
-  if (t.confidence != null) h += `<span class="conf">confidence ${fmtConf(t.confidence)}</span>`;
-  h += `</div>`;
+function confHtml(t, prev){
+  if (!Number.isInteger(t.confidence)) return "";
+  let delta = "";
+  if (Number.isInteger(prev) && t.confidence !== prev){
+    const up = t.confidence > prev;
+    delta = ` <span class="${up ? "delta-up" : "delta-down"}">` +
+            `${up ? "↑" : "↓"}${Math.abs(t.confidence - prev)}</span>`;
+  }
+  return `<span class="confbar" title="confidence ${t.confidence}%">` +
+         `<i style="width:${Math.max(0, Math.min(100, t.confidence))}%"></i></span>` +
+         `<span class="confnum">${t.confidence}%${delta}</span>`;
+}
+
+function turnHtml(node, t, prevConf, allowBranch){
+  let h = `<article class="turn" data-turn="${t.turn}">`;
+  h += `<div class="turnhead"><span>turn ${t.turn}</span>${confHtml(t, prevConf)}</div>`;
   if (t.thinking){
     h += `<div class="block thinking"><div class="who">💭 thinking to myself</div>${esc(t.thinking)}</div>`;
   }
@@ -349,33 +624,70 @@ function turnHtml(node, t, allowBranch){
   }
   if (t.tutor){
     h += `<div class="block tutor-b"><div class="who">📘 claude answers</div>${tutorHtml(t.tutor)}</div>`;
+    if (t.done){
+      h += `<div class="donechip">✓ the learner can now explain it in their own words</div>`;
+    }
     if (allowBranch){
       h += `<div class="branchrow">` +
            `<button onclick="startBranchUI(${node.id},${t.turn},this)">⤵ branch — dig into this answer</button>` +
            `</div>`;
     }
   }
-  h += `</div>`;
+  h += `</article>`;
   return h;
 }
 
-function renderConversation(){
+function activityHtml(){
+  if (!activity) return "";
+  const learner = activity.kind === "learner";
+  return `<div class="turn pending"><div class="block ${learner ? "thinking" : "tutor-b"}">` +
+         `<div class="who">${learner ? "💭 learner is thinking" : "📘 claude is answering"}` +
+         `<span class="dots"></span></div></div></div>`;
+}
+
+const EXAMPLES = ["what a hash table is", "how DNS resolution works",
+                  "why compilers need linkers", "what a mutex actually does"];
+
+function emptyHtml(){
+  return `<div class="empty">
+    <div class="seed" aria-hidden="true">🌱</div>
+    <h3>grow a tree of knowledge</h3>
+    <p>Type a topic on the left and press <b>new</b>. A simulated human learner will
+    investigate it with a terse tutor, one scoped question at a time — and whenever an
+    answer deserves a deeper look, you can branch into it.</p>
+    <div class="examples">${EXAMPLES.map(t =>
+      `<button onclick="useExample('${esc(t)}')">${esc(t)}</button>`).join("")}</div>
+  </div>`;
+}
+
+function nearBottom(){
+  return window.innerHeight + window.scrollY >= document.body.scrollHeight - 220;
+}
+function renderConversation(keepScroll){
+  const stick = !keepScroll && nearBottom();
   const tree = cur();
   const conv = $("conv");
   if (!tree || currentNode == null || !getNode(tree, currentNode)){
-    conv.innerHTML = `<div class="empty">Start a new tree on the left, or open a saved one.</div>`;
+    conv.innerHTML = emptyHtml();
     return;
   }
   const node = getNode(tree, currentNode);
   let h = `<div class="nodeinfo">● [${node.id}] <b>${esc(node.label)}</b>`;
   if (node.parent_id != null){
-    h += ` — branched from [${node.parent_id}] turn ${node.branch_from_turn}`;
-    if (node.focus) h += ` · focus: ${esc(node.focus)}`;
+    h += `<div class="crumb">branched from [${node.parent_id}] turn ${node.branch_from_turn}` +
+         (node.focus ? ` · focus: ${esc(node.focus)}` : "") + `</div>`;
   }
-  h += `<br>${esc(breadcrumb(tree, node.id))} · ${node.turns.length} turns · ` +
-       `conf ${fmtConf(node.final_confidence)} · $${(node.cost || 0).toFixed(4)}</div>`;
-  for (const t of node.turns) h += turnHtml(node, t, !running);
-  conv.innerHTML = h || "";
+  h += `<div class="crumb">${esc(breadcrumb(tree, node.id))}</div>` +
+       `<div class="stats">${node.turns.length} turns · confidence ${fmtConf(node.final_confidence)} · ` +
+       `${fmtCost(node.cost)} · ${esc(node.learner_model)}</div></div>`;
+  let prevConf = null;
+  for (const t of node.turns){
+    h += turnHtml(node, t, prevConf, !running);
+    if (Number.isInteger(t.confidence)) prevConf = t.confidence;
+  }
+  if (activity && activity.nodeId === node.id) h += activityHtml();
+  conv.innerHTML = h;
+  if (stick && running) window.scrollTo(0, document.body.scrollHeight);
 }
 
 function renderMap(){
@@ -387,13 +699,15 @@ function renderMap(){
   const rows = [];
   const walk = (nid, prefix, isLast, isRoot) => {
     const n = getNode(tree, nid);
+    const live = running && activity && activity.nodeId === nid;
     const meta = (isRoot ? "" : `↳T${n.branch_from_turn} · `) +
-                 `${n.turns.length} turns · conf ${fmtConf(n.final_confidence)}`;
+                 `${n.turns.length}t · ${fmtConf(n.final_confidence)}`;
     const connector = isRoot ? "" : prefix + (isLast ? "└─ " : "├─ ");
     rows.push(
-      `<div class="noderow${nid === currentNode ? " active" : ""}" onclick="selectNode(${nid})">` +
-      `${esc(connector)}● [${n.id}] ${esc(oneLine(n.label, 34))} ` +
-      `<span class="meta">(${esc(meta)})</span></div>`
+      `<div class="noderow${nid === currentNode ? " active" : ""}" onclick="selectNode(${nid})"` +
+      ` title="${esc(n.label)}">` +
+      `${esc(connector)}<span${live ? ' class="live"' : ""}>●</span> [${n.id}] ` +
+      `${esc(oneLine(n.label, 26))} <span class="meta">(${esc(meta)})</span></div>`
     );
     const childPrefix = isRoot ? "" : prefix + (isLast ? "   " : "│  ");
     n.children.forEach((c, i) => walk(c, childPrefix, i === n.children.length - 1, false));
@@ -405,141 +719,237 @@ function renderMap(){
 function renderTreeList(){
   const list = $("treelist");
   const items = Object.values(store).sort((a, b) => (b.created || "").localeCompare(a.created || ""));
-  list.innerHTML = items.map(t =>
-    `<div class="item${t.id === currentId ? " active" : ""}">` +
-    `<span class="lbl" onclick="openTree('${t.id}')">${esc(oneLine(t.root_topic, 40))}</span>` +
-    `<button class="del" title="delete" onclick="deleteTree('${t.id}')">✕</button></div>`
-  ).join("") || `<span style="color:var(--muted)">none yet</span>`;
+  list.innerHTML = items.map(t => {
+    const n = Object.keys(t.nodes).length;
+    return `<div class="item${t.id === currentId ? " active" : ""}" onclick="openTree('${t.id}')">` +
+      `<div class="top"><span class="lbl">${esc(oneLine(t.root_topic, 44))}</span>` +
+      `<button class="del" title="remove from this browser" aria-label="delete tree"` +
+      ` onclick="event.stopPropagation();deleteTree('${t.id}')">✕</button></div>` +
+      `<div class="meta">${n} node${n === 1 ? "" : "s"} · ${fmtCost(totalCost(t))}` +
+      (t.created ? ` · ${fmtDate(t.created)}` : "") + `</div></div>`;
+  }).join("") || `<span style="color:var(--muted);font-size:.86rem">none yet</span>`;
 }
 
 function renderHeader(){
   const tree = cur();
   $("treename").textContent = tree ? oneLine(tree.root_topic, 48) : "no tree";
-  $("treecost").textContent = tree ? "$" + totalCost(tree).toFixed(4) : "";
+  $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
+  $("exportjson").disabled = $("exportmd").disabled = !tree;
 }
 
-function renderAll(){ renderHeader(); renderMap(); renderTreeList(); renderConversation(); }
+function renderAll(keepScroll){
+  renderHeader(); renderMap(); renderTreeList(); renderConversation(keepScroll);
+}
 
 function setStatus(msg){
-  $("statusbar").classList.add("on");
-  const m = $("statusmsg"); m.textContent = msg; m.classList.remove("err");
+  const bar = $("statusbar");
+  bar.classList.add("on"); bar.classList.remove("err");
+  $("statusmsg").textContent = msg;
+  $("stopbtn").style.display = running ? "" : "none";
+  $("retrybtn").style.display = $("giveupbtn").style.display = "none";
 }
 function setError(msg){
-  $("statusbar").classList.add("on");
-  const m = $("statusmsg"); m.textContent = msg; m.classList.add("err");
+  const bar = $("statusbar");
+  bar.classList.add("on", "err");
+  $("statusmsg").textContent = msg;
   $("stopbtn").style.display = "none";
 }
-function clearStatus(){ $("statusbar").classList.remove("on"); }
+function clearStatus(){ $("statusbar").classList.remove("on", "err"); }
+
+/* ------------------------------------------------------------------ */
+/* run queue — sequential thunks with pause-and-retry on failure       */
+/* ------------------------------------------------------------------ */
+const queue = [];
+let queueActive = false;
+
+function enqueue(...thunks){
+  queue.push(...thunks);
+  if (!queueActive) drainQueue();
+}
+async function drainQueue(){
+  queueActive = true;
+  setRunning(true);
+  try {
+    while (queue.length){
+      if (stopRequested){ queue.length = 0; break; }
+      const thunk = queue[0];
+      try {
+        await thunk();
+        queue.shift();
+      } catch (err){
+        if (err && err.message === "logged out"){ queue.length = 0; break; }
+        const giveUp = await offerRetry(err);
+        if (giveUp){ queue.length = 0; break; }
+        // retry: loop re-runs the same thunk, which resumes where it left off
+      }
+    }
+  } finally {
+    queueActive = false;
+    setRunning(false);
+    activity = null;
+    stopRequested = false;
+    clearStatus();
+    renderAll(true);
+  }
+}
+function offerRetry(err){
+  activity = null; renderAll(true);
+  setError(oneLine(err.message, 300) + " — nothing is lost; you can retry this step.");
+  $("retrybtn").style.display = $("giveupbtn").style.display = "";
+  return new Promise((resolve) => {
+    $("retrybtn").onclick = () => { cleanup(); resolve(false); };
+    $("giveupbtn").onclick = () => { cleanup(); resolve(true); };
+    function cleanup(){
+      $("retrybtn").style.display = $("giveupbtn").style.display = "none";
+      $("retrybtn").onclick = $("giveupbtn").onclick = null;
+      clearStatus();
+    }
+  });
+}
+function setRunning(on){
+  running = on;
+  $("newbtn").disabled = $("fullbtn").disabled = $("topic").disabled = on;
+  $("importbtn").disabled = on;
+}
 
 /* ------------------------------------------------------------------ */
 /* the learner<->tutor loop (mirrors simulator.run_conversation)       */
 /* ------------------------------------------------------------------ */
 async function runInvestigation(tree, node, ctx){
-  running = true; stopRequested = false;
-  $("stopbtn").style.display = ""; $("newbtn").disabled = true; $("fullbtn").disabled = true;
-  let finalConf = null;
-  try {
-    for (let turn = node.turns.length + 1; turn <= CONFIG.max_turns; turn++){
-      setStatus(`turn ${turn}: learner is thinking…`);
-      const L = await api("learner", {...ctx, turns: node.turns});
-      node.cost += L.cost;
-      const rec = { turn, thinking: L.thinking, new_term: L.new_term || "",
-                    action: L.action, confidence: L.confidence, done: L.done, tutor: "" };
-      node.turns.push(rec);
-      saveStore(); renderAll();
-      window.scrollTo(0, document.body.scrollHeight);
-      if (!rec.action) break;
-
-      setStatus(`turn ${turn}: claude is answering…`);
-      const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action});
-      node.cost += T.cost;
-      rec.tutor = T.tutor;
-      if (rec.confidence != null) finalConf = rec.confidence;
-      node.final_confidence = finalConf;
-      saveStore(); renderAll();
-      window.scrollTo(0, document.body.scrollHeight);
-      if (rec.done || stopRequested) break;
-    }
-  } finally {
-    node.final_confidence = finalConf ?? node.final_confidence;
-    saveStore();
-    running = false; stopRequested = false;
-    $("newbtn").disabled = false; $("fullbtn").disabled = false;
-    clearStatus(); renderAll();
-  }
-}
-
-/* ------------------------------------------------------------------ */
-/* commands: new / full / branch                                       */
-/* ------------------------------------------------------------------ */
-async function cmdNew(topic){
-  const tree = newTree(topic);
-  store[tree.id] = tree; currentId = tree.id;
-  const node = makeNode(tree, topic);
-  currentNode = node.id;
-  saveStore(); renderAll();
-  await runInvestigation(tree, node, {kind: "root", topic});
-  return tree;
-}
-
-async function cmdFull(topic){
-  const tree = await cmdNew(topic);
-  for (let i = 0; i < 3; i++){
-    if (stopRequested) break;
-    const order = Object.keys(tree.nodes).map(Number).sort((a, b) => a - b);
-    const covered = order.map(id => getNode(tree, id).label);
-    const recap = order.map(id =>
-      `[${getNode(tree, id).label}]\n${conversationDigest(getNode(tree, id).turns)}`).join("\n");
-
-    setStatus("tutor is choosing the next concept…");
-    running = true; $("newbtn").disabled = true; $("fullbtn").disabled = true;
-    let pick, pickCost;
-    try {
-      const r = await api("next_concept", {root_topic: tree.root_topic, covered, recap});
-      pick = r.pick; pickCost = r.cost;
-    } finally { running = false; }
-    if (!pick){ setError("the tutor couldn't pick a next concept — stopping here"); break; }
-
-    const concept = oneLine(String(pick.concept), 60);
-    const question = oneLine(String(pick.opening_question || ""), 200);
-    const prev = getNode(tree, order[order.length - 1]);
-    const node = makeNode(tree, concept, prev.id, prev.turns.length || 1, "");
-    node.cost += pickCost;
-    currentNode = node.id;
+  // Resumable: picks up after the last completed step, including the case
+  // where the learner asked but the tutor call failed (tutor is empty).
+  const last = node.turns[node.turns.length - 1];
+  if (last && last.action && !last.tutor && !last.done){
+    activity = {nodeId: node.id, kind: "tutor"};
+    setStatus(`turn ${last.turn}: claude is answering…`); renderAll();
+    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action});
+    node.cost += T.cost;
+    last.tutor = T.tutor;
+    if (Number.isInteger(last.confidence)) node.final_confidence = last.confidence;
     saveStore(); renderAll();
-    await runInvestigation(tree, node, {
-      kind: "followup", topic: tree.root_topic, recap, concept, opening_question: question,
-    });
   }
+
+  for (let turn = node.turns.length + 1; turn <= CONFIG.max_turns; turn++){
+    const prev = node.turns[node.turns.length - 1];
+    if (prev && (prev.done || !prev.action)) break;
+    if (stopRequested) break;
+
+    activity = {nodeId: node.id, kind: "learner"};
+    setStatus(`turn ${turn}: learner is thinking…`); renderAll();
+    const L = await api("learner", {...ctx, turns: node.turns});
+    node.cost += L.cost;
+    const rec = { turn, thinking: L.thinking, new_term: L.new_term || "",
+                  action: L.action, confidence: L.confidence, done: L.done, tutor: "" };
+    node.turns.push(rec);
+    saveStore(); renderAll();
+    if (!rec.action) break;
+
+    activity = {nodeId: node.id, kind: "tutor"};
+    setStatus(`turn ${turn}: claude is answering…`); renderAll();
+    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action});
+    node.cost += T.cost;
+    rec.tutor = T.tutor;
+    if (Number.isInteger(rec.confidence)) node.final_confidence = rec.confidence;
+    saveStore(); renderAll();
+    if (rec.done || stopRequested) break;
+  }
+  activity = null;
+  saveStore(); renderAll(true);
+}
+
+/* ------------------------------------------------------------------ */
+/* commands: new / full / branch (as queue thunks)                     */
+/* ------------------------------------------------------------------ */
+function rootThunk(topic){
+  let node = null;
+  return async () => {
+    if (!node){
+      const tree = newTree(topic);
+      store[tree.id] = tree; currentId = tree.id;
+      node = makeNode(tree, topic);
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    await runInvestigation(store[currentId], node, {kind: "root", topic});
+  };
+}
+
+function followupThunk(){
+  // Created lazily so each follow-up sees the tree state its predecessors built.
+  let node = null, ctx = null;
+  return async () => {
+    const tree = cur();
+    if (!node){
+      const order = Object.keys(tree.nodes).map(Number).sort((a, b) => a - b);
+      const covered = order.map(id => getNode(tree, id).label);
+      const recap = order.map(id =>
+        `[${getNode(tree, id).label}]\n${conversationDigest(getNode(tree, id).turns)}`).join("\n");
+
+      activity = null;
+      setStatus("tutor is choosing the next concept…"); renderAll();
+      const r = await api("next_concept", {root_topic: tree.root_topic, covered, recap});
+      if (!r.pick) throw new Error("the tutor couldn't pick a next concept");
+
+      const concept = oneLine(String(r.pick.concept), 60);
+      const question = oneLine(String(r.pick.opening_question || ""), 200);
+      const prev = getNode(tree, order[order.length - 1]);
+      node = makeNode(tree, concept, prev.id, prev.turns.length || 1, "");
+      node.cost += r.cost;
+      ctx = {kind: "followup", topic: tree.root_topic, recap, concept, opening_question: question};
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    await runInvestigation(tree, node, ctx);
+  };
+}
+
+function branchThunk(treeId, nodeId, branchTurn, focus){
+  let node = null, ctx = null;
+  return async () => {
+    const tree = store[treeId];
+    const parent = getNode(tree, nodeId);
+    const bt = parent.turns[branchTurn - 1];
+    if (!node){
+      ctx = {
+        kind: "branch", topic: tree.root_topic,
+        breadcrumb: breadcrumb(tree, nodeId),
+        digest: conversationDigest(parent.turns, branchTurn),
+        branch_q: bt.action, branch_a: bt.tutor, focus,
+      };
+      node = makeNode(tree, focus || "digging…", nodeId, branchTurn, focus);
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    await runInvestigation(tree, node, ctx);
+    if (!focus){ node.label = deriveLabel(node.turns, bt.tutor); saveStore(); renderAll(true); }
+  };
+}
+
+function cmdNew(topic){ enqueue(rootThunk(topic)); }
+function cmdFull(topic){
+  enqueue(rootThunk(topic), followupThunk(), followupThunk(), followupThunk());
 }
 
 function startBranchUI(nodeId, turn, btn){
   const row = btn.parentElement;
   row.innerHTML =
-    `<input type="text" id="focusinput" placeholder="focus (optional — else the learner picks)">` +
+    `<input type="text" id="focusinput" placeholder="focus (optional — else the learner picks)"` +
+    ` aria-label="branch focus">` +
     `<button class="primary" onclick="cmdBranch(${nodeId},${turn})">go</button>` +
-    `<button onclick="renderConversation()">cancel</button>`;
-  row.querySelector("input").focus();
+    `<button onclick="renderConversation(true)">cancel</button>` +
+    `<span class="why">the learner re-investigates this answer, going deeper</span>`;
+  const inp = row.querySelector("input");
+  inp.focus();
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") cmdBranch(nodeId, turn); });
 }
 
-async function cmdBranch(nodeId, branchTurn){
+function cmdBranch(nodeId, branchTurn){
   const tree = cur(); if (!tree || running) return;
   const focus = ($("focusinput")?.value || "").trim();
   const parent = getNode(tree, nodeId);
-  const bt = parent.turns[branchTurn - 1];
+  const bt = parent && parent.turns[branchTurn - 1];
   if (!bt || !bt.tutor){ setError("that turn has no tutor answer to dig into"); return; }
-
-  const ctx = {
-    kind: "branch", topic: tree.root_topic,
-    breadcrumb: breadcrumb(tree, nodeId),
-    digest: conversationDigest(parent.turns, branchTurn),
-    branch_q: bt.action, branch_a: bt.tutor, focus,
-  };
-  const node = makeNode(tree, focus || "digging…", nodeId, branchTurn, focus);
-  currentNode = node.id;
-  saveStore(); renderAll();
-  await runInvestigation(tree, node, ctx);
-  if (!focus){ node.label = deriveLabel(node.turns, bt.tutor); saveStore(); renderAll(); }
+  enqueue(branchThunk(tree.id, nodeId, branchTurn, focus));
 }
 
 /* ------------------------------------------------------------------ */
@@ -549,18 +959,26 @@ function openTree(id){
   if (running) return;
   currentId = id;
   currentNode = store[id]?.root_id ?? null;
-  renderAll();
+  renderAll(true);
+  closeMenu();
 }
-function selectNode(id){ if (!running){ currentNode = id; renderAll(); } }
+function selectNode(id){
+  currentNode = id; renderAll(true);
+  if (!running) closeMenu();
+}
 function deleteTree(id){
   if (running) return;
-  if (!confirm(`delete "${oneLine(store[id]?.root_topic || "?", 40)}"? this only removes it from this browser.`)) return;
+  if (!confirm(`delete "${oneLine(store[id]?.root_topic || "?", 40)}"?\n\nThis only removes it from this browser — export it first if you want to keep it.`)) return;
   delete store[id];
   if (currentId === id){ currentId = null; currentNode = null; }
-  saveStore(); renderAll();
+  saveStore(); renderAll(true);
+}
+function useExample(topic){
+  $("topic").value = topic;
+  $("topic").focus();
 }
 window.openTree = openTree; window.selectNode = selectNode; window.deleteTree = deleteTree;
-window.startBranchUI = startBranchUI; window.cmdBranch = cmdBranch;
+window.startBranchUI = startBranchUI; window.cmdBranch = cmdBranch; window.useExample = useExample;
 
 /* ------------------------------------------------------------------ */
 /* wiring                                                              */
@@ -569,10 +987,12 @@ function guardTopic(){
   const t = $("topic").value.trim();
   if (!t){ $("topic").focus(); return null; }
   if (running) return null;
+  $("topic").value = "";
+  closeMenu();
   return t;
 }
-$("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t).catch(e => setError(e.message)); };
-$("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t).catch(e => setError(e.message)); };
+$("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t); };
+$("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t); };
 $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") $("newbtn").click(); });
 $("stopbtn").onclick = () => { stopRequested = true; setStatus("stopping after this turn…"); };
 
@@ -597,33 +1017,35 @@ $("importfile").onchange = async (e) => {
     if (d.format !== FORMAT) throw new Error("not a knowledge-tree file");
     if (!d.id) d.id = randHex(12);
     store[d.id] = d; currentId = d.id; currentNode = d.root_id;
-    saveStore(); renderAll();
+    saveStore(); renderAll(true);
   } catch (err){ setError("import failed: " + err.message); }
   e.target.value = "";
 };
 
-/* font size + theme */
-function applyPrefs(){
-  const size = +localStorage.getItem("lwc.font") || 17;
-  document.documentElement.style.fontSize = size + "px";
-  const theme = localStorage.getItem("lwc.theme") || "cream";
-  document.documentElement.dataset.theme = theme === "dark" ? "dark" : "";
-}
-$("fontplus").onclick = () => {
-  localStorage.setItem("lwc.font", Math.min(24, (+localStorage.getItem("lwc.font") || 17) + 1));
-  applyPrefs();
+/* mobile menu */
+function closeMenu(){ document.body.classList.remove("menu-open"); }
+$("menubtn").onclick = (e) => {
+  e.stopPropagation();
+  document.body.classList.toggle("menu-open");
 };
-$("fontminus").onclick = () => {
-  localStorage.setItem("lwc.font", Math.max(14, (+localStorage.getItem("lwc.font") || 17) - 1));
-  applyPrefs();
-};
-$("themebtn").onclick = () => {
-  const t = (localStorage.getItem("lwc.theme") || "cream") === "dark" ? "cream" : "dark";
-  localStorage.setItem("lwc.theme", t); applyPrefs();
-};
+document.addEventListener("click", (e) => {
+  if (document.body.classList.contains("menu-open") &&
+      !$("sidebar").contains(e.target) && e.target !== $("menubtn")) closeMenu();
+});
+
+/* read aloud + Esc */
+document.addEventListener("click", (e) => {
+  if (!prefs.speak) return;
+  if (e.target.closest("button,input,select,a,#aapanel,aside,header")) return;
+  const block = e.target.closest(".block");
+  if (block && !block.closest(".pending")) speakBlock(block);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape"){ stopSpeech(); closePanel(); closeMenu(); }
+});
 
 /* login */
-function showLogin(){ $("login").style.display = "flex"; }
+function showLogin(){ $("login").style.display = "flex"; setTimeout(() => $("pw").focus(), 50); }
 function hideLogin(){ $("login").style.display = "none"; }
 $("loginform").onsubmit = async (e) => {
   e.preventDefault();
@@ -644,10 +1066,18 @@ async function boot(){
   if (!res.ok){ showLogin(); return; }
   CONFIG = await res.json();
   hideLogin();
-  renderAll();
+  // reopen the most recent tree so returning feels like coming back to a desk
+  if (!currentId){
+    const latest = Object.values(store)
+      .sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
+    if (latest){ currentId = latest.id; currentNode = latest.root_id; }
+  }
+  renderAll(true);
 }
 
+buildPanel();
 applyPrefs();
+renderAll(true);
 boot();
 window.addEventListener("beforeunload", (e) => {
   if (running){ e.preventDefault(); e.returnValue = ""; }
