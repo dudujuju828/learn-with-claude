@@ -9,9 +9,10 @@ description = "Simulate a human learner exploring a topic with Claude as a branc
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
-# The CLI itself is stdlib-only; `anthropic` is for the Vercel web backend
-# (api/index.py), which Vercel may install from here instead of requirements.txt.
-dependencies = ["anthropic>=0.90.0"]
+# The CLI itself is stdlib-only (and still runs on 3.8); `anthropic` is for the
+# Vercel web backend (api/index.py), whose runtime is 3.12 — the marker keeps
+# uv's cross-version resolution happy without raising the CLI's floor.
+dependencies = ["anthropic>=0.90.0; python_version >= '3.9'"]
 
 [project.scripts]
 learn = "learn_with_claude.cli:main"

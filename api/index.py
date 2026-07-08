@@ -131,6 +131,13 @@ def usage_cost(model: str, usage) -> float:
 
 
 def call_model(system: str, messages: list, model: str) -> tuple[str, float]:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise ApiError(
+            "ANTHROPIC_API_KEY is not set on the server — add it in the Vercel "
+            "project settings (or `vercel env add ANTHROPIC_API_KEY production`) "
+            "and redeploy",
+            500,
+        )
     try:
         resp = _client.messages.create(
             model=model,
