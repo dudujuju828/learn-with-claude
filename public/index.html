@@ -216,6 +216,54 @@
   @keyframes dots{0%{content:""} 25%{content:"."} 50%{content:".."} 75%{content:"..."}}
   @keyframes pulse{0%,100%{opacity:.3} 50%{opacity:1}}
 
+  /* ---- reading ruler + focus line ---- */
+  #ruler{
+    display:none; position:absolute; z-index:5; pointer-events:none;
+    background:rgba(255,205,50,.18); border-top:2px solid rgba(226,164,26,.6);
+    border-bottom:2px solid rgba(226,164,26,.6); border-radius:.3rem;
+  }
+  body.ruler-on #ruler{display:block}
+  /* focus line: fade every block; when the current line is a sentence inside a
+     tutor block, restore that container and fade its other sentences instead
+     (opacity nests multiplicatively, so the container must not stay faded) */
+  body.focus-on #conv .block, body.focus-on #conv .nodeinfo,
+  body.focus-on #conv .turnhead, body.focus-on #conv .donechip,
+  body.focus-on #conv .branchrow{
+    opacity:.06; transition:opacity .15s;
+  }
+  body.focus-on #conv .block.rl-current{opacity:1}
+  body.focus-on #conv .tutor-b:has(.rl-current){opacity:1}
+  body.focus-on #conv .tutor-b:has(.rl-current) :is(p,pre,.who){opacity:.06; transition:opacity .15s}
+  body.focus-on #conv .tutor-b :is(p,pre).rl-current{opacity:1 !important}
+
+  /* jump to latest */
+  #jumpbtn{
+    display:none; position:fixed; right:1rem; bottom:3.4rem; z-index:55;
+    border-radius:2rem; padding:.45rem .95rem; box-shadow:0 4px 18px rgba(0,0,0,.18);
+  }
+  #jumpbtn.on{display:block}
+
+  /* drag-and-drop import */
+  body.dragging::after{
+    content:"drop a .know.json to import it"; position:fixed; inset:0; z-index:90;
+    display:flex; align-items:center; justify-content:center; font-size:1.2rem;
+    background:color-mix(in srgb, var(--bg) 82%, transparent);
+    border:3px dashed var(--accent); pointer-events:none;
+  }
+
+  @media print{
+    header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel{display:none !important}
+    main{max-width:none; padding:0}
+    .block{break-inside:avoid}
+  }
+
+  /* confidence sparkline */
+  .spark{vertical-align:-4px; margin-left:.5rem}
+  .spark polyline{fill:none; stroke:var(--ask); stroke-width:2}
+  .spark circle{fill:var(--ask)}
+  .crumb .cl{cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px}
+  .crumb .cl:hover{color:var(--fg)}
+
   /* ---- status bar ---- */
   #statusbar{
     position:fixed; left:0; right:0; bottom:0; z-index:60;
@@ -291,6 +339,14 @@
     <label for="speakbtn">🔊 read aloud — click any block to hear it (Esc stops)</label>
     <button id="speakbtn" class="toggle" role="switch">off</button>
   </div>
+  <div class="row">
+    <label for="rulerbtn">🖍 reading ruler — ↑/↓ step sentence by sentence, keyboard only</label>
+    <button id="rulerbtn" class="toggle" role="switch">off</button>
+  </div>
+  <div class="row">
+    <label for="focusbtn">🕶 focus line — fade everything except the current sentence</label>
+    <button id="focusbtn" class="toggle" role="switch">off</button>
+  </div>
   <div class="foot">
     <button id="aareset">reset</button>
     <button id="aaclose">close</button>
@@ -327,6 +383,9 @@
     <div id="conv"></div>
   </main>
 </div>
+
+<div id="ruler" aria-hidden="true"></div>
+<button id="jumpbtn" aria-label="jump to the latest turn">↓ latest</button>
 
 <div id="statusbar">
   <span class="dot" aria-hidden="true"></span>
@@ -403,7 +462,7 @@ const THEMES = {
          termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e'},
 };
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
-                       theme: "cream", speak: false};
+                       theme: "cream", speak: false, ruler: false, focus: false};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -436,10 +495,15 @@ function applyPrefs(){
   $("lhval").textContent = PREF_STEPS.lh.fmt(prefs.lh);
   $("lsval").textContent = PREF_STEPS.ls.fmt(prefs.ls);
   $("wsval").textContent = PREF_STEPS.ws.fmt(prefs.ws);
-  const sp = $("speakbtn");
-  sp.textContent = prefs.speak ? "on" : "off";
-  sp.classList.toggle("on", prefs.speak);
-  sp.setAttribute("aria-checked", String(prefs.speak));
+  for (const [id, key] of [["speakbtn", "speak"], ["rulerbtn", "ruler"], ["focusbtn", "focus"]]){
+    const b = $(id);
+    b.textContent = prefs[key] ? "on" : "off";
+    b.classList.toggle("on", prefs[key]);
+    b.setAttribute("aria-checked", String(prefs[key]));
+  }
+  document.body.classList.toggle("ruler-on", prefs.ruler);
+  document.body.classList.toggle("focus-on", prefs.focus);
+  if (rulerActive()) refreshRuler(); else clearRuler();
   document.querySelectorAll(".swatch").forEach(b =>
     b.classList.toggle("active", b.dataset.theme === prefs.theme));
   savePrefs();
@@ -463,6 +527,8 @@ function buildPanel(){
   $("speakbtn").onclick = () => {
     prefs.speak = !prefs.speak; if (!prefs.speak) stopSpeech(); applyPrefs();
   };
+  $("rulerbtn").onclick = () => { prefs.ruler = !prefs.ruler; applyPrefs(); };
+  $("focusbtn").onclick = () => { prefs.focus = !prefs.focus; applyPrefs(); };
   $("aareset").onclick = () => { prefs = Object.assign({}, PREF_DEFAULTS); applyPrefs(); };
   $("aaclose").onclick = closePanel;
   $("aabtn").onclick = (e) => {
@@ -494,6 +560,69 @@ function speakBlock(el){
   speakingEl = el; el.classList.add("speaking");
   try { speechSynthesis.speak(u); } catch {}
 }
+
+/* ------------------------------------------------------------------ */
+/* reading ruler + focus line — keyboard only, like the HTML export:   */
+/* arrow keys step one sentence-block at a time, the page scrolls so   */
+/* the current line stays centred (teleprompter), the mouse never      */
+/* moves it. Focus mode fades everything except the current line.      */
+/* ------------------------------------------------------------------ */
+let rlTargets = [];
+let rlIdx = -1;
+
+function rulerActive(){ return prefs.ruler || prefs.focus; }
+function reducedMotion(){ return matchMedia("(prefers-reduced-motion: reduce)").matches; }
+
+function collectTargets(){
+  rlTargets = [];
+  document.querySelectorAll("#conv .block").forEach(b => {
+    if (b.classList.contains("tutor-b")){
+      const kids = b.querySelectorAll("p,pre");
+      if (kids.length) kids.forEach(k => rlTargets.push(k));
+      else rlTargets.push(b);
+    } else rlTargets.push(b);
+  });
+}
+function positionRuler(){
+  const band = $("ruler");
+  const el = rlTargets[rlIdx];
+  document.querySelectorAll("#conv .rl-current").forEach(n => n.classList.remove("rl-current"));
+  if (!el){ band.style.width = "0"; return; }
+  el.classList.add("rl-current");
+  const r = el.getBoundingClientRect();
+  band.style.top = (r.top + window.scrollY - 4) + "px";
+  band.style.left = (r.left + window.scrollX - 10) + "px";
+  band.style.width = (r.width + 20) + "px";
+  band.style.height = (r.height + 8) + "px";
+}
+function rlStep(d){
+  if (!rlTargets.length) collectTargets();
+  if (!rlTargets.length) return;
+  if (rlIdx < 0){
+    // first press: land on the first block below the top quarter of the screen
+    const y = window.scrollY + window.innerHeight * 0.25;
+    rlIdx = rlTargets.findIndex(el => el.getBoundingClientRect().top + window.scrollY >= y);
+    if (rlIdx < 0) rlIdx = rlTargets.length - 1;
+  } else {
+    rlIdx = Math.max(0, Math.min(rlTargets.length - 1, rlIdx + d));
+  }
+  positionRuler();
+  const el = rlTargets[rlIdx];
+  const r = el.getBoundingClientRect();
+  const top = r.top + window.scrollY - (window.innerHeight - r.height) / 2;
+  window.scrollTo({top: Math.max(0, top), behavior: reducedMotion() ? "auto" : "smooth"});
+}
+function refreshRuler(){
+  collectTargets();
+  if (rlIdx >= rlTargets.length) rlIdx = rlTargets.length - 1;
+  positionRuler();
+}
+function clearRuler(){
+  document.querySelectorAll("#conv .rl-current").forEach(n => n.classList.remove("rl-current"));
+  $("ruler").style.width = "0";
+  rlIdx = -1;
+}
+window.addEventListener("resize", () => { if (rulerActive()) refreshRuler(); });
 
 /* ------------------------------------------------------------------ */
 /* knowledge tree (same shape as knowledge.py to_dict)                 */
@@ -598,6 +727,25 @@ function tutorHtml(text){
   return html;
 }
 
+function sparkHtml(turns){
+  const pts = turns.filter(t => Number.isInteger(t.confidence)).map(t => t.confidence);
+  if (pts.length < 2) return "";
+  const w = Math.max(64, pts.length * 12), h = 22, pad = 3;
+  const x = (i) => pad + i * (w - 2 * pad) / (pts.length - 1);
+  const y = (v) => h - pad - (v / 100) * (h - 2 * pad);
+  const poly = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"` +
+         ` role="img" aria-label="confidence across ${pts.length} turns">` +
+         `<polyline points="${poly}"/>` +
+         `<circle cx="${x(pts.length - 1).toFixed(1)}" cy="${y(pts[pts.length - 1]).toFixed(1)}" r="2.5"/></svg>`;
+}
+
+function crumbHtml(tree, id){
+  return lineage(tree, id).map(n =>
+    `<span class="cl" onclick="selectNode(${n.id})" title="show node [${n.id}]">${esc(n.label)}</span>`
+  ).join(" › ");
+}
+
 function confHtml(t, prev){
   if (!Number.isInteger(t.confidence)) return "";
   let delta = "";
@@ -677,9 +825,9 @@ function renderConversation(keepScroll){
     h += `<div class="crumb">branched from [${node.parent_id}] turn ${node.branch_from_turn}` +
          (node.focus ? ` · focus: ${esc(node.focus)}` : "") + `</div>`;
   }
-  h += `<div class="crumb">${esc(breadcrumb(tree, node.id))}</div>` +
-       `<div class="stats">${node.turns.length} turns · confidence ${fmtConf(node.final_confidence)} · ` +
-       `${fmtCost(node.cost)} · ${esc(node.learner_model)}</div></div>`;
+  h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>` +
+       `<div class="stats">${node.turns.length} turns · confidence ${fmtConf(node.final_confidence)}` +
+       `${sparkHtml(node.turns)} · ${fmtCost(node.cost)} · ${esc(node.learner_model)}</div></div>`;
   let prevConf = null;
   for (const t of node.turns){
     h += turnHtml(node, t, prevConf, !running);
@@ -688,6 +836,8 @@ function renderConversation(keepScroll){
   if (activity && activity.nodeId === node.id) h += activityHtml();
   conv.innerHTML = h;
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
+  if (rulerActive()) refreshRuler();
+  updateJump();
 }
 
 function renderMap(){
@@ -817,9 +967,10 @@ function setRunning(on){
 /* ------------------------------------------------------------------ */
 async function runInvestigation(tree, node, ctx){
   // Resumable: picks up after the last completed step, including the case
-  // where the learner asked but the tutor call failed (tutor is empty).
+  // where the learner asked but the tutor call failed (tutor is empty). The
+  // tutor answers even a done=true final restatement, exactly like the CLI.
   const last = node.turns[node.turns.length - 1];
-  if (last && last.action && !last.tutor && !last.done){
+  if (last && last.action && !last.tutor){
     activity = {nodeId: node.id, kind: "tutor"};
     setStatus(`turn ${last.turn}: claude is answering…`); renderAll();
     const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action});
@@ -1009,16 +1160,20 @@ $("exportmd").onclick = async () => {
     clearStatus();
   } catch (e){ setError(e.message); }
 };
-$("importbtn").onclick = () => $("importfile").click();
-$("importfile").onchange = async (e) => {
-  const f = e.target.files[0]; if (!f) return;
+async function importTreeFile(f){
   try {
     const d = JSON.parse(await f.text());
     if (d.format !== FORMAT) throw new Error("not a knowledge-tree file");
     if (!d.id) d.id = randHex(12);
     store[d.id] = d; currentId = d.id; currentNode = d.root_id;
     saveStore(); renderAll(true);
+    clearStatus();
   } catch (err){ setError("import failed: " + err.message); }
+}
+$("importbtn").onclick = () => $("importfile").click();
+$("importfile").onchange = (e) => {
+  const f = e.target.files[0];
+  if (f) importTreeFile(f);
   e.target.value = "";
 };
 
@@ -1041,7 +1196,46 @@ document.addEventListener("click", (e) => {
   if (block && !block.closest(".pending")) speakBlock(block);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape"){ stopSpeech(); closePanel(); closeMenu(); }
+  if (e.key === "Escape"){
+    stopSpeech(); closePanel(); closeMenu();
+    if (rulerActive()){ prefs.ruler = false; prefs.focus = false; applyPrefs(); }
+    return;
+  }
+  const typing = e.target.closest?.("input,select,textarea");
+  if (rulerActive() && !typing){
+    if (e.key === "ArrowDown" || e.key === "ArrowRight"){ e.preventDefault(); rlStep(1); return; }
+    if (e.key === "ArrowUp" || e.key === "ArrowLeft"){ e.preventDefault(); rlStep(-1); return; }
+  }
+  if (e.key === "/" && !typing){
+    e.preventDefault();
+    if (matchMedia("(max-width:900px)").matches) document.body.classList.add("menu-open");
+    $("topic").focus();
+  }
+});
+
+/* jump to the latest turn while a run scrolls past you */
+function updateJump(){
+  $("jumpbtn").classList.toggle("on", running && !nearBottom());
+}
+window.addEventListener("scroll", updateJump, {passive: true});
+$("jumpbtn").onclick = () =>
+  window.scrollTo({top: document.body.scrollHeight, behavior: reducedMotion() ? "auto" : "smooth"});
+
+/* drag a .know.json anywhere onto the page to import it */
+let dragDepth = 0;
+document.addEventListener("dragenter", (e) => {
+  e.preventDefault();
+  if (!running){ dragDepth++; document.body.classList.add("dragging"); }
+});
+document.addEventListener("dragover", (e) => e.preventDefault());
+document.addEventListener("dragleave", () => {
+  if (--dragDepth <= 0){ dragDepth = 0; document.body.classList.remove("dragging"); }
+});
+document.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dragDepth = 0; document.body.classList.remove("dragging");
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f && !running) importTreeFile(f);
 });
 
 /* login */
