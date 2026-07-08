@@ -1,0 +1,12 @@
+{
+  "name": "learn with claude",
+  "short_name": "learn",
+  "description": "Grow a branchable tree of knowledge by watching a simulated learner investigate topics with Claude, one scoped question at a time.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbf6ea",
+  "theme_color": "#fbf6ea",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
