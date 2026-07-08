@@ -11,3 +11,6 @@ knowledge/
 # Stray C/C++ artifacts not part of this Python project
 *.exe
 *.cpp
+
+# Vercel project link (contains project/org ids)
+.vercel/
