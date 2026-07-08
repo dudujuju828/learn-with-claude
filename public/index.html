@@ -216,6 +216,34 @@
   @keyframes dots{0%{content:""} 25%{content:"."} 50%{content:".."} 75%{content:"..."}}
   @keyframes pulse{0%,100%{opacity:.3} 50%{opacity:1}}
 
+  /* ---- help panel ---- */
+  #helppanel{
+    display:none; position:fixed; top:3.3rem; right:.7rem; z-index:80;
+    background:var(--card); border:1px solid var(--line); border-radius:.9rem;
+    padding:1rem 1.2rem; width:min(24rem,92vw); max-height:calc(100vh - 5rem);
+    overflow:auto; box-shadow:0 8px 34px rgba(0,0,0,.18); font-size:.9rem;
+  }
+  #helppanel.open{display:block}
+  #helppanel h3{font-size:.82rem; font-weight:600; color:var(--muted);
+    text-transform:lowercase; letter-spacing:.06em; margin:.9rem 0 .3rem}
+  #helppanel h3:first-child{margin-top:0}
+  #helppanel p{margin:.45rem 0}
+  #helppanel td{padding:.1rem .5rem .1rem 0; vertical-align:top}
+  #helppanel kbd{
+    background:var(--bg); border:1px solid var(--line); border-radius:.3rem;
+    padding:0 .35rem; font-family:Consolas,monospace; font-size:.85em;
+  }
+
+  /* ---- terms glossary ---- */
+  #terms .t{
+    display:inline-block; margin:.15rem .25rem .15rem 0; cursor:pointer;
+    background:var(--termbg); color:var(--term); border-radius:.55rem;
+    padding:.08rem .6rem; font-size:.84rem; border:1px solid transparent;
+  }
+  #terms .t:hover{border-color:var(--term)}
+  .flash{outline:3px solid var(--accent) !important; outline-offset:3px;
+    transition:outline-color 1s}
+
   /* ---- reading ruler + focus line ---- */
   #ruler{
     display:none; position:absolute; z-index:5; pointer-events:none;
@@ -306,9 +334,29 @@
   <span class="brand">learn <span class="with">with claude</span></span>
   <span class="treename" id="treename">no tree</span>
   <span class="cost" id="treecost" title="total spend on this tree"></span>
+  <button id="helpbtn" title="help" aria-label="help">?</button>
   <button id="aabtn" title="reading settings" aria-label="reading settings">Aa</button>
   <button id="logoutbtn">log out</button>
 </header>
+
+<div id="helppanel" role="dialog" aria-label="help">
+  <h3>how this works</h3>
+  <p><b>new</b> runs one investigation: a simulated human learner asks your tutor
+  one scoped question at a time until it can explain the idea in its own words.</p>
+  <p><b>full</b> does that, then the tutor picks 3 more related concepts to
+  investigate — a small tour of the topic.</p>
+  <p><b>⤵ branch</b> under any tutor answer re-investigates that answer more
+  deeply, growing the tree. Every turn is two real model calls (~5–7¢).</p>
+  <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
+  another device or the CLI — the file format is identical.</p>
+  <h3>keyboard</h3>
+  <table>
+    <tr><td><kbd>/</kbd></td><td>jump to the topic box</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>step the reading ruler / focus line (when on)</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>stop speech · close panels · turn the ruler off</td></tr>
+  </table>
+  <div style="text-align:right; margin-top:.6rem"><button id="helpclose">close</button></div>
+</div>
 
 <div id="aapanel" role="dialog" aria-label="reading settings">
   <div class="row">
@@ -369,10 +417,16 @@
       <button class="primary" id="newbtn" title="one investigation">new</button>
       <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
     </div>
-    <p class="hint">“full” runs the root investigation, then the tutor picks 3 more related concepts to explore.</p>
+    <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
+    related concepts to explore. Each turn is two real model calls (~5–7¢).</p>
 
     <h2>tree</h2>
     <div id="map"><span style="color:var(--muted)">—</span></div>
+
+    <div id="termswrap" style="display:none">
+      <h2>terms the learner hit</h2>
+      <div id="terms"></div>
+    </div>
 
     <h2>trees</h2>
     <div id="treelist"></div>
@@ -541,13 +595,26 @@ function buildPanel(){
   $("aaclose").onclick = closePanel;
   $("aabtn").onclick = (e) => {
     e.stopPropagation();
-    $("aapanel").classList.toggle("open");
+    const wasOpen = $("aapanel").classList.contains("open");
+    closePanel();
+    if (!wasOpen) $("aapanel").classList.add("open");
   };
+  $("helpbtn").onclick = (e) => {
+    e.stopPropagation();
+    const wasOpen = $("helppanel").classList.contains("open");
+    closePanel();
+    if (!wasOpen) $("helppanel").classList.add("open");
+  };
+  $("helpclose").onclick = closePanel;
   document.addEventListener("click", (e) => {
-    if (!$("aapanel").contains(e.target) && e.target !== $("aabtn")) closePanel();
+    if (!$("aapanel").contains(e.target) && !$("helppanel").contains(e.target) &&
+        e.target !== $("aabtn") && e.target !== $("helpbtn")) closePanel();
   });
 }
-function closePanel(){ $("aapanel").classList.remove("open"); }
+function closePanel(){
+  $("aapanel").classList.remove("open");
+  $("helppanel").classList.remove("open");
+}
 
 /* ------------------------------------------------------------------ */
 /* read aloud                                                          */
@@ -924,8 +991,39 @@ async function copyBlock(btn){
 }
 window.copyBlock = copyBlock;
 
+function renderTerms(){
+  const tree = cur();
+  const wrap = $("termswrap");
+  if (!tree){ wrap.style.display = "none"; return; }
+  const seen = new Set(); const items = [];
+  for (const id of Object.keys(tree.nodes).map(Number).sort((a, b) => a - b)){
+    for (const t of getNode(tree, id).turns){
+      const term = (t.new_term || "").trim();
+      if (!term || seen.has(term.toLowerCase())) continue;
+      seen.add(term.toLowerCase());
+      items.push({term, nodeId: id, turn: t.turn});
+    }
+  }
+  if (!items.length){ wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  $("terms").innerHTML = items.map(i =>
+    `<span class="t" onclick="jumpToTerm(${i.nodeId},${i.turn})" tabindex="0" role="button"` +
+    ` title="node [${i.nodeId}] · turn ${i.turn}">🔍 ${esc(i.term)}</span>`).join("");
+}
+function jumpToTerm(nodeId, turn){
+  selectNode(nodeId);
+  const el = document.querySelector(`#conv .turn[data-turn="${turn}"]`);
+  if (el){
+    el.scrollIntoView?.({behavior: reducedMotion() ? "auto" : "smooth", block: "center"});
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1400);
+  }
+  closeMenu();
+}
+window.jumpToTerm = jumpToTerm;
+
 function renderAll(keepScroll){
-  renderHeader(); renderMap(); renderTreeList(); renderConversation(keepScroll);
+  renderHeader(); renderMap(); renderTreeList(); renderTerms(); renderConversation(keepScroll);
 }
 
 let runLabel = "";              // e.g. "investigation 2 of 4" during a full session
@@ -1208,13 +1306,17 @@ function cmdBranch(nodeId, branchTurn){
 /* ------------------------------------------------------------------ */
 function openTree(id){
   if (running) return;
+  const changed = currentId !== id;
   currentId = id;
   currentNode = store[id]?.root_id ?? null;
   renderAll(true);
+  if (changed) window.scrollTo({top: 0});
   closeMenu();
 }
 function selectNode(id){
+  const changed = currentNode !== id;
   currentNode = id; renderAll(true);
+  if (changed && !running) window.scrollTo({top: 0});
   if (!running) closeMenu();
 }
 function deleteTree(id){
@@ -1277,10 +1379,10 @@ $("importfile").onchange = (e) => {
   e.target.value = "";
 };
 
-/* keyboard access for the map and tree list */
-for (const id of ["map", "treelist"]){
+/* keyboard access for the map, tree list, and term chips */
+for (const id of ["map", "treelist", "terms"]){
   $(id).addEventListener("keydown", (e) => {
-    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".noderow,.item")){
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".noderow,.item,.t")){
       e.preventDefault(); e.target.click();
     }
   });
