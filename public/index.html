@@ -263,6 +263,14 @@
   .spark circle{fill:var(--ask)}
   .crumb .cl{cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px}
   .crumb .cl:hover{color:var(--fg)}
+  .crumb .danger{color:var(--danger)}
+  .who .copy{
+    margin-left:auto; border:none; background:none; color:var(--muted);
+    padding:0 .15rem; font-size:.95rem; cursor:pointer; line-height:1;
+  }
+  .who .copy:hover{color:var(--fg)}
+  #map .noderow:focus-visible, #treelist .item:focus-visible{
+    outline:2px solid var(--accent); outline-offset:1px}
 
   /* ---- status bar ---- */
   #statusbar{
@@ -762,16 +770,17 @@ function confHtml(t, prev){
 function turnHtml(node, t, prevConf, allowBranch){
   let h = `<article class="turn" data-turn="${t.turn}">`;
   h += `<div class="turnhead"><span>turn ${t.turn}</span>${confHtml(t, prevConf)}</div>`;
+  const copyBtn = `<button class="copy" onclick="copyBlock(this)" title="copy text" aria-label="copy text">⧉</button>`;
   if (t.thinking){
-    h += `<div class="block thinking"><div class="who">💭 thinking to myself</div>${esc(t.thinking)}</div>`;
+    h += `<div class="block thinking"><div class="who">💭 thinking to myself${copyBtn}</div>${esc(t.thinking)}</div>`;
   }
   if (t.action){
     h += `<div class="block action"><div class="who">🙋 I ask claude` +
          (t.new_term ? `<span class="term">🔍 ${esc(t.new_term)}</span>` : "") +
-         `</div>${esc(t.action)}</div>`;
+         `${copyBtn}</div>${esc(t.action)}</div>`;
   }
   if (t.tutor){
-    h += `<div class="block tutor-b"><div class="who">📘 claude answers</div>${tutorHtml(t.tutor)}</div>`;
+    h += `<div class="block tutor-b"><div class="who">📘 claude answers${copyBtn}</div>${tutorHtml(t.tutor)}</div>`;
     if (t.done){
       h += `<div class="donechip">✓ the learner can now explain it in their own words</div>`;
     }
@@ -827,7 +836,19 @@ function renderConversation(keepScroll){
   }
   h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>` +
        `<div class="stats">${node.turns.length} turns · confidence ${fmtConf(node.final_confidence)}` +
-       `${sparkHtml(node.turns)} · ${fmtCost(node.cost)} · ${esc(node.learner_model)}</div></div>`;
+       `${sparkHtml(node.turns)} · ${fmtCost(node.cost)} · ${esc(node.learner_model)}</div>`;
+  let nav = "";
+  if (node.parent_id != null)
+    nav += `<span class="cl" onclick="selectNode(${node.parent_id})">↩ up to [${node.parent_id}]</span>`;
+  if (node.children.length)
+    nav += (nav ? " · " : "") + "branches: " + node.children.map(c =>
+      `<span class="cl" onclick="selectNode(${c})">[${c}] ${esc(oneLine(getNode(tree, c).label, 24))}</span>`
+    ).join(" · ");
+  if (!running && node.parent_id != null && !node.children.length)
+    nav += (nav ? " · " : "") +
+      `<span class="cl danger" onclick="removeBranch(${node.id})">✕ remove this branch</span>`;
+  if (nav) h += `<div class="crumb">${nav}</div>`;
+  h += `</div>`;
   let prevConf = null;
   for (const t of node.turns){
     h += turnHtml(node, t, prevConf, !running);
@@ -855,7 +876,7 @@ function renderMap(){
     const connector = isRoot ? "" : prefix + (isLast ? "└─ " : "├─ ");
     rows.push(
       `<div class="noderow${nid === currentNode ? " active" : ""}" onclick="selectNode(${nid})"` +
-      ` title="${esc(n.label)}">` +
+      ` tabindex="0" role="button" title="${esc(n.label)}">` +
       `${esc(connector)}<span${live ? ' class="live"' : ""}>●</span> [${n.id}] ` +
       `${esc(oneLine(n.label, 26))} <span class="meta">(${esc(meta)})</span></div>`
     );
@@ -871,7 +892,8 @@ function renderTreeList(){
   const items = Object.values(store).sort((a, b) => (b.created || "").localeCompare(a.created || ""));
   list.innerHTML = items.map(t => {
     const n = Object.keys(t.nodes).length;
-    return `<div class="item${t.id === currentId ? " active" : ""}" onclick="openTree('${t.id}')">` +
+    return `<div class="item${t.id === currentId ? " active" : ""}" onclick="openTree('${t.id}')"` +
+      ` tabindex="0" role="button">` +
       `<div class="top"><span class="lbl">${esc(oneLine(t.root_topic, 44))}</span>` +
       `<button class="del" title="remove from this browser" aria-label="delete tree"` +
       ` onclick="event.stopPropagation();deleteTree('${t.id}')">✕</button></div>` +
@@ -885,32 +907,62 @@ function renderHeader(){
   $("treename").textContent = tree ? oneLine(tree.root_topic, 48) : "no tree";
   $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
   $("exportjson").disabled = $("exportmd").disabled = !tree;
+  document.title = tree
+    ? oneLine(tree.root_topic, 40) + " — learn with claude"
+    : "learn with claude";
 }
+
+async function copyBlock(btn){
+  const block = btn.closest(".block");
+  const clone = block.cloneNode(true);
+  clone.querySelectorAll(".who,button").forEach(n => n.remove());
+  const parts = [...clone.querySelectorAll("p,pre")].map(n => n.textContent.trim());
+  const text = (parts.length ? parts.join("\n\n") : clone.textContent).trim();
+  try { await navigator.clipboard.writeText(text); btn.textContent = "✓"; }
+  catch { btn.textContent = "✗"; }
+  setTimeout(() => { btn.textContent = "⧉"; }, 1200);
+}
+window.copyBlock = copyBlock;
 
 function renderAll(keepScroll){
   renderHeader(); renderMap(); renderTreeList(); renderConversation(keepScroll);
 }
 
+let runLabel = "";              // e.g. "investigation 2 of 4" during a full session
+let statusBase = "", statusStart = 0, statusTimer = null;
+
+function statusTick(){
+  const s = Math.floor((Date.now() - statusStart) / 1000);
+  $("statusmsg").textContent = statusBase + (s >= 4 ? ` — ${s}s` : "");
+}
 function setStatus(msg){
   const bar = $("statusbar");
   bar.classList.add("on"); bar.classList.remove("err");
-  $("statusmsg").textContent = msg;
+  statusBase = (runLabel ? runLabel + " · " : "") + msg;
+  statusStart = Date.now();
+  if (!statusTimer) statusTimer = setInterval(statusTick, 1000);
+  statusTick();
   $("stopbtn").style.display = running ? "" : "none";
   $("retrybtn").style.display = $("giveupbtn").style.display = "none";
 }
+function stopTicker(){
+  if (statusTimer){ clearInterval(statusTimer); statusTimer = null; }
+}
 function setError(msg){
+  stopTicker();
   const bar = $("statusbar");
   bar.classList.add("on", "err");
   $("statusmsg").textContent = msg;
   $("stopbtn").style.display = "none";
 }
-function clearStatus(){ $("statusbar").classList.remove("on", "err"); }
+function clearStatus(){ stopTicker(); $("statusbar").classList.remove("on", "err"); }
 
 /* ------------------------------------------------------------------ */
 /* run queue — sequential thunks with pause-and-retry on failure       */
 /* ------------------------------------------------------------------ */
 const queue = [];
 let queueActive = false;
+let activeRun = null;           // {treeId, nodeId} of the node being grown
 
 function enqueue(...thunks){
   queue.push(...thunks);
@@ -926,6 +978,7 @@ async function drainQueue(){
       try {
         await thunk();
         queue.shift();
+        activeRun = null;
       } catch (err){
         if (err && err.message === "logged out"){ queue.length = 0; break; }
         const giveUp = await offerRetry(err);
@@ -934,14 +987,52 @@ async function drainQueue(){
       }
     }
   } finally {
+    // a node that never got a single turn (aborted before the learner spoke)
+    // would clutter the tree forever — drop it, like the CLI, which only
+    // adds nodes once a conversation completes
+    if (activeRun){
+      const tree = store[activeRun.treeId];
+      const node = tree && getNode(tree, activeRun.nodeId);
+      if (node && node.turns.length === 0) removeNodeFromTree(tree, node.id);
+      activeRun = null;
+    }
     queueActive = false;
     setRunning(false);
     activity = null;
     stopRequested = false;
+    runLabel = "";
     clearStatus();
     renderAll(true);
   }
 }
+
+function removeNodeFromTree(tree, nodeId){
+  const node = getNode(tree, nodeId);
+  if (!node || node.children.length) return;
+  if (node.parent_id != null){
+    const p = getNode(tree, node.parent_id);
+    p.children = p.children.filter(c => c !== node.id);
+    if (currentNode === node.id) currentNode = p.id;
+  } else {
+    tree.root_id = null;
+    if (currentNode === node.id) currentNode = null;
+  }
+  delete tree.nodes[String(node.id)];
+  if (tree.root_id == null && !Object.keys(tree.nodes).length){
+    delete store[tree.id];
+    if (currentId === tree.id){ currentId = null; currentNode = null; }
+  }
+  saveStore();
+}
+function removeBranch(nodeId){
+  const tree = cur(); if (!tree || running) return;
+  const node = getNode(tree, nodeId);
+  if (!node || node.parent_id == null || node.children.length) return;
+  if (!confirm(`remove branch [${node.id}] "${oneLine(node.label, 40)}"?\n\nIts conversation is deleted from this tree (the money is already spent either way).`)) return;
+  removeNodeFromTree(tree, nodeId);
+  renderAll(true);
+}
+window.removeBranch = removeBranch;
 function offerRetry(err){
   activity = null; renderAll(true);
   setError(oneLine(err.message, 300) + " — nothing is lost; you can retry this step.");
@@ -1011,24 +1102,27 @@ async function runInvestigation(tree, node, ctx){
 /* ------------------------------------------------------------------ */
 /* commands: new / full / branch (as queue thunks)                     */
 /* ------------------------------------------------------------------ */
-function rootThunk(topic){
-  let node = null;
+function rootThunk(topic, label=""){
+  let node = null, treeId = null;
   return async () => {
+    runLabel = label;
     if (!node){
       const tree = newTree(topic);
-      store[tree.id] = tree; currentId = tree.id;
+      store[tree.id] = tree; currentId = tree.id; treeId = tree.id;
       node = makeNode(tree, topic);
       currentNode = node.id;
       saveStore(); renderAll();
     }
-    await runInvestigation(store[currentId], node, {kind: "root", topic});
+    activeRun = {treeId, nodeId: node.id};
+    await runInvestigation(store[treeId], node, {kind: "root", topic});
   };
 }
 
-function followupThunk(){
+function followupThunk(label=""){
   // Created lazily so each follow-up sees the tree state its predecessors built.
   let node = null, ctx = null;
   return async () => {
+    runLabel = label;
     const tree = cur();
     if (!node){
       const order = Object.keys(tree.nodes).map(Number).sort((a, b) => a - b);
@@ -1050,6 +1144,7 @@ function followupThunk(){
       currentNode = node.id;
       saveStore(); renderAll();
     }
+    activeRun = {treeId: tree.id, nodeId: node.id};
     await runInvestigation(tree, node, ctx);
   };
 }
@@ -1057,6 +1152,7 @@ function followupThunk(){
 function branchThunk(treeId, nodeId, branchTurn, focus){
   let node = null, ctx = null;
   return async () => {
+    runLabel = "";
     const tree = store[treeId];
     const parent = getNode(tree, nodeId);
     const bt = parent.turns[branchTurn - 1];
@@ -1071,6 +1167,7 @@ function branchThunk(treeId, nodeId, branchTurn, focus){
       currentNode = node.id;
       saveStore(); renderAll();
     }
+    activeRun = {treeId, nodeId: node.id};
     await runInvestigation(tree, node, ctx);
     if (!focus){ node.label = deriveLabel(node.turns, bt.tutor); saveStore(); renderAll(true); }
   };
@@ -1078,7 +1175,10 @@ function branchThunk(treeId, nodeId, branchTurn, focus){
 
 function cmdNew(topic){ enqueue(rootThunk(topic)); }
 function cmdFull(topic){
-  enqueue(rootThunk(topic), followupThunk(), followupThunk(), followupThunk());
+  enqueue(rootThunk(topic, "investigation 1 of 4"),
+          followupThunk("investigation 2 of 4"),
+          followupThunk("investigation 3 of 4"),
+          followupThunk("investigation 4 of 4"));
 }
 
 function startBranchUI(nodeId, turn, btn){
@@ -1176,6 +1276,15 @@ $("importfile").onchange = (e) => {
   if (f) importTreeFile(f);
   e.target.value = "";
 };
+
+/* keyboard access for the map and tree list */
+for (const id of ["map", "treelist"]){
+  $(id).addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".noderow,.item")){
+      e.preventDefault(); e.target.click();
+    }
+  });
+}
 
 /* mobile menu */
 function closeMenu(){ document.body.classList.remove("menu-open"); }
