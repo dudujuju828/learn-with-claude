@@ -1031,8 +1031,10 @@ function emptyHtml(){
     <div class="seed" aria-hidden="true">🌱</div>
     <h3>grow a tree of knowledge</h3>
     <p>Type a topic on the left and press <b>new</b>. A simulated human learner will
-    investigate it with a terse tutor, one scoped question at a time — and whenever an
+    investigate it with your tutor, one scoped question at a time — and whenever an
     answer deserves a deeper look, you can branch into it.</p>
+    <p>Pick a <b>tutor style</b> (highly technical → simple), search every past tree
+    from the sidebar, and press <kbd>?</kbd> for the full tour.</p>
     <div class="examples">${EXAMPLES.map(t =>
       `<button onclick="useExample('${esc(t)}')">${esc(t)}</button>`).join("")}</div>
   </div>`;
@@ -1210,6 +1212,16 @@ let searchTimer = null;
 $("searchbox").addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(runSearch, 200);
+});
+$("searchbox").addEventListener("keydown", (e) => {
+  if (e.key === "Enter"){
+    runSearch();
+    $("searchresults").querySelector(".hit")?.click();
+  } else if (e.key === "Escape" && $("searchbox").value){
+    e.stopPropagation();
+    $("searchbox").value = "";
+    $("searchresults").innerHTML = "";
+  }
 });
 
 function renderTerms(){
