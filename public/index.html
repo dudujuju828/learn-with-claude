@@ -247,24 +247,19 @@
     transition:outline-color 1s}
 
   /* ---- reading ruler + focus line ---- */
+  /* the band is positioned over the current visual line; focus mode adds a
+     huge box-shadow around it — a typoscope card over the whole page, with
+     only the band's window left readable */
   #ruler{
-    display:none; position:absolute; z-index:5; pointer-events:none;
-    background:rgba(255,205,50,.18); border-top:2px solid rgba(226,164,26,.6);
+    display:none; position:absolute; z-index:55; pointer-events:none;
+    background:rgba(255,205,50,.16); border-top:2px solid rgba(226,164,26,.6);
     border-bottom:2px solid rgba(226,164,26,.6); border-radius:.3rem;
   }
-  body.ruler-on #ruler{display:block}
-  /* focus line: fade every block; when the current line is a sentence inside a
-     tutor block, restore that container and fade its other sentences instead
-     (opacity nests multiplicatively, so the container must not stay faded) */
-  body.focus-on #conv .block, body.focus-on #conv .nodeinfo,
-  body.focus-on #conv .turnhead, body.focus-on #conv .donechip,
-  body.focus-on #conv .branchrow{
-    opacity:.06; transition:opacity .15s;
+  body.ruler-on #ruler, body.focus-on #ruler{display:block}
+  body.focus-on #ruler{
+    box-shadow:0 0 0 200vmax color-mix(in srgb, var(--bg) 93%, transparent);
   }
-  body.focus-on #conv .block.rl-current{opacity:1}
-  body.focus-on #conv .tutor-b:has(.rl-current){opacity:1}
-  body.focus-on #conv .tutor-b:has(.rl-current) :is(p,pre,.who){opacity:.06; transition:opacity .15s}
-  body.focus-on #conv .tutor-b :is(p,pre).rl-current{opacity:1 !important}
+  body.focus-on:not(.ruler-on) #ruler{background:transparent; border-color:transparent}
 
   /* jump to latest */
   #jumpbtn{
@@ -399,11 +394,11 @@
     <button id="speakbtn" class="toggle" role="switch">off</button>
   </div>
   <div class="row">
-    <label for="rulerbtn">🖍 reading ruler — ↑/↓ step sentence by sentence, keyboard only</label>
+    <label for="rulerbtn">🖍 reading ruler — ↑/↓ step line by line, keyboard only</label>
     <button id="rulerbtn" class="toggle" role="switch">off</button>
   </div>
   <div class="row">
-    <label for="focusbtn">🕶 focus line — fade everything except the current sentence</label>
+    <label for="focusbtn">🕶 focus line — hide everything except the current line</label>
     <button id="focusbtn" class="toggle" role="switch">off</button>
   </div>
   <div class="foot">
@@ -645,59 +640,89 @@ function speakBlock(el){
 /* the current line stays centred (teleprompter), the mouse never      */
 /* moves it. Focus mode fades everything except the current line.      */
 /* ------------------------------------------------------------------ */
-let rlTargets = [];
+let rlLines = [];               // {el, top, left, width, height} in document coords
 let rlIdx = -1;
 
 function rulerActive(){ return prefs.ruler || prefs.focus; }
 function reducedMotion(){ return matchMedia("(prefers-reduced-motion: reduce)").matches; }
 
 function collectTargets(){
-  rlTargets = [];
+  rlLines = [];
   document.querySelectorAll("#conv .block").forEach(b => {
-    if (b.classList.contains("tutor-b")){
-      const kids = b.querySelectorAll("p,pre");
-      if (kids.length) kids.forEach(k => rlTargets.push(k));
-      else rlTargets.push(b);
-    } else rlTargets.push(b);
+    const els = b.classList.contains("tutor-b")
+      ? [...b.querySelectorAll("p,pre")] : [b];
+    for (const el of els){
+      // measure the element's visual lines: the Range rects of its contents,
+      // merged per line box
+      let lines = [];
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        for (const r of (range.getClientRects ? range.getClientRects() : [])){
+          if (r.width < 2 || r.height < 2) continue;
+          const last = lines[lines.length - 1];
+          if (last && Math.abs(r.top - last.top) < 4){
+            last.left = Math.min(last.left, r.left);
+            last.right = Math.max(last.right, r.right);
+            last.bottom = Math.max(last.bottom, r.bottom);
+          } else {
+            lines.push({top: r.top, bottom: r.bottom, left: r.left, right: r.right});
+          }
+        }
+      } catch {}
+      if (!lines.length){
+        const r = el.getBoundingClientRect();
+        lines = [{top: r.top, bottom: r.bottom, left: r.left, right: r.right}];
+      }
+      for (const L of lines){
+        rlLines.push({
+          el,
+          top: L.top + window.scrollY,
+          left: L.left + window.scrollX,
+          width: Math.max(L.right - L.left, 40),
+          height: Math.max(L.bottom - L.top, 8),
+        });
+      }
+    }
   });
+  rlLines.sort((a, b) => a.top - b.top || a.left - b.left);
 }
 function positionRuler(){
   const band = $("ruler");
-  const el = rlTargets[rlIdx];
+  const L = rlLines[rlIdx];
   document.querySelectorAll("#conv .rl-current").forEach(n => n.classList.remove("rl-current"));
-  if (!el){ band.style.width = "0"; return; }
-  el.classList.add("rl-current");
-  const r = el.getBoundingClientRect();
-  band.style.top = (r.top + window.scrollY - 4) + "px";
-  band.style.left = (r.left + window.scrollX - 10) + "px";
-  band.style.width = (r.width + 20) + "px";
-  band.style.height = (r.height + 8) + "px";
+  if (!L){ band.style.width = "0"; band.style.height = "0"; return; }
+  L.el.classList.add("rl-current");
+  band.style.top = (L.top - 3) + "px";
+  band.style.left = (L.left - 10) + "px";
+  band.style.width = (L.width + 20) + "px";
+  band.style.height = (L.height + 6) + "px";
 }
 function rlStep(d){
-  if (!rlTargets.length) collectTargets();
-  if (!rlTargets.length) return;
+  if (!rlLines.length) collectTargets();
+  if (!rlLines.length) return;
   if (rlIdx < 0){
-    // first press: land on the first block below the top quarter of the screen
+    // first press: land on the first line below the top quarter of the screen
     const y = window.scrollY + window.innerHeight * 0.25;
-    rlIdx = rlTargets.findIndex(el => el.getBoundingClientRect().top + window.scrollY >= y);
-    if (rlIdx < 0) rlIdx = rlTargets.length - 1;
+    rlIdx = rlLines.findIndex(L => L.top >= y);
+    if (rlIdx < 0) rlIdx = rlLines.length - 1;
   } else {
-    rlIdx = Math.max(0, Math.min(rlTargets.length - 1, rlIdx + d));
+    rlIdx = Math.max(0, Math.min(rlLines.length - 1, rlIdx + d));
   }
   positionRuler();
-  const el = rlTargets[rlIdx];
-  const r = el.getBoundingClientRect();
-  const top = r.top + window.scrollY - (window.innerHeight - r.height) / 2;
+  const L = rlLines[rlIdx];
+  const top = L.top - (window.innerHeight - L.height) / 2;
   window.scrollTo({top: Math.max(0, top), behavior: reducedMotion() ? "auto" : "smooth"});
 }
 function refreshRuler(){
   collectTargets();
-  if (rlIdx >= rlTargets.length) rlIdx = rlTargets.length - 1;
+  if (rlIdx >= rlLines.length) rlIdx = rlLines.length - 1;
   positionRuler();
 }
 function clearRuler(){
   document.querySelectorAll("#conv .rl-current").forEach(n => n.classList.remove("rl-current"));
-  $("ruler").style.width = "0";
+  const band = $("ruler");
+  band.style.width = "0"; band.style.height = "0";
   rlIdx = -1;
 }
 window.addEventListener("resize", () => { if (rulerActive()) refreshRuler(); });
