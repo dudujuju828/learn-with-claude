@@ -153,6 +153,15 @@
   #map .noderow.active{background:var(--card); outline:1px solid var(--line)}
   #map .noderow .meta{color:var(--muted); font-size:.8em}
   #map .live{color:var(--accent); animation:pulse 1.2s ease-in-out infinite}
+  #alltreescost{font-weight:300; text-transform:none; letter-spacing:0}
+  #searchresults .hit{
+    padding:.3rem .5rem; margin:.2rem 0; border-radius:.55rem; cursor:pointer;
+    font-size:.84rem; border:1px solid transparent;
+  }
+  #searchresults .hit:hover{background:var(--card); border-color:var(--line)}
+  #searchresults .hit .where{color:var(--muted); font-size:.78rem}
+  #searchresults .hit mark{background:var(--termbg); color:var(--term); border-radius:.2rem}
+  #searchresults .none{color:var(--muted); font-size:.84rem; padding:.2rem .5rem}
 
   /* ---- conversation ---- */
   .empty{color:var(--muted); margin-top:2.4rem; max-width:32rem}
@@ -356,6 +365,7 @@
   <h3>keyboard</h3>
   <table>
     <tr><td><kbd>/</kbd></td><td>jump to the topic box</td></tr>
+    <tr><td><kbd>?</kbd></td><td>open this help</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>step the reading ruler / focus line (when on)</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>stop speech · close panels · turn the ruler off</td></tr>
   </table>
@@ -442,7 +452,11 @@
       <div id="terms"></div>
     </div>
 
-    <h2>trees</h2>
+    <h2>search</h2>
+    <input id="searchbox" type="text" placeholder="search every tree…" aria-label="search all trees">
+    <div id="searchresults"></div>
+
+    <h2>trees <span id="alltreescost"></span></h2>
     <div id="treelist"></div>
 
     <h2>file</h2>
@@ -1108,6 +1122,8 @@ function renderTreeList(){
       `<div class="meta">${n} node${n === 1 ? "" : "s"} · ${fmtCost(totalCost(t))}` +
       (stamp(t) ? ` · ${fmtDate(stamp(t))}` : "") + `</div></div>`;
   }).join("") || `<span style="color:var(--muted);font-size:.86rem">none yet</span>`;
+  const all = items.reduce((s, t) => s + totalCost(t), 0);
+  $("alltreescost").textContent = items.length > 1 ? `· ${fmtCost(all)} total` : "";
 }
 
 function renderHeader(){
@@ -1131,6 +1147,65 @@ async function copyBlock(btn){
   setTimeout(() => { btn.textContent = "⧉"; }, 1200);
 }
 window.copyBlock = copyBlock;
+
+/* ------------------------------------------------------------------ */
+/* search across every turn of every tree                              */
+/* ------------------------------------------------------------------ */
+function snippetHtml(text, i, qlen){
+  const start = Math.max(0, i - 36);
+  const end = Math.min(text.length, i + qlen + 56);
+  return (start > 0 ? "…" : "") +
+         esc(text.slice(start, i)) +
+         "<mark>" + esc(text.slice(i, i + qlen)) + "</mark>" +
+         esc(text.slice(i + qlen, end)) +
+         (end < text.length ? "…" : "");
+}
+function runSearch(){
+  const q = $("searchbox").value.trim().toLowerCase();
+  const box = $("searchresults");
+  if (q.length < 2){ box.innerHTML = ""; return; }
+  const hits = [];
+  outer:
+  for (const tree of Object.values(store)){
+    for (const id of Object.keys(tree.nodes).map(Number).sort((a, b) => a - b)){
+      const node = getNode(tree, id);
+      for (const t of node.turns){
+        for (const field of ["action", "tutor", "thinking", "new_term"]){
+          const text = t[field] || "";
+          const i = text.toLowerCase().indexOf(q);
+          if (i >= 0){
+            hits.push({tree, node, turn: t.turn, html: snippetHtml(text, i, q.length)});
+            break;
+          }
+        }
+        if (hits.length >= 25) break outer;
+      }
+    }
+  }
+  box.innerHTML = hits.length
+    ? hits.map((h, i) =>
+        `<div class="hit" tabindex="0" role="button" data-hit="${i}">` +
+        `<div class="where">${esc(oneLine(h.tree.root_topic, 30))} · [${h.node.id}] turn ${h.turn}</div>` +
+        `${h.html}</div>`).join("")
+    : `<div class="none">no matches</div>`;
+  box.querySelectorAll(".hit").forEach((el) => {
+    const h = hits[+el.dataset.hit];
+    el.onclick = () => openSearchHit(h.tree.id, h.node.id, h.turn);
+    el.onkeydown = (e) => {
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); el.onclick(); }
+    };
+  });
+}
+function openSearchHit(treeId, nodeId, turn){
+  if (running && treeId !== currentId) return;
+  currentId = treeId;
+  jumpToTerm(nodeId, turn);
+}
+let searchTimer = null;
+$("searchbox").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 200);
+});
 
 function renderTerms(){
   const tree = cur();
@@ -1566,6 +1641,10 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (matchMedia("(max-width:900px)").matches) document.body.classList.add("menu-open");
     $("topic").focus();
+  }
+  if (e.key === "?" && !typing){
+    e.preventDefault();
+    $("helpbtn").click();
   }
 });
 
