@@ -79,7 +79,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   line / letter / word spacing, keyboard-only **reading ruler** and
   **focus line** (typoscope) stepping visual lines, read aloud, a glossary of
   every term the learner hit, branch buttons under every answer, live cost,
-  and `.know.json` import/export compatible with the CLI.
+  and `.know.json` import/export compatible with the CLI. A **tutor style**
+  picker switches the answers between balanced / highly technical / precise /
+  simple / concise (the original terse style), applied from the next turn.
 
 Deploy your own: `vercel deploy --prod`, then `vercel env add APP_PASSWORD
 production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob

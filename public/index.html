@@ -1050,9 +1050,14 @@ function renderConversation(keepScroll){
     return;
   }
   const node = getNode(tree, currentNode);
-  let h = `<div class="nodeinfo">● [${node.id}] <b>${esc(node.label)}</b>`;
+  let h = `<div class="nodeinfo">● [${node.id}] <b>${esc(node.label)}</b>` +
+          (running ? "" :
+            ` <button class="copy" style="margin-left:.2rem" onclick="renameNode(${node.id})"` +
+            ` title="rename this node" aria-label="rename this node">✎</button>`);
   if (node.parent_id != null){
-    h += `<div class="crumb">branched from [${node.parent_id}] turn ${node.branch_from_turn}` +
+    h += `<div class="crumb">branched from ` +
+         `<span class="cl" onclick="jumpToTerm(${node.parent_id},${node.branch_from_turn})"` +
+         ` title="show that answer">[${node.parent_id}] turn ${node.branch_from_turn}</span>` +
          (node.focus ? ` · focus: ${esc(node.focus)}` : "") + `</div>`;
   }
   h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>` +
@@ -1252,7 +1257,8 @@ function statusTick(){
 function setStatus(msg){
   const bar = $("statusbar");
   bar.classList.add("on"); bar.classList.remove("err");
-  statusBase = (runLabel ? runLabel + " · " : "") + msg;
+  statusBase = (runLabel ? runLabel + " · " : "") +
+               (prefs.tmode !== "balanced" ? prefs.tmode + " · " : "") + msg;
   statusStart = Date.now();
   if (!statusTimer) statusTimer = setInterval(statusTick, 1000);
   statusTick();
@@ -1340,6 +1346,17 @@ function removeNodeFromTree(tree, nodeId){
   }
   saveStore();
 }
+function renameNode(nodeId){
+  const tree = cur(); if (!tree || running) return;
+  const node = getNode(tree, nodeId);
+  if (!node) return;
+  const label = prompt("rename this node:", node.label);
+  if (label == null || !label.trim() || label.trim() === node.label) return;
+  node.label = label.trim();
+  saveStore(); renderAll(true);
+}
+window.renameNode = renameNode;
+
 function removeBranch(nodeId){
   const tree = cur(); if (!tree || running) return;
   const node = getNode(tree, nodeId);
