@@ -58,6 +58,34 @@ Trees are stored in `~/.learn-with-claude/knowledge` by default (so the global
 command keeps everything in one place). Override with `--dir` or the `LEARN_DIR`
 environment variable.
 
+## Web app (self-hosted on Vercel)
+
+The same learner↔tutor loop as a password-protected web app — open a link on
+any device, log in, and grow trees. Prompts, models (`claude-sonnet-5` @
+`xhigh`), loop semantics, and the `.know.json` format are identical to the
+CLI; the only difference is that the server calls the Anthropic **API**
+directly (a local `claude` login can't run on a server), so it needs an
+`ANTHROPIC_API_KEY` and bills per token at the same ~$0.05–0.07/turn.
+
+- `api/index.py` — stateless backend: login (HMAC cookie from `APP_PASSWORD`),
+  one endpoint per model step; imports `personas.py` / `knowledge.py` /
+  `render.py` / `simulator.py` unchanged.
+- `api/trees.js` — tree history in Vercel Blob (`trees/<id>.json`), so every
+  logged-in device sees the same past investigations. The browser keeps a
+  localStorage working copy and syncs (debounced push, boot merge,
+  last-write-wins per tree).
+- `public/index.html` — the shell as a dyslexia-friendly page: font switcher
+  (OpenDyslexic / Lexend / Atkinson / Comic Sans), five colour themes, text /
+  line / letter / word spacing, keyboard-only **reading ruler** and
+  **focus line** (typoscope) stepping visual lines, read aloud, a glossary of
+  every term the learner hit, branch buttons under every answer, live cost,
+  and `.know.json` import/export compatible with the CLI.
+
+Deploy your own: `vercel deploy --prod`, then `vercel env add APP_PASSWORD
+production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob
+store add <name>` (linked to the project) for history. Not in the web app:
+tutor diagrams (they need a local Obsidian vault), `many`, `seeplusplus`.
+
 ## Quick start
 
 ```bash

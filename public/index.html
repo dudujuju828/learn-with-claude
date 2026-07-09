@@ -197,6 +197,10 @@
   .tutor-b pre{background:var(--prebg); border:1px solid var(--line); border-radius:.5rem;
     padding:.7rem .8rem; overflow-x:auto; line-height:1.5; font-size:.9em;
     letter-spacing:0; word-spacing:0}
+  .tutor-b code{background:var(--prebg); border-radius:.3rem; padding:0 .3em;
+    font-family:'Cascadia Code',Consolas,monospace; font-size:.92em;
+    letter-spacing:0; word-spacing:0}
+  .tutor-b pre, .tutor-b pre code{background:var(--prebg); font-size:.9em}
   .term{display:inline-block; background:var(--termbg); color:var(--term);
     border-radius:.5rem; padding:.02rem .55rem; font-size:.82rem}
   .speaking{outline:2px solid var(--accent); outline-offset:2px}
@@ -829,7 +833,10 @@ function setSync(state){
     ? "couldn't reach the server — trees are safe in this browser; click to retry"
     : "trees sync to the server so every device sees them — click to sync now";
 }
+let lastSync = 0;
 async function syncFromServer(){
+  lastSync = Date.now();
+  setSync("saving");
   let index;
   try {
     const r = await fetch("/api/trees");
@@ -910,7 +917,9 @@ function tutorHtml(text){
       html += "<pre>" + esc(body) + "</pre>";
     } else {
       for (const p of parts[i].split(/\n{2,}/)){
-        if (p.trim()) html += "<p>" + esc(p.trim()) + "</p>";
+        // escape first, then allow `inline code` through
+        if (p.trim()) html += "<p>" +
+          esc(p.trim()).replace(/`([^`\n]+)`/g, "<code>$1</code>") + "</p>";
       }
     }
   }
@@ -1071,7 +1080,8 @@ function renderMap(){
 
 function renderTreeList(){
   const list = $("treelist");
-  const items = Object.values(store).sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+  const stamp = (t) => t.saved_at || t.created || "";
+  const items = Object.values(store).sort((a, b) => stamp(b).localeCompare(stamp(a)));
   list.innerHTML = items.map(t => {
     const n = Object.keys(t.nodes).length;
     return `<div class="item${t.id === currentId ? " active" : ""}" onclick="openTree('${t.id}')"` +
@@ -1080,7 +1090,7 @@ function renderTreeList(){
       `<button class="del" title="remove from this browser" aria-label="delete tree"` +
       ` onclick="event.stopPropagation();deleteTree('${t.id}')">✕</button></div>` +
       `<div class="meta">${n} node${n === 1 ? "" : "s"} · ${fmtCost(totalCost(t))}` +
-      (t.created ? ` · ${fmtDate(t.created)}` : "") + `</div></div>`;
+      (stamp(t) ? ` · ${fmtDate(stamp(t))}` : "") + `</div></div>`;
   }).join("") || `<span style="color:var(--muted);font-size:.86rem">none yet</span>`;
 }
 
@@ -1607,6 +1617,23 @@ buildPanel();
 applyPrefs();
 renderAll(true);
 boot();
+/* another tab of this browser changed the trees — pick the change up */
+window.addEventListener("storage", (e) => {
+  if (e.key === LS_KEY && !running){
+    store = loadStore();
+    if (currentId && !store[currentId]){ currentId = null; currentNode = null; }
+    renderAll(true);
+  }
+});
+/* coming back to the app (phone → PC and back): quietly re-sync */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !running &&
+      Date.now() - lastSync > 60_000 &&
+      $("login").style.display === "none"){
+    syncFromServer();
+  }
+});
+
 window.addEventListener("beforeunload", (e) => {
   // best-effort push of unsynced trees on the way out
   for (const id of dirty){
