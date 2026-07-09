@@ -349,6 +349,8 @@
   investigate — a small tour of the topic.</p>
   <p><b>⤵ branch</b> under any tutor answer re-investigates that answer more
   deeply, growing the tree. Every turn is two real model calls (~5–7¢).</p>
+  <p><b>tutor style</b> changes how the tutor answers — from highly technical
+  to simple everyday words — and applies from the next turn, even mid-run.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
   another device or the CLI — the file format is identical.</p>
   <h3>keyboard</h3>
@@ -421,6 +423,16 @@
     </div>
     <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
     related concepts to explore. Each turn is two real model calls (~5–7¢).</p>
+
+    <h2>tutor style</h2>
+    <select id="modesel" aria-label="tutor style">
+      <option value="balanced">balanced — clear and informative</option>
+      <option value="technical">highly technical — full depth</option>
+      <option value="precise">precise — rigorous and exact</option>
+      <option value="simple">simple — everyday words</option>
+      <option value="concise">concise — the classic terse tutor</option>
+    </select>
+    <p class="hint">applies to the tutor's answers from the next turn on.</p>
 
     <h2>tree</h2>
     <div id="map"><span style="color:var(--muted)">—</span></div>
@@ -526,7 +538,8 @@ const THEMES = {
          termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e'},
 };
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
-                       theme: "cream", speak: false, ruler: false, focus: false};
+                       theme: "cream", speak: false, ruler: false, focus: false,
+                       tmode: "balanced"};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -565,6 +578,8 @@ function applyPrefs(){
     b.classList.toggle("on", prefs[key]);
     b.setAttribute("aria-checked", String(prefs[key]));
   }
+  $("modesel").value = prefs.tmode;
+  if ($("modesel").selectedIndex < 0) $("modesel").value = prefs.tmode = "balanced";
   document.body.classList.toggle("ruler-on", prefs.ruler);
   document.body.classList.toggle("focus-on", prefs.focus);
   if (rulerActive()) refreshRuler(); else clearRuler();
@@ -588,6 +603,7 @@ function buildPanel(){
     };
   });
   $("fontsel").onchange = () => { prefs.font = $("fontsel").value; applyPrefs(); };
+  $("modesel").onchange = () => { prefs.tmode = $("modesel").value; savePrefs(); };
   $("speakbtn").onclick = () => {
     prefs.speak = !prefs.speak; if (!prefs.speak) stopSpeech(); applyPrefs();
   };
@@ -1289,7 +1305,7 @@ async function runInvestigation(tree, node, ctx){
   if (last && last.action && !last.tutor){
     activity = {nodeId: node.id, kind: "tutor"};
     setStatus(`turn ${last.turn}: claude is answering…`); renderAll();
-    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action});
+    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action, mode: prefs.tmode});
     node.cost += T.cost;
     last.tutor = T.tutor;
     if (Number.isInteger(last.confidence)) node.final_confidence = last.confidence;
@@ -1313,7 +1329,7 @@ async function runInvestigation(tree, node, ctx){
 
     activity = {nodeId: node.id, kind: "tutor"};
     setStatus(`turn ${turn}: claude is answering…`); renderAll();
-    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action});
+    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action, mode: prefs.tmode});
     node.cost += T.cost;
     rec.tutor = T.tutor;
     if (Number.isInteger(rec.confidence)) node.final_confidence = rec.confidence;

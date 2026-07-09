@@ -36,6 +36,7 @@ from learn_with_claude.knowledge import KnowledgeTree, conversation_digest  # no
 from learn_with_claude.personas import (  # noqa: E402
     LEARNER_SYSTEM,
     NEXT_CONCEPT_SYSTEM,
+    TUTOR_MODES,
     branch_learner_message,
     branch_tutor_context,
     feedback_message,
@@ -224,7 +225,10 @@ def handle_tutor(body: dict) -> dict:
     action = (body.get("action") or "").strip()
     if not action:
         raise ApiError("missing 'action'")
-    system = tutor_system(diagrams=False)
+    mode = body.get("mode")
+    if mode not in TUTOR_MODES:
+        mode = "balanced"
+    system = tutor_system(diagrams=False, mode=mode)
     extra = tutor_extra_context(body)
     if extra:
         system += f"\n\n{extra}"
@@ -280,6 +284,7 @@ def handle_config() -> dict:
         "tutor_model": TUTOR_MODEL,
         "effort": EFFORT,
         "max_turns": MAX_TURNS,
+        "modes": list(TUTOR_MODES),
     }
 
 
