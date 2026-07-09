@@ -84,6 +84,8 @@
     text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:3rem}
   header .cost{color:var(--muted); font-size:.86rem; white-space:nowrap;
     font-variant-numeric:tabular-nums}
+  #syncbtn{color:var(--muted); font-size:.85rem; padding:.34rem .3rem; white-space:nowrap}
+  #syncbtn.err{color:var(--danger)}
   #menubtn{display:none}
   #app{display:flex; align-items:flex-start}
   aside{
@@ -334,6 +336,7 @@
   <span class="brand">learn <span class="with">with claude</span></span>
   <span class="treename" id="treename">no tree</span>
   <span class="cost" id="treecost" title="total spend on this tree"></span>
+  <button id="syncbtn" class="ghost" title="trees sync to the server so every device sees them — click to sync now">☁</button>
   <button id="helpbtn" title="help" aria-label="help">?</button>
   <button id="aabtn" title="reading settings" aria-label="reading settings">Aa</button>
   <button id="logoutbtn">log out</button>
@@ -748,8 +751,95 @@ function loadStore(){
   try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch { return {}; }
 }
 function saveStore(){
+  if (currentId && store[currentId]){
+    store[currentId].saved_at = new Date().toISOString();
+    markDirty(currentId);
+  }
   try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
   catch (e) { setError("could not save to browser storage: " + e.message); }
+}
+
+/* ------------------------------------------------------------------ */
+/* server sync — trees mirror to /api/trees (Vercel Blob) so any       */
+/* device that logs in sees the same history. localStorage stays the   */
+/* working copy; pushes are debounced; last write wins per tree.       */
+/* ------------------------------------------------------------------ */
+const dirty = new Set();
+let pushTimer = null;
+
+function markDirty(id){
+  dirty.add(id);
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(flushDirty, 1500);
+}
+async function flushDirty(){
+  clearTimeout(pushTimer); pushTimer = null;
+  for (const id of [...dirty]){
+    dirty.delete(id);
+    const tree = store[id];
+    if (!tree) continue;
+    try {
+      setSync("saving");
+      await api("trees", {tree});
+      setSync("ok");
+    } catch (e){
+      if (e.message === "logged out") return;
+      dirty.add(id);
+      setSync("err");
+      return;
+    }
+  }
+  if (!dirty.size) setSync("ok");
+}
+function deleteTreeRemote(id){
+  fetch("/api/trees?id=" + encodeURIComponent(id), {method: "DELETE"}).catch(() => {});
+}
+function setSync(state){
+  const b = $("syncbtn");
+  b.classList.toggle("err", state === "err");
+  b.textContent = state === "saving" ? "☁ …"
+                : state === "err"    ? "☁ offline"
+                : "☁";
+  b.title = state === "err"
+    ? "couldn't reach the server — trees are safe in this browser; click to retry"
+    : "trees sync to the server so every device sees them — click to sync now";
+}
+async function syncFromServer(){
+  let index;
+  try {
+    const r = await fetch("/api/trees");
+    if (!r.ok) throw new Error();
+    index = (await r.json()).trees || [];
+  } catch { setSync("err"); return; }
+
+  const remote = new Map(index.map(t => [t.id, t]));
+  for (const [id, meta] of remote){
+    const local = store[id];
+    // cheap freshness check on list metadata; the pulled document's own
+    // saved_at is the authoritative comparison
+    if (local && new Date(meta.uploadedAt).getTime() <=
+                 new Date(local.saved_at || local.created || 0).getTime() + 2000) continue;
+    try {
+      const r = await fetch("/api/trees?id=" + encodeURIComponent(id));
+      if (!r.ok) continue;
+      const {tree} = await r.json();
+      if (!tree || tree.format !== FORMAT) continue;
+      if (!local || (tree.saved_at || tree.created || "") >= (local.saved_at || local.created || "")){
+        store[id] = tree;
+      }
+    } catch {}
+  }
+  for (const id of Object.keys(store)){
+    if (!remote.has(id)) dirty.add(id);   // local-only trees go up
+  }
+  try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
+  if (!currentId){
+    const latest = Object.values(store)
+      .sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
+    if (latest){ currentId = latest.id; currentNode = latest.root_id; }
+  }
+  renderAll(true);
+  if (dirty.size) flushDirty(); else setSync("ok");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1118,6 +1208,8 @@ function removeNodeFromTree(tree, nodeId){
   delete tree.nodes[String(node.id)];
   if (tree.root_id == null && !Object.keys(tree.nodes).length){
     delete store[tree.id];
+    dirty.delete(tree.id);
+    deleteTreeRemote(tree.id);
     if (currentId === tree.id){ currentId = null; currentNode = null; }
   }
   saveStore();
@@ -1321,8 +1413,10 @@ function selectNode(id){
 }
 function deleteTree(id){
   if (running) return;
-  if (!confirm(`delete "${oneLine(store[id]?.root_topic || "?", 40)}"?\n\nThis only removes it from this browser — export it first if you want to keep it.`)) return;
+  if (!confirm(`delete "${oneLine(store[id]?.root_topic || "?", 40)}"?\n\nThis removes it everywhere (all devices). Export it first if you want to keep a copy.`)) return;
   delete store[id];
+  dirty.delete(id);
+  deleteTreeRemote(id);
   if (currentId === id){ currentId = null; currentNode = null; }
   saveStore(); renderAll(true);
 }
@@ -1462,22 +1556,26 @@ $("loginform").onsubmit = async (e) => {
   } catch (err){ $("loginerr").textContent = err.message; }
 };
 $("logoutbtn").onclick = async () => {
+  try { await flushDirty(); } catch {}
   try { await api("logout", {}); } catch {}
   showLogin();
 };
+$("syncbtn").onclick = () => { setSync("saving"); syncFromServer(); };
 
 async function boot(){
   const res = await fetch("/api/me");
   if (!res.ok){ showLogin(); return; }
   CONFIG = await res.json();
   hideLogin();
-  // reopen the most recent tree so returning feels like coming back to a desk
+  // reopen the most recent local tree immediately; the server sync then
+  // merges in anything grown on other devices
   if (!currentId){
     const latest = Object.values(store)
       .sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
     if (latest){ currentId = latest.id; currentNode = latest.root_id; }
   }
   renderAll(true);
+  syncFromServer();
 }
 
 buildPanel();
@@ -1485,6 +1583,15 @@ applyPrefs();
 renderAll(true);
 boot();
 window.addEventListener("beforeunload", (e) => {
+  // best-effort push of unsynced trees on the way out
+  for (const id of dirty){
+    const tree = store[id];
+    if (!tree) continue;
+    try {
+      navigator.sendBeacon("/api/trees",
+        new Blob([JSON.stringify({tree})], {type: "application/json"}));
+    } catch {}
+  }
   if (running){ e.preventDefault(); e.returnValue = ""; }
 });
 </script>

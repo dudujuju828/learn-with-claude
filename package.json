@@ -1,0 +1,8 @@
+{
+  "name": "learn-with-claude-web",
+  "private": true,
+  "description": "Node dependency for api/trees.js (server-side tree history in Vercel Blob)",
+  "dependencies": {
+    "@vercel/blob": "^2.6.1"
+  }
+}

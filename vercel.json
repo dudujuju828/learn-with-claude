@@ -6,6 +6,9 @@
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/index" }
+    {
+      "source": "/api/:route(login|logout|me|learner|tutor|next_concept|export_md|digest)",
+      "destination": "/api/index"
+    }
   ]
 }
