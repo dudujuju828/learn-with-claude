@@ -504,6 +504,12 @@
       placeholder="e.g. Answer like a wise Unix greybeard: dry humour, always ground the point in a real command or file the learner can poke at, and end with the one thing worth remembering."></textarea>
     <p class="hint">your instructions are added to the base tutor rules — it still answers
     exactly what was asked, never offers topic menus, and keeps one sentence per paragraph.</p>
+    <label for="tutortest">try it before saving (one real model call)</label>
+    <div class="newrow">
+      <input id="tutortest" type="text" value="why is the sky blue?" aria-label="test question">
+      <button id="tutortry">ask</button>
+    </div>
+    <div id="tutorpreview" class="block tutor-b" style="display:none; max-height:14rem; overflow:auto; font-size:.9rem"></div>
     <div class="foot">
       <button id="tutordelete" class="ghost" style="color:var(--danger)">delete</button>
       <span style="flex:1"></span>
@@ -668,6 +674,7 @@ function buildPanel(){
   $("tutorsave").onclick = saveTutor;
   $("tutorcancel").onclick = closeTutorEditor;
   $("tutordelete").onclick = deleteTutor;
+  $("tutortry").onclick = tryTutor;
   $("tutoreditor").addEventListener("click", (e) => {
     if (e.target === $("tutoreditor")) closeTutorEditor();
   });
@@ -777,8 +784,29 @@ function openTutorEditor(id){
   $("tutorname").value = t ? t.name : "";
   $("tutorstyle").value = t ? t.style : "";
   $("tutordelete").style.display = t ? "" : "none";
+  const preview = $("tutorpreview");
+  preview.style.display = "none"; preview.innerHTML = "";
   $("tutoreditor").classList.add("open");
   setTimeout(() => $("tutorname").focus(), 50);
+}
+async function tryTutor(){
+  const style = $("tutorstyle").value.trim();
+  if (!style){ $("tutorstyle").focus(); return; }
+  const q = $("tutortest").value.trim() || "why is the sky blue?";
+  const box = $("tutorpreview");
+  box.style.display = "";
+  box.innerHTML = `<div class="who">📘 asking<span class="dots"></span></div>`;
+  $("tutortry").disabled = true;
+  try {
+    const r = await api("tutor", {kind: "root", turns: [], action: q,
+                                  custom_style: style.slice(0, 4000)});
+    box.innerHTML = `<div class="who">📘 ${esc(oneLine(q, 60))} · ${fmtCost(r.cost)}</div>` +
+                    tutorHtml(r.tutor);
+  } catch (e){
+    box.innerHTML = `<div class="who" style="color:var(--danger)">${esc(e.message)}</div>`;
+  } finally {
+    $("tutortry").disabled = false;
+  }
 }
 function closeTutorEditor(){
   $("tutoreditor").classList.remove("open");
