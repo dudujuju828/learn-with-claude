@@ -231,6 +231,26 @@
   @keyframes dots{0%{content:""} 25%{content:"."} 50%{content:".."} 75%{content:"..."}}
   @keyframes pulse{0%,100%{opacity:.3} 50%{opacity:1}}
 
+  /* ---- custom tutor editor ---- */
+  #tutoreditor{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:color-mix(in srgb, var(--bg) 72%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #tutoreditor.open{display:flex}
+  #tutoreditor .box{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1.4rem 1.5rem; width:min(30rem,94vw); box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  #tutoreditor h3{font-size:1rem; font-weight:600; margin:0 0 .8rem}
+  #tutoreditor label{display:block; font-size:.8rem; color:var(--muted); margin:.6rem 0 .2rem}
+  #tutoreditor textarea{
+    width:100%; font-family:inherit; font-size:.95rem; color:var(--fg);
+    background:var(--bg); border:1px solid var(--line); border-radius:.55rem;
+    padding:.5rem .65rem; resize:vertical; line-height:1.5;
+  }
+  #tutoreditor .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
+
   /* ---- help panel ---- */
   #helppanel{
     display:none; position:fixed; top:3.3rem; right:.7rem; z-index:80;
@@ -360,6 +380,9 @@
   deeply, growing the tree. Every turn is two real model calls (~5–7¢).</p>
   <p><b>tutor style</b> changes how the tutor answers — from highly technical
   to simple everyday words — and applies from the next turn, even mid-run.</p>
+  <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
+  own: name it, describe how it should answer, and it syncs to your other
+  devices. The base rules always stay in force.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
   another device or the CLI — the file format is identical.</p>
   <h3>keyboard</h3>
@@ -435,14 +458,11 @@
     related concepts to explore. Each turn is two real model calls (~5–7¢).</p>
 
     <h2>tutor style</h2>
-    <select id="modesel" aria-label="tutor style">
-      <option value="balanced">balanced — clear and informative</option>
-      <option value="technical">highly technical — full depth</option>
-      <option value="precise">precise — rigorous and exact</option>
-      <option value="simple">simple — everyday words</option>
-      <option value="concise">concise — the classic terse tutor</option>
-    </select>
-    <p class="hint">applies to the tutor's answers from the next turn on.</p>
+    <div class="newrow">
+      <select id="modesel" aria-label="tutor style" style="flex:1"></select>
+      <button id="tutoreditbtn" title="create or edit custom tutors" aria-label="create or edit custom tutors">✎</button>
+    </div>
+    <p class="hint">applies to the tutor's answers from the next turn on. ✎ makes your own tutor.</p>
 
     <h2>tree</h2>
     <div id="map"><span style="color:var(--muted)">—</span></div>
@@ -472,6 +492,25 @@
   <main>
     <div id="conv"></div>
   </main>
+</div>
+
+<div id="tutoreditor" role="dialog" aria-label="custom tutor editor">
+  <div class="box">
+    <h3 id="tutoreditortitle">new custom tutor</h3>
+    <label for="tutorname">name</label>
+    <input id="tutorname" type="text" maxlength="40" placeholder="e.g. socratic greybeard">
+    <label for="tutorstyle">how should this tutor answer?</label>
+    <textarea id="tutorstyle" rows="7" maxlength="4000"
+      placeholder="e.g. Answer like a wise Unix greybeard: dry humour, always ground the point in a real command or file the learner can poke at, and end with the one thing worth remembering."></textarea>
+    <p class="hint">your instructions are added to the base tutor rules — it still answers
+    exactly what was asked, never offers topic menus, and keeps one sentence per paragraph.</p>
+    <div class="foot">
+      <button id="tutordelete" class="ghost" style="color:var(--danger)">delete</button>
+      <span style="flex:1"></span>
+      <button id="tutorcancel">cancel</button>
+      <button id="tutorsave" class="primary">save</button>
+    </div>
+  </div>
 </div>
 
 <div id="ruler" aria-hidden="true"></div>
@@ -617,7 +656,21 @@ function buildPanel(){
     };
   });
   $("fontsel").onchange = () => { prefs.font = $("fontsel").value; applyPrefs(); };
-  $("modesel").onchange = () => { prefs.tmode = $("modesel").value; savePrefs(); };
+  $("modesel").onchange = () => {
+    const v = $("modesel").value;
+    if (v === "__new"){ openTutorEditor(null); return; }
+    prefs.tmode = v; savePrefs();
+  };
+  $("tutoreditbtn").onclick = () => {
+    const t = currentTutor();
+    openTutorEditor(t ? t.id : null);
+  };
+  $("tutorsave").onclick = saveTutor;
+  $("tutorcancel").onclick = closeTutorEditor;
+  $("tutordelete").onclick = deleteTutor;
+  $("tutoreditor").addEventListener("click", (e) => {
+    if (e.target === $("tutoreditor")) closeTutorEditor();
+  });
   $("speakbtn").onclick = () => {
     prefs.speak = !prefs.speak; if (!prefs.speak) stopSpeech(); applyPrefs();
   };
@@ -646,6 +699,117 @@ function buildPanel(){
 function closePanel(){
   $("aapanel").classList.remove("open");
   $("helppanel").classList.remove("open");
+}
+
+/* ------------------------------------------------------------------ */
+/* custom tutors — user-defined styles, synced like the trees          */
+/* ------------------------------------------------------------------ */
+const BUILTIN_MODES = [
+  ["balanced", "balanced — clear and informative"],
+  ["technical", "highly technical — full depth"],
+  ["precise", "precise — rigorous and exact"],
+  ["simple", "simple — everyday words"],
+  ["concise", "concise — the classic terse tutor"],
+];
+let tutorsDoc = loadTutorsDoc();
+let editingTutorId = null;
+
+function loadTutorsDoc(){
+  try {
+    const d = JSON.parse(localStorage.getItem("lwc.tutors.v1"));
+    if (d && Array.isArray(d.tutors)) return d;
+  } catch {}
+  return {saved_at: "", tutors: []};
+}
+function buildModeSelect(){
+  const sel = $("modesel");
+  const builtin = BUILTIN_MODES.map(([v, l]) =>
+    `<option value="${v}">${esc(l)}</option>`).join("");
+  const custom = tutorsDoc.tutors.map(t =>
+    `<option value="custom:${esc(t.id)}">${esc(t.name)}</option>`).join("");
+  sel.innerHTML =
+    `<optgroup label="built-in">${builtin}</optgroup>` +
+    (custom ? `<optgroup label="your tutors">${custom}</optgroup>` : "") +
+    `<option value="__new">＋ create a custom tutor…</option>`;
+  sel.value = prefs.tmode;
+  if (sel.selectedIndex < 0){ prefs.tmode = "balanced"; sel.value = "balanced"; savePrefs(); }
+}
+function currentTutor(){
+  return prefs.tmode.startsWith("custom:")
+    ? tutorsDoc.tutors.find(t => "custom:" + t.id === prefs.tmode) || null
+    : null;
+}
+function tutorParams(){
+  const t = currentTutor();
+  return t ? {mode: "balanced", custom_style: t.style} : {mode: prefs.tmode};
+}
+function styleName(){
+  const t = currentTutor();
+  if (t) return t.name;
+  return prefs.tmode !== "balanced" ? prefs.tmode : "";
+}
+async function persistTutors(){
+  tutorsDoc.saved_at = new Date().toISOString();
+  try { localStorage.setItem("lwc.tutors.v1", JSON.stringify(tutorsDoc)); } catch {}
+  try { await api("tutors", {doc: tutorsDoc}); setSync("ok"); }
+  catch (e){ if (e.message !== "logged out") setSync("err"); }
+}
+async function syncTutorsFromServer(){
+  try {
+    const r = await fetch("/api/tutors");
+    if (!r.ok) return;
+    const {doc} = await r.json();
+    if (doc && Array.isArray(doc.tutors) &&
+        (doc.saved_at || "") > (tutorsDoc.saved_at || "")){
+      tutorsDoc = doc;
+      try { localStorage.setItem("lwc.tutors.v1", JSON.stringify(tutorsDoc)); } catch {}
+      buildModeSelect();
+    } else if (tutorsDoc.tutors.length &&
+               (!doc || (tutorsDoc.saved_at || "") > (doc.saved_at || ""))){
+      await api("tutors", {doc: tutorsDoc}).catch(() => {});
+    }
+  } catch {}
+}
+function openTutorEditor(id){
+  editingTutorId = id;
+  const t = id ? tutorsDoc.tutors.find(x => x.id === id) : null;
+  $("tutoreditortitle").textContent = t ? `edit “${t.name}”` : "new custom tutor";
+  $("tutorname").value = t ? t.name : "";
+  $("tutorstyle").value = t ? t.style : "";
+  $("tutordelete").style.display = t ? "" : "none";
+  $("tutoreditor").classList.add("open");
+  setTimeout(() => $("tutorname").focus(), 50);
+}
+function closeTutorEditor(){
+  $("tutoreditor").classList.remove("open");
+  buildModeSelect();   // restore selection if the picker was left on "__new"
+}
+function saveTutor(){
+  const name = $("tutorname").value.trim();
+  const style = $("tutorstyle").value.trim();
+  if (!name){ $("tutorname").focus(); return; }
+  if (!style){ $("tutorstyle").focus(); return; }
+  let id = editingTutorId;
+  if (!id){
+    id = (slug(name).slice(0, 24) || "tutor") + "-" + randHex(4);
+    tutorsDoc.tutors.push({id, name, style});
+  } else {
+    const t = tutorsDoc.tutors.find(x => x.id === id);
+    if (t){ t.name = name; t.style = style; }
+  }
+  prefs.tmode = "custom:" + id;
+  savePrefs();
+  closeTutorEditor();
+  persistTutors();
+}
+function deleteTutor(){
+  if (!editingTutorId) return;
+  const t = tutorsDoc.tutors.find(x => x.id === editingTutorId);
+  if (!confirm(`delete tutor “${t ? t.name : "?"}”?`)) return;
+  tutorsDoc.tutors = tutorsDoc.tutors.filter(x => x.id !== editingTutorId);
+  if (prefs.tmode === "custom:" + editingTutorId){ prefs.tmode = "balanced"; savePrefs(); }
+  closeTutorEditor();
+  persistTutors();
 }
 
 /* ------------------------------------------------------------------ */
@@ -902,6 +1066,7 @@ async function syncFromServer(){
   }
   renderAll(true);
   if (dirty.size) flushDirty(); else setSync("ok");
+  syncTutorsFromServer();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1270,7 +1435,7 @@ function setStatus(msg){
   const bar = $("statusbar");
   bar.classList.add("on"); bar.classList.remove("err");
   statusBase = (runLabel ? runLabel + " · " : "") +
-               (prefs.tmode !== "balanced" ? prefs.tmode + " · " : "") + msg;
+               (styleName() ? styleName() + " · " : "") + msg;
   statusStart = Date.now();
   if (!statusTimer) statusTimer = setInterval(statusTick, 1000);
   statusTick();
@@ -1409,7 +1574,7 @@ async function runInvestigation(tree, node, ctx){
   if (last && last.action && !last.tutor){
     activity = {nodeId: node.id, kind: "tutor"};
     setStatus(`turn ${last.turn}: claude is answering…`); renderAll();
-    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action, mode: prefs.tmode});
+    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action, ...tutorParams()});
     node.cost += T.cost;
     last.tutor = T.tutor;
     if (Number.isInteger(last.confidence)) node.final_confidence = last.confidence;
@@ -1433,7 +1598,7 @@ async function runInvestigation(tree, node, ctx){
 
     activity = {nodeId: node.id, kind: "tutor"};
     setStatus(`turn ${turn}: claude is answering…`); renderAll();
-    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action, mode: prefs.tmode});
+    const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action, ...tutorParams()});
     node.cost += T.cost;
     rec.tutor = T.tutor;
     if (Number.isInteger(rec.confidence)) node.final_confidence = rec.confidence;
@@ -1657,6 +1822,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape"){
+    if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     stopSpeech(); closePanel(); closeMenu();
     if (rulerActive()){ prefs.ruler = false; prefs.focus = false; applyPrefs(); }
     return;
@@ -1738,6 +1904,7 @@ async function boot(){
 }
 
 buildPanel();
+buildModeSelect();
 applyPrefs();
 renderAll(true);
 boot();

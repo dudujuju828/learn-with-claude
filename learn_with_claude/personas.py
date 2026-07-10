@@ -162,10 +162,15 @@ directed edges.
 - Never draw the same thing twice; never announce that you are "about to" draw."""
 
 
-def tutor_system(*, diagrams: bool, mode: str = "balanced") -> str:
-    """The tutor's full system prompt: base rules, an optional style addendum
-    (see TUTOR_MODES), and the tool clause."""
-    style = TUTOR_MODES.get(mode) or ""
+def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str | None" = None) -> str:
+    """The tutor's full system prompt: base rules, a style addendum (a built-in
+    TUTOR_MODES entry, or the caller's own custom style text, which wins), and
+    the tool clause. The base rules — answer what was asked, no menu endings,
+    dyslexia-friendly layout — always apply."""
+    if custom_style and custom_style.strip():
+        style = "STYLE — CUSTOM (defined by the learner's operator):\n" + custom_style.strip()
+    else:
+        style = TUTOR_MODES.get(mode) or ""
     parts = [TUTOR_SYSTEM]
     if style:
         parts.append(style)

@@ -10,34 +10,12 @@
 //   POST   /api/trees {tree} -> { ok, id }   (overwrites; last write wins)
 //   DELETE /api/trees?id=X   -> { ok }
 
-const crypto = require("crypto");
 const { list, put, del } = require("@vercel/blob");
+const { authed } = require("./_auth");
 
 const PREFIX = "trees/";
 const FORMAT = "learn-with-claude/knowledge-tree";
 const idOk = (id) => /^[a-z0-9][a-z0-9-]{0,63}$/.test(id);
-
-function secretKey() {
-  return crypto.createHash("sha256")
-    .update("learn-with-claude-web:" + (process.env.APP_PASSWORD || ""))
-    .digest();
-}
-
-function authed(req) {
-  const cookie = (req.headers.cookie || "")
-    .split(";").map((s) => s.trim())
-    .find((s) => s.startsWith("lwc_auth="));
-  if (!cookie) return false;
-  const token = cookie.slice("lwc_auth=".length);
-  const dot = token.indexOf(".");
-  if (dot < 1) return false;
-  const exp = token.slice(0, dot);
-  const sig = Buffer.from(token.slice(dot + 1));
-  const want = Buffer.from(
-    crypto.createHmac("sha256", secretKey()).update(exp).digest("hex"));
-  if (sig.length !== want.length || !crypto.timingSafeEqual(sig, want)) return false;
-  return parseInt(exp, 10) > Date.now() / 1000;
-}
 
 async function findBlob(id) {
   const page = await list({ prefix: `${PREFIX}${id}.json`, limit: 10 });

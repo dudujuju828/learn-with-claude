@@ -228,7 +228,12 @@ def handle_tutor(body: dict) -> dict:
     mode = body.get("mode")
     if mode not in TUTOR_MODES:
         mode = "balanced"
-    system = tutor_system(diagrams=False, mode=mode)
+    custom = body.get("custom_style")
+    if not isinstance(custom, str):
+        custom = None
+    elif len(custom) > 4000:
+        custom = custom[:4000]
+    system = tutor_system(diagrams=False, mode=mode, custom_style=custom)
     extra = tutor_extra_context(body)
     if extra:
         system += f"\n\n{extra}"
