@@ -77,13 +77,20 @@ directly (a local `claude` login can't run on a server), so it needs an
 - `public/index.html` — the shell as a dyslexia-friendly page: font switcher
   (OpenDyslexic / Lexend / Atkinson / Comic Sans), five colour themes, text /
   line / letter / word spacing, keyboard-only **reading ruler** and
-  **focus line** (typoscope) stepping visual lines, read aloud, a glossary of
-  every term the learner hit, branch buttons under every answer, live cost,
-  and `.know.json` import/export compatible with the CLI. A **tutor style**
-  picker switches the answers between balanced / highly technical / precise /
-  simple / concise (the original terse style), applied from the next turn — or
-  write your own **custom tutor** (name + how it should answer), which syncs
-  across devices like the trees and keeps the base rules in force.
+  **focus line** (typoscope) stepping visual lines, read aloud (per block, or
+  🔊 listen through a whole conversation), a glossary of every term the
+  learner hit, **search across every tree**, branch buttons under every
+  answer, live cost, and `.know.json` import/export compatible with the CLI
+  (plus the CLI's standalone HTML reading page via *export html*). A **tutor
+  style** picker switches the answers between balanced / highly technical /
+  precise / simple / concise (the original terse style), applied from the next
+  turn — or write your own **custom tutor** (name + how it should answer, with
+  a try-before-saving preview), which syncs across devices like the trees and
+  keeps the base rules in force. You can also **ask the tutor yourself** under
+  any conversation — your question is answered with the node's context and
+  stored as your own turn (`user: true`), which the simulated learner never
+  sees. Conversations interrupted mid-run offer **▶ continue**; URLs
+  deep-link to the exact tree and node.
 
 Deploy your own: `vercel deploy --prod`, then `vercel env add APP_PASSWORD
 production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob
