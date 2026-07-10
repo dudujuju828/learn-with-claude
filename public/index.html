@@ -865,21 +865,53 @@ function deleteTutor(){
 /* read aloud                                                          */
 /* ------------------------------------------------------------------ */
 let speakingEl = null;
+let playList = [], playIdx = -1;
+
 function stopSpeech(){
+  playList = []; playIdx = -1;
   try { speechSynthesis.cancel(); } catch {}
   if (speakingEl){ speakingEl.classList.remove("speaking"); speakingEl = null; }
 }
-function speakBlock(el){
-  stopSpeech();
+function speak(el, onDone){
+  if (typeof SpeechSynthesisUtterance === "undefined"){ onDone?.(); return; }
   const clone = el.cloneNode(true);
   clone.querySelectorAll(".who,button,input").forEach(n => n.remove());
   const text = clone.textContent.replace(/\s+/g, " ").trim();
-  if (!text) return;
+  if (!text){ onDone?.(); return; }
   const u = new SpeechSynthesisUtterance(text);
-  u.onend = u.onerror = () => { if (speakingEl === el){ el.classList.remove("speaking"); speakingEl = null; } };
+  u.onend = u.onerror = () => {
+    if (speakingEl === el){ el.classList.remove("speaking"); speakingEl = null; }
+    onDone?.();
+  };
   speakingEl = el; el.classList.add("speaking");
-  try { speechSynthesis.speak(u); } catch {}
+  try { speechSynthesis.speak(u); } catch { onDone?.(); }
 }
+function speakBlock(el){ stopSpeech(); speak(el); }
+/* listen to the whole conversation, block by block (Esc stops) */
+function listenNode(){
+  stopSpeech();
+  playList = [...document.querySelectorAll("#conv .block")].filter(b =>
+    !b.closest(".pending") &&
+    !(b.classList.contains("thinking") && document.body.classList.contains("hide-think")));
+  playIdx = -1;
+  playNext();
+}
+function playNext(){
+  if (!playList.length) return;
+  playIdx++;
+  if (playIdx >= playList.length){ playList = []; playIdx = -1; return; }
+  const el = playList[playIdx];
+  el.scrollIntoView?.({behavior: reducedMotion() ? "auto" : "smooth", block: "center"});
+  speak(el, playNext);
+}
+window.listenNode = listenNode;
+
+async function copyLink(el){
+  try { await navigator.clipboard.writeText(location.href); el.textContent = "✓ copied"; }
+  catch { el.textContent = "✗ couldn't copy"; }
+  setTimeout(() => { el.textContent = "🔗 copy link"; }, 1400);
+}
+window.copyLink = copyLink;
 
 /* ------------------------------------------------------------------ */
 /* reading ruler + focus line — keyboard only, like the HTML export:   */
@@ -1297,6 +1329,10 @@ function renderConversation(keepScroll){
     nav.push("branches: " + node.children.map(c =>
       `<span class="cl" onclick="selectNode(${c})">[${c}] ${esc(oneLine(getNode(tree, c).label, 24))}</span>`
     ).join(" · "));
+  if (!running && node.turns.length){
+    nav.push(`<span class="cl" onclick="listenNode()" title="read the whole conversation aloud — Esc stops">🔊 listen</span>`);
+    nav.push(`<span class="cl" onclick="copyLink(this)" title="copy a link straight to this conversation">🔗 copy link</span>`);
+  }
   if (!running && node.parent_id != null && !node.children.length)
     nav.push(`<span class="cl danger" onclick="removeBranch(${node.id})">✕ remove this branch</span>`);
   if (nav.length) h += `<div class="crumb">${nav.join(" · ")}</div>`;
