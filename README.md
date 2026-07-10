@@ -81,7 +81,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   every term the learner hit, branch buttons under every answer, live cost,
   and `.know.json` import/export compatible with the CLI. A **tutor style**
   picker switches the answers between balanced / highly technical / precise /
-  simple / concise (the original terse style), applied from the next turn.
+  simple / concise (the original terse style), applied from the next turn — or
+  write your own **custom tutor** (name + how it should answer), which syncs
+  across devices like the trees and keeps the base rules in force.
 
 Deploy your own: `vercel deploy --prod`, then `vercel env add APP_PASSWORD
 production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob
