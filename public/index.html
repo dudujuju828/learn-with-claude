@@ -200,6 +200,9 @@
   .thinking{border-left-color:var(--think); color:var(--muted); font-size:.93rem}
   body.hide-think #conv .block.thinking{display:none}
   .action{border-left-color:var(--ask)}
+  .action.user-q{border-left-color:var(--term)}
+  #askrow{display:flex; gap:.5rem; margin:1.6rem 0 0}
+  #askrow input{flex:1}
   .tutor-b{border-left-color:var(--ans)}
   .tutor-b p{margin:.85em 0}
   .tutor-b p:first-child{margin-top:0}
@@ -384,6 +387,9 @@
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
+  <p><b>ask the tutor yourself</b> — the box under any conversation sends your
+  own question with the same context. It's recorded as your turn (🧑), and the
+  simulated learner never sees it.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
   another device or the CLI — the file format is identical.</p>
   <h3>keyboard</h3>
@@ -498,6 +504,11 @@
 
   <main>
     <div id="conv"></div>
+    <div id="askrow" style="display:none">
+      <input id="askinput" type="text" placeholder="ask the tutor yourself…"
+             aria-label="ask the tutor yourself">
+      <button id="askbtn" class="primary">ask</button>
+    </div>
   </main>
 </div>
 
@@ -1206,7 +1217,8 @@ function turnHtml(node, t, prevConf, allowBranch){
     h += `<div class="block thinking"><div class="who">💭 thinking to myself${copyBtn}</div>${esc(t.thinking)}</div>`;
   }
   if (t.action){
-    h += `<div class="block action"><div class="who">🙋 I ask claude` +
+    h += `<div class="block action${t.user ? " user-q" : ""}">` +
+         `<div class="who">${t.user ? "🧑 you ask claude" : "🙋 I ask claude"}` +
          (t.new_term ? `<span class="term">🔍 ${esc(t.new_term)}</span>` : "") +
          `${copyBtn}</div>${esc(t.action)}</div>`;
   }
@@ -1259,6 +1271,7 @@ function renderConversation(keepScroll){
   const conv = $("conv");
   if (!tree || currentNode == null || !getNode(tree, currentNode)){
     conv.innerHTML = emptyHtml();
+    $("askrow").style.display = "none";
     return;
   }
   const node = getNode(tree, currentNode);
@@ -1295,6 +1308,7 @@ function renderConversation(keepScroll){
   }
   if (activity && activity.nodeId === node.id) h += activityHtml();
   conv.innerHTML = h;
+  $("askrow").style.display = (!running && node.turns.some(t => t.tutor)) ? "" : "none";
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
   if (rulerActive()) refreshRuler();
   updateJump();
@@ -1661,7 +1675,7 @@ async function runInvestigation(tree, node, ctx){
 
     activity = {nodeId: node.id, kind: "learner"};
     setStatus(`turn ${turn}: learner is thinking…`); renderAll();
-    const L = await api("learner", {...ctx, turns: node.turns});
+    const L = await api("learner", {...ctx, turns: node.turns.filter(t => !t.user)});
     node.cost += L.cost;
     const rec = { turn, thinking: L.thinking, new_term: L.new_term || "",
                   action: L.action, confidence: L.confidence, done: L.done, tutor: "" };
@@ -1796,6 +1810,47 @@ function continueNode(nodeId){
   enqueue(continueThunk(tree.id, nodeId));
 }
 window.continueNode = continueNode;
+
+/* the human can step in and ask the tutor directly; the question is
+   recorded as their own turn (user: true) and never enters the simulated
+   learner's history */
+function askThunk(treeId, nodeId, question){
+  let rec = null;
+  return async () => {
+    runLabel = "";
+    const tree = store[treeId];
+    const node = getNode(tree, nodeId);
+    activeRun = {treeId, nodeId};
+    if (!rec){
+      rec = {turn: node.turns.length + 1, thinking: "", new_term: "",
+             action: question, confidence: null, done: false, tutor: "", user: true};
+      node.turns.push(rec);
+      saveStore(); renderAll();
+    }
+    if (!rec.tutor){
+      activity = {nodeId, kind: "tutor"};
+      setStatus("claude is answering you…"); renderAll();
+      const before = node.turns.slice(0, node.turns.indexOf(rec));
+      const T = await api("tutor", {...rebuildCtx(tree, node), turns: before,
+                                    action: question, ...tutorParams()});
+      node.cost += T.cost;
+      rec.tutor = T.tutor;
+      saveStore();
+    }
+    activity = null;
+    renderAll(true);
+  };
+}
+function askTutor(){
+  const tree = cur(); if (!tree || running || currentNode == null) return;
+  const node = getNode(tree, currentNode);
+  const q = $("askinput").value.trim();
+  if (!node || !q) return;
+  $("askinput").value = "";
+  enqueue(askThunk(tree.id, node.id, q));
+}
+$("askbtn").onclick = askTutor;
+$("askinput").addEventListener("keydown", (e) => { if (e.key === "Enter") askTutor(); });
 
 function cmdNew(topic){ enqueue(rootThunk(topic)); }
 function cmdFull(topic){
