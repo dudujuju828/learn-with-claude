@@ -1307,16 +1307,23 @@ function renderMap(){
     map.innerHTML = `<span style="color:var(--muted)">—</span>`; return;
   }
   const rows = [];
+  const dark = prefs.theme === "dark";
   const walk = (nid, prefix, isLast, isRoot) => {
     const n = getNode(tree, nid);
     const live = running && activity && activity.nodeId === nid;
     const meta = (isRoot ? "" : `↳T${n.branch_from_turn} · `) +
-                 `${n.turns.length}t · ${fmtConf(n.final_confidence)}`;
+                 `${n.turns.length}t · ${fmtConf(n.final_confidence)}` +
+                 (!live && canContinue(n) ? " · unfinished" : "");
     const connector = isRoot ? "" : prefix + (isLast ? "└─ " : "├─ ");
+    // dot tinted by how confident the learner got: red → green
+    const dot = live ? '<span class="live">●</span>'
+      : Number.isInteger(n.final_confidence)
+        ? `<span style="color:hsl(${Math.round(n.final_confidence * 1.2)},48%,${dark ? 58 : 38}%)">●</span>`
+        : "●";
     rows.push(
       `<div class="noderow${nid === currentNode ? " active" : ""}" onclick="selectNode(${nid})"` +
       ` tabindex="0" role="button" title="${esc(n.label)}">` +
-      `${esc(connector)}<span${live ? ' class="live"' : ""}>●</span> [${n.id}] ` +
+      `${esc(connector)}${dot} [${n.id}] ` +
       `${esc(oneLine(n.label, 26))} <span class="meta">(${esc(meta)})</span></div>`
     );
     const childPrefix = isRoot ? "" : prefix + (isLast ? "   " : "│  ");
