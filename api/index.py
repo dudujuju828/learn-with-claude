@@ -268,6 +268,16 @@ def handle_export_md(body: dict) -> dict:
     return {"markdown": kb.to_markdown(), "filename": kb.default_filename().replace(".know.json", ".md")}
 
 
+def handle_export_html(body: dict) -> dict:
+    tree = body.get("tree")
+    if not isinstance(tree, dict):
+        raise ApiError("missing 'tree'")
+    from learn_with_claude.export_html import tree_to_html
+
+    kb = KnowledgeTree.from_dict(tree)
+    return {"html": tree_to_html(kb), "filename": kb.default_filename().replace(".know.json", ".html")}
+
+
 def handle_digest(body: dict) -> dict:
     """Server-side conversation_digest so the recap text matches the CLI."""
     return {"digest": conversation_digest(body.get("turns", []), body.get("upto"))}
@@ -298,6 +308,7 @@ ROUTES = {
     "tutor": handle_tutor,
     "next_concept": handle_next_concept,
     "export_md": handle_export_md,
+    "export_html": handle_export_html,
     "digest": handle_digest,
 }
 

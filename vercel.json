@@ -7,7 +7,7 @@
   },
   "rewrites": [
     {
-      "source": "/api/:route(login|logout|me|learner|tutor|next_concept|export_md|digest)",
+      "source": "/api/:route(login|logout|me|learner|tutor|next_concept|export_md|export_html|digest)",
       "destination": "/api/index"
     }
   ]

@@ -198,6 +198,7 @@
   .block .who{font-size:.76rem; letter-spacing:.06em; color:var(--muted);
     margin-bottom:.3rem; display:flex; align-items:center; gap:.45rem; flex-wrap:wrap}
   .thinking{border-left-color:var(--think); color:var(--muted); font-size:.93rem}
+  body.hide-think #conv .block.thinking{display:none}
   .action{border-left-color:var(--ask)}
   .tutor-b{border-left-color:var(--ans)}
   .tutor-b p{margin:.85em 0}
@@ -433,6 +434,10 @@
     <button id="speakbtn" class="toggle" role="switch">off</button>
   </div>
   <div class="row">
+    <label for="thinkbtn">💭 show the learner's thinking blocks</label>
+    <button id="thinkbtn" class="toggle" role="switch">on</button>
+  </div>
+  <div class="row">
     <label for="rulerbtn">🖍 reading ruler — ↑/↓ step line by line, keyboard only</label>
     <button id="rulerbtn" class="toggle" role="switch">off</button>
   </div>
@@ -483,6 +488,7 @@
     <div class="btnrow">
       <button id="exportjson" title="download this tree as a portable .know.json">save .know.json</button>
       <button id="exportmd" title="download this tree as readable markdown">export md</button>
+      <button id="exporthtml" title="download the standalone dyslexia-friendly reading page (the CLI's HTML export)">export html</button>
       <button id="importbtn" title="open a .know.json from the CLI or another device">import</button>
       <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
     </div>
@@ -598,7 +604,7 @@ const THEMES = {
 };
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
-                       tmode: "balanced"};
+                       tmode: "balanced", think: true};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -631,7 +637,9 @@ function applyPrefs(){
   $("lhval").textContent = PREF_STEPS.lh.fmt(prefs.lh);
   $("lsval").textContent = PREF_STEPS.ls.fmt(prefs.ls);
   $("wsval").textContent = PREF_STEPS.ws.fmt(prefs.ws);
-  for (const [id, key] of [["speakbtn", "speak"], ["rulerbtn", "ruler"], ["focusbtn", "focus"]]){
+  document.body.classList.toggle("hide-think", !prefs.think);
+  for (const [id, key] of [["speakbtn", "speak"], ["rulerbtn", "ruler"],
+                           ["focusbtn", "focus"], ["thinkbtn", "think"]]){
     const b = $(id);
     b.textContent = prefs[key] ? "on" : "off";
     b.classList.toggle("on", prefs[key]);
@@ -683,6 +691,7 @@ function buildPanel(){
   };
   $("rulerbtn").onclick = () => { prefs.ruler = !prefs.ruler; applyPrefs(); };
   $("focusbtn").onclick = () => { prefs.focus = !prefs.focus; applyPrefs(); };
+  $("thinkbtn").onclick = () => { prefs.think = !prefs.think; applyPrefs(); if (rulerActive()) refreshRuler(); };
   $("aareset").onclick = () => { prefs = Object.assign({}, PREF_DEFAULTS); applyPrefs(); };
   $("aaclose").onclick = closePanel;
   $("aabtn").onclick = (e) => {
@@ -875,6 +884,8 @@ function reducedMotion(){ return matchMedia("(prefers-reduced-motion: reduce)").
 function collectTargets(){
   rlLines = [];
   document.querySelectorAll("#conv .block").forEach(b => {
+    if (b.classList.contains("thinking") &&
+        document.body.classList.contains("hide-think")) return;
     const els = b.classList.contains("tutor-b")
       ? [...b.querySelectorAll("p,pre")] : [b];
     for (const el of els){
@@ -1066,6 +1077,8 @@ async function syncFromServer(){
     index = (await r.json()).trees || [];
   } catch { setSync("err"); return; }
 
+  const hashTree = new URLSearchParams(location.hash.slice(1)).get("t");
+  const hadHashTree = !!(hashTree && store[hashTree]);
   const remote = new Map(index.map(t => [t.id, t]));
   for (const [id, meta] of remote){
     const local = store[id];
@@ -1087,6 +1100,9 @@ async function syncFromServer(){
     if (!remote.has(id)) dirty.add(id);   // local-only trees go up
   }
   try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
+  // a deep link pointing at a tree that only existed on the server can be
+  // honoured now that the merge brought it in
+  if (!hadHashTree && !running) applyHash();
   if (!currentId){
     const latest = Object.values(store)
       .sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
@@ -1448,8 +1464,28 @@ function jumpToTerm(nodeId, turn){
 }
 window.jumpToTerm = jumpToTerm;
 
+function updateHash(){
+  const h = currentId
+    ? "#t=" + currentId + (currentNode != null ? "&n=" + currentNode : "")
+    : "";
+  if (("#" + location.hash.replace(/^#/, "")) !== ("#" + h.replace(/^#/, "")))
+    history.replaceState(null, "", h || location.pathname + location.search);
+}
+function applyHash(){
+  const p = new URLSearchParams(location.hash.slice(1));
+  const t = p.get("t"), n = p.get("n");
+  if (!t || !store[t]) return false;
+  currentId = t;
+  currentNode = (n != null && getNode(store[t], n)) ? +n : store[t].root_id;
+  return true;
+}
+window.addEventListener("hashchange", () => {
+  if (!running && applyHash()) renderAll(true);
+});
+
 function renderAll(keepScroll){
   renderHeader(); renderMap(); renderTreeList(); renderTerms(); renderConversation(keepScroll);
+  updateHash();
 }
 
 let runLabel = "";              // e.g. "investigation 2 of 4" during a full session
@@ -1804,6 +1840,15 @@ $("exportmd").onclick = async () => {
     clearStatus();
   } catch (e){ setError(e.message); }
 };
+$("exporthtml").onclick = async () => {
+  const tree = cur(); if (!tree) return;
+  try {
+    setStatus("building the reading page…");
+    const r = await api("export_html", {tree});
+    download(r.filename || "tree.html", r.html, "text/html");
+    clearStatus();
+  } catch (e){ setError(e.message); }
+};
 async function importTreeFile(f){
   try {
     const d = JSON.parse(await f.text());
@@ -1920,9 +1965,9 @@ async function boot(){
   if (!res.ok){ showLogin(); return; }
   CONFIG = await res.json();
   hideLogin();
-  // reopen the most recent local tree immediately; the server sync then
-  // merges in anything grown on other devices
-  if (!currentId){
+  // deep link first, else reopen the most recent local tree; the server sync
+  // then merges in anything grown on other devices
+  if (!applyHash() && !currentId){
     const latest = Object.values(store)
       .sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
     if (latest){ currentId = latest.id; currentNode = latest.root_id; }
