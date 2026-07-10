@@ -390,6 +390,7 @@
   <table>
     <tr><td><kbd>/</kbd></td><td>jump to the topic box</td></tr>
     <tr><td><kbd>?</kbd></td><td>open this help</td></tr>
+    <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>hop to the next / previous turn</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>step the reading ruler / focus line (when on)</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>stop speech · close panels · turn the ruler off</td></tr>
   </table>
@@ -1274,17 +1275,18 @@ function renderConversation(keepScroll){
   h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>` +
        `<div class="stats">${node.turns.length} turns · confidence ${fmtConf(node.final_confidence)}` +
        `${sparkHtml(node.turns)} · ${fmtCost(node.cost)} · ${esc(node.learner_model)}</div>`;
-  let nav = "";
+  const nav = [];
+  if (!running && canContinue(node))
+    nav.push(`<span class="cl" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">▶ continue investigating</span>`);
   if (node.parent_id != null)
-    nav += `<span class="cl" onclick="selectNode(${node.parent_id})">↩ up to [${node.parent_id}]</span>`;
+    nav.push(`<span class="cl" onclick="selectNode(${node.parent_id})">↩ up to [${node.parent_id}]</span>`);
   if (node.children.length)
-    nav += (nav ? " · " : "") + "branches: " + node.children.map(c =>
+    nav.push("branches: " + node.children.map(c =>
       `<span class="cl" onclick="selectNode(${c})">[${c}] ${esc(oneLine(getNode(tree, c).label, 24))}</span>`
-    ).join(" · ");
+    ).join(" · "));
   if (!running && node.parent_id != null && !node.children.length)
-    nav += (nav ? " · " : "") +
-      `<span class="cl danger" onclick="removeBranch(${node.id})">✕ remove this branch</span>`;
-  if (nav) h += `<div class="crumb">${nav}</div>`;
+    nav.push(`<span class="cl danger" onclick="removeBranch(${node.id})">✕ remove this branch</span>`);
+  if (nav.length) h += `<div class="crumb">${nav.join(" · ")}</div>`;
   h += `</div>`;
   let prevConf = null;
   for (const t of node.turns){
@@ -1747,6 +1749,47 @@ function branchThunk(treeId, nodeId, branchTurn, focus){
   };
 }
 
+function canContinue(node){
+  if (!node || !node.turns.length || node.turns.length >= CONFIG.max_turns) return false;
+  const last = node.turns[node.turns.length - 1];
+  return !last.done && !!last.action;
+}
+function rebuildCtx(tree, node){
+  // reconstruct the opening context for a resumed investigation; for
+  // follow-up nodes this lands on the branch shape, which seeds the same
+  // "you already covered X, dig into Y" framing
+  if (node.parent_id == null) return {kind: "root", topic: tree.root_topic};
+  const parent = getNode(tree, node.parent_id);
+  const bt = parent && parent.turns[node.branch_from_turn - 1];
+  if (bt && bt.tutor){
+    return {kind: "branch", topic: tree.root_topic,
+            breadcrumb: breadcrumb(tree, node.parent_id),
+            digest: conversationDigest(parent.turns, node.branch_from_turn),
+            branch_q: bt.action, branch_a: bt.tutor, focus: node.focus || ""};
+  }
+  const order = Object.keys(tree.nodes).map(Number).sort((a, b) => a - b)
+    .filter(id => id < node.id);
+  const recap = order.map(id =>
+    `[${getNode(tree, id).label}]\n${conversationDigest(getNode(tree, id).turns)}`).join("\n");
+  return {kind: "followup", topic: tree.root_topic, recap,
+          concept: node.label, opening_question: ""};
+}
+function continueThunk(treeId, nodeId){
+  return async () => {
+    runLabel = "";
+    const tree = store[treeId];
+    const node = getNode(tree, nodeId);
+    activeRun = {treeId, nodeId};
+    await runInvestigation(tree, node, rebuildCtx(tree, node));
+  };
+}
+function continueNode(nodeId){
+  const tree = cur(); if (!tree || running) return;
+  currentNode = nodeId;
+  enqueue(continueThunk(tree.id, nodeId));
+}
+window.continueNode = continueNode;
+
 function cmdNew(topic){ enqueue(rootThunk(topic)); }
 function cmdFull(topic){
   enqueue(rootThunk(topic, "investigation 1 of 4"),
@@ -1914,7 +1957,24 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     $("helpbtn").click();
   }
+  if ((e.key === "j" || e.key === "k") && !typing && !rulerActive() &&
+      !e.ctrlKey && !e.metaKey && !e.altKey){
+    e.preventDefault();
+    stepTurn(e.key === "j" ? 1 : -1);
+  }
 });
+
+/* j/k hop between turns */
+function stepTurn(d){
+  const turns = [...document.querySelectorAll("#conv .turn:not(.pending)")];
+  if (!turns.length) return;
+  const y = window.scrollY + 90;
+  let i = turns.findIndex(t => t.offsetTop + t.offsetHeight > y);
+  if (i < 0) i = turns.length - 1;
+  i = Math.max(0, Math.min(turns.length - 1, i + d));
+  window.scrollTo({top: Math.max(0, turns[i].offsetTop - 70),
+                   behavior: reducedMotion() ? "auto" : "smooth"});
+}
 
 /* jump to the latest turn while a run scrolls past you */
 function updateJump(){
