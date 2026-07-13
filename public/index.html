@@ -115,6 +115,7 @@
     font-size:.9rem;
   }
   #aapanel.open{display:block}
+  #aapanel{max-height:calc(100vh - 4.5rem); overflow:auto}
   #aapanel .row{display:flex; align-items:center; gap:.55rem; margin:.45rem 0}
   #aapanel .row label{flex:1; color:var(--muted)}
   #aapanel .row .val{min-width:3.2em; text-align:center; font-variant-numeric:tabular-nums}
@@ -1507,9 +1508,11 @@ function renderTerms(){
   }
   if (!items.length){ wrap.style.display = "none"; return; }
   wrap.style.display = "";
-  $("terms").innerHTML = items.map(i =>
+  const extra = items.length - 40;
+  $("terms").innerHTML = items.slice(0, 40).map(i =>
     `<span class="t" onclick="jumpToTerm(${i.nodeId},${i.turn})" tabindex="0" role="button"` +
-    ` title="node [${i.nodeId}] · turn ${i.turn}">🔍 ${esc(i.term)}</span>`).join("");
+    ` title="node [${i.nodeId}] · turn ${i.turn}">🔍 ${esc(i.term)}</span>`).join("") +
+    (extra > 0 ? `<span class="hint">… and ${extra} more (search finds them all)</span>` : "");
 }
 function jumpToTerm(nodeId, turn){
   selectNode(nodeId);
