@@ -98,6 +98,9 @@ class KnowledgeTree:
         self.root_id: int | None = None
         self._next = 1
         self.path: Path | None = Path(path) if path else None
+        # term (lowercased key) -> {"term", "def", "node", "turn"}: every word
+        # the learner hit, with the definition the web app generated for it
+        self.glossary: dict = {}
 
     # --- mutation --------------------------------------------------------
     def _alloc(self) -> int:
@@ -151,7 +154,7 @@ class KnowledgeTree:
 
     # --- persistence -----------------------------------------------------
     def to_dict(self) -> dict:
-        return {
+        d = {
             "format": FORMAT,
             "version": VERSION,
             "id": self.id,
@@ -161,6 +164,9 @@ class KnowledgeTree:
             "next": self._next,
             "nodes": {str(nid): asdict(node) for nid, node in self.nodes.items()},
         }
+        if self.glossary:
+            d["glossary"] = self.glossary
+        return d
 
     @classmethod
     def from_dict(cls, d: dict, path=None) -> "KnowledgeTree":
@@ -173,6 +179,7 @@ class KnowledgeTree:
             for k, v in d.get("nodes", {}).items()
         }
         tree._next = d.get("next") or (max(tree.nodes, default=0) + 1)
+        tree.glossary = d.get("glossary") if isinstance(d.get("glossary"), dict) else {}
         return tree
 
     def save(self, path=None) -> Path:
@@ -281,4 +288,15 @@ class KnowledgeTree:
 
         if self.root_id is not None:
             walk(self.root_id, 0)
+
+        defined = sorted(
+            (e for e in self.glossary.values() if isinstance(e, dict) and e.get("def")),
+            key=lambda e: str(e.get("term", "")).lower(),
+        )
+        if defined:
+            out.append("## Glossary")
+            out.append("")
+            for e in defined:
+                out.append(f"- **{e['term']}** — {e['def']}")
+            out.append("")
         return "\n".join(out)

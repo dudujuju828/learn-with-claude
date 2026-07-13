@@ -596,6 +596,25 @@ def tree_to_html(tree) -> str:
 
     toolbar = toolbar_html()
 
+    glossary_html = ""
+    defined = sorted(
+        (e for e in getattr(tree, "glossary", {}).values()
+         if isinstance(e, dict) and e.get("def")),
+        key=lambda e: str(e.get("term", "")).lower(),
+    )
+    if defined:
+        entries = "".join(
+            f'<div class="turn"><div class="block ans">'
+            f'<div class="label">🔍 {_esc(e["term"])}</div>'
+            f'<p>{_esc(e["def"])}</p></div></div>'
+            for e in defined
+        )
+        glossary_html = (
+            '<section class="node" id="glossary"><h2>Glossary</h2>'
+            '<div class="muted">Every word the learner hit, defined.</div>'
+            f"{entries}</section>"
+        )
+
     meta = (f'<p class="muted">Created {_esc(tree.created)} · {len(tree.nodes)} '
             f'investigations · total cost ${tree.total_cost():.4f}</p>')
 
@@ -610,6 +629,7 @@ def tree_to_html(tree) -> str:
         + nav_html
         + "</div>"
         + "".join(sections)
+        + glossary_html
         + "</div>"
         + '<div id="ruler"></div>'
         + ai_config_html()

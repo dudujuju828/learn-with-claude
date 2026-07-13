@@ -35,16 +35,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from learn_with_claude.knowledge import KnowledgeTree, conversation_digest  # noqa: E402
 from learn_with_claude.personas import (  # noqa: E402
+    GLOSSARY_SYSTEM,
     LEARNER_LEVELS,
     NEXT_CONCEPT_SYSTEM,
     TUTOR_MODES,
-    learner_system,
     branch_learner_message,
     branch_tutor_context,
+    define_message,
     feedback_message,
     first_learner_message,
     followup_learner_message,
     followup_tutor_context,
+    learner_system,
     next_concept_message,
     tutor_system,
 )
@@ -55,6 +57,8 @@ import anthropic  # noqa: E402
 
 LEARNER_MODEL = os.environ.get("LEARN_LEARNER_MODEL", "claude-sonnet-5")
 TUTOR_MODEL = os.environ.get("LEARN_TUTOR_MODEL", "claude-sonnet-5")
+# glossary definitions are two plain sentences — a small fast model is plenty
+GLOSSARY_MODEL = os.environ.get("LEARN_GLOSSARY_MODEL", "claude-haiku-4-5-20251001")
 EFFORT = os.environ.get("LEARN_EFFORT", "xhigh")
 MAX_TURNS = int(os.environ.get("LEARN_MAX_TURNS", "20"))
 
@@ -133,7 +137,10 @@ def usage_cost(model: str, usage) -> float:
     ) / 1_000_000
 
 
-def call_model(system: str, messages: list, model: str) -> tuple[str, float]:
+def call_model(
+    system: str, messages: list, model: str,
+    effort: "str | None" = None, max_tokens: int = 16000,
+) -> tuple[str, float]:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise ApiError(
             "ANTHROPIC_API_KEY is not set on the server — add it in the Vercel "
@@ -141,13 +148,16 @@ def call_model(system: str, messages: list, model: str) -> tuple[str, float]:
             "and redeploy",
             500,
         )
+    if effort is None:
+        effort = EFFORT
+    extra = {} if effort == "none" else {"output_config": {"effort": effort}}
     try:
         resp = _client.messages.create(
             model=model,
-            max_tokens=16000,
+            max_tokens=max_tokens,
             system=system,
             messages=messages,
-            output_config={"effort": EFFORT},
+            **extra,
         )
     except anthropic.AuthenticationError:
         raise ApiError("ANTHROPIC_API_KEY is missing or invalid on the server", 500)
@@ -306,6 +316,31 @@ def handle_next_concept(body: dict) -> dict:
     return {"pick": pick, "cost": cost}
 
 
+def handle_define(body: dict) -> dict:
+    """One glossary definition, on the cheap model. Context is the exchange
+    where the learner hit the term, so the definition matches its use there."""
+    term = (body.get("term") or "").strip()
+    if not term:
+        raise ApiError("missing 'term'")
+    message = define_message(
+        term[:120],
+        (body.get("topic") or "").strip()[:200],
+        (body.get("context") or "").strip()[:4000],
+    )
+    text, cost = call_model(
+        GLOSSARY_SYSTEM, [{"role": "user", "content": message}],
+        GLOSSARY_MODEL, effort="none", max_tokens=300,
+    )
+    data = first_json_object(text)
+    definition = ""
+    if isinstance(data, dict):
+        definition = str(data.get("definition") or "").strip()
+    if not definition:
+        # a small model may answer in prose despite the contract — take it
+        definition = text.strip().strip('"')
+    return {"definition": definition[:600], "cost": cost}
+
+
 def handle_export_md(body: dict) -> dict:
     tree = body.get("tree")
     if not isinstance(tree, dict):
@@ -354,6 +389,7 @@ ROUTES = {
     "learner": handle_learner,
     "tutor": handle_tutor,
     "next_concept": handle_next_concept,
+    "define": handle_define,
     "export_md": handle_export_md,
     "export_html": handle_export_html,
     "digest": handle_digest,

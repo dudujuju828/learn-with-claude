@@ -303,6 +303,30 @@ def branch_learner_message(
     )
 
 
+GLOSSARY_SYSTEM = """\
+You write single entries for a learner's personal glossary. You will be shown
+a term and the exchange where the learner met it. Define the term AS USED
+THERE, so the learner can look it up later and recognise the idea.
+
+RULES:
+- 1-2 short, plain sentences (roughly 10-35 words). Everyday words first;
+  no jargon that itself needs a glossary entry.
+- Define what the term IS — not the surrounding topic, not its history.
+- No hedging ("in this context..."), no cross-references, no markdown.
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"definition": "<the definition>"}"""
+
+
+def define_message(term: str, topic: str, context: str) -> str:
+    return (
+        f'Term: "{term}"\n'
+        f'The learner met it while learning about: "{topic}"\n\n'
+        f"The exchange where it came up:\n{context or '(not recorded)'}\n\n"
+        "Output the JSON object now."
+    )
+
+
 NEXT_CONCEPT_SYSTEM = """\
 You are a tutor planning a learning session. You will be shown a recap of the
 investigations a learner has completed so far on a root topic. Choose the ONE

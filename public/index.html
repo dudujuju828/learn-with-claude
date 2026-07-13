@@ -292,13 +292,46 @@
     padding:0 .35rem; font-family:Consolas,monospace; font-size:.85em;
   }
 
-  /* ---- terms glossary ---- */
-  #terms .t{
-    display:inline-block; margin:.15rem .25rem .15rem 0; cursor:pointer;
-    background:var(--termbg); color:var(--term); border-radius:.55rem;
-    padding:.08rem .6rem; font-size:.84rem; border:1px solid transparent;
+  /* ---- glossary ---- */
+  #terms details.gentry{margin:.1rem 0; border-radius:.55rem}
+  #terms details.gentry summary{
+    cursor:pointer; list-style:none; display:flex; align-items:center; gap:.45rem;
+    padding:.22rem .45rem; border-radius:.55rem; font-size:.88rem; min-height:1.9rem;
   }
-  #terms .t:hover{border-color:var(--term)}
+  #terms details.gentry summary::-webkit-details-marker{display:none}
+  #terms details.gentry summary:hover{background:var(--card)}
+  #terms details.gentry[open] summary{color:var(--term)}
+  #terms .gdot{width:.5rem; height:.5rem; border-radius:50%; flex:none;
+    border:1px solid var(--term); background:transparent}
+  #terms .gdot.on{background:var(--term)}
+  #terms .gdef{
+    margin:.1rem 0 .45rem 1.35rem; padding:.45rem .6rem; font-size:.85rem;
+    background:var(--card); border:1px solid var(--line); border-radius:.55rem;
+    color:var(--fg);
+  }
+  #terms .gdeflinks{margin-top:.3rem; color:var(--muted); font-size:.8rem}
+  .cl{cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px}
+  .cl:hover{color:var(--fg)}
+  .term[role=button]{cursor:pointer}
+  .term[role=button]:hover{outline:1px solid var(--term)}
+
+  /* in-text glossary references inside tutor answers */
+  .gref{
+    display:inline; border:none; background:none; padding:0; margin:0;
+    font:inherit; letter-spacing:inherit; word-spacing:inherit; color:inherit;
+    border-bottom:2px dotted var(--term); border-radius:0; cursor:pointer;
+  }
+  .gref:hover{color:var(--term)}
+
+  /* glossary popover */
+  #gpop{
+    position:fixed; z-index:85; background:var(--card); border:1px solid var(--term);
+    border-radius:.8rem; box-shadow:0 10px 36px rgba(0,0,0,.22);
+    padding:.8rem .95rem; font-size:.92rem;
+  }
+  #gpop .gname{color:var(--term); font-weight:600; margin-bottom:.3rem}
+  #gpop .gbody{line-height:1.55}
+  #gpop .gfoot{margin-top:.45rem; color:var(--muted); font-size:.82rem}
   .flash{outline:3px solid var(--accent) !important; outline-offset:3px;
     transition:outline-color 1s}
 
@@ -410,6 +443,10 @@
   <p><b>answer parts</b> — when an answer has distinct aspects (the why, an
   example, a caveat), each shows as its own labelled card under the direct
   answer. Tap a card to fold or unfold it — one idea at a time.</p>
+  <p><b>glossary</b> — every term the learner hits gets a short definition
+  (written the moment it appears) and lives in the tree, so it syncs and
+  exports with it. Dotted-underlined words in answers are glossary terms —
+  tap one to see its definition right there.</p>
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
@@ -513,8 +550,11 @@
     <div id="map"><span style="color:var(--muted)">—</span></div>
 
     <div id="termswrap" style="display:none">
-      <h2>terms the learner hit</h2>
+      <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span></h2>
+      <input id="glossfilter" type="text" placeholder="filter terms…"
+             aria-label="filter glossary" style="display:none; margin-bottom:.4rem">
       <div id="terms"></div>
+      <div class="btnrow" id="glossactions" style="margin-top:.45rem"></div>
     </div>
 
     <h2>search</h2>
@@ -568,6 +608,12 @@
       <button id="tutorsave" class="primary">save</button>
     </div>
   </div>
+</div>
+
+<div id="gpop" role="dialog" aria-label="glossary entry" hidden>
+  <div class="gname"></div>
+  <div class="gbody"></div>
+  <div class="gfoot"></div>
 </div>
 
 <div id="ruler" aria-hidden="true"></div>
@@ -943,6 +989,7 @@ function stopSpeech(){
 function speak(el, onDone){
   if (typeof SpeechSynthesisUtterance === "undefined"){ onDone?.(); return; }
   const clone = el.cloneNode(true);
+  clone.querySelectorAll(".gref").forEach(n => n.replaceWith(n.textContent));
   clone.querySelectorAll('.who,button,input,[aria-hidden="true"]').forEach(n => n.remove());
   const text = clone.textContent.replace(/\s+/g, " ").trim();
   if (!text){ onDone?.(); return; }
@@ -1350,7 +1397,9 @@ function turnHtml(node, t, prevConf, allowBranch){
   if (t.action){
     h += `<div class="block action${t.user ? " user-q" : ""}">` +
          `<div class="who">${t.user ? "🧑 you ask claude" : "🙋 I ask claude"}` +
-         (t.new_term ? `<span class="term">🔍 ${esc(t.new_term)}</span>` : "") +
+         (t.new_term ? `<span class="term" role="button" tabindex="0" ` +
+           `onclick="event.stopPropagation();showGloss(this.dataset.term, this)" ` +
+           `data-term="${esc(t.new_term)}" title="show in glossary">🔍 ${esc(t.new_term)}</span>` : "") +
          `${copyBtn}</div>${esc(t.action)}</div>`;
   }
   if (t.tutor){
@@ -1444,6 +1493,8 @@ function renderConversation(keepScroll){
   }
   if (activity && activity.nodeId === node.id) h += activityHtml();
   conv.innerHTML = h;
+  hideGloss();
+  annotateTerms();
   $("askrow").style.display = (!running && node.turns.some(t => t.tutor)) ? "" : "none";
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
   if (rulerActive()) refreshRuler();
@@ -1514,6 +1565,7 @@ function renderHeader(){
 async function copyBlock(btn){
   const block = btn.closest(".block");
   const clone = block.cloneNode(true);
+  clone.querySelectorAll(".gref").forEach(n => n.replaceWith(n.textContent));
   clone.querySelectorAll(".who,button").forEach(n => n.remove());
   const parts = [...clone.querySelectorAll("p,pre")].map(n => n.textContent.trim());
   const text = (parts.length ? parts.join("\n\n") : clone.textContent).trim();
@@ -1592,27 +1644,224 @@ $("searchbox").addEventListener("keydown", (e) => {
   }
 });
 
-function renderTerms(){
-  const tree = cur();
-  const wrap = $("termswrap");
-  if (!tree){ wrap.style.display = "none"; return; }
+/* ------------------------------------------------------------------ */
+/* glossary — every term the learner hit, with a generated definition. */
+/* Lives inside the tree (so it syncs and travels in .know.json);      */
+/* definitions come from /api/define on a cheap model, fired the       */
+/* moment a term appears, best-effort ("define missing" backfills).    */
+/* ------------------------------------------------------------------ */
+function glossaryOf(tree){
+  if (!tree.glossary || typeof tree.glossary !== "object") tree.glossary = {};
+  return tree.glossary;
+}
+function glossaryItems(tree){
+  // every distinct term in turn order, joined with its glossary entry
   const seen = new Set(); const items = [];
   for (const id of Object.keys(tree.nodes).map(Number).sort((a, b) => a - b)){
     for (const t of getNode(tree, id).turns){
       const term = (t.new_term || "").trim();
-      if (!term || seen.has(term.toLowerCase())) continue;
-      seen.add(term.toLowerCase());
-      items.push({term, nodeId: id, turn: t.turn});
+      const key = term.toLowerCase();
+      if (!term || seen.has(key)) continue;
+      seen.add(key);
+      items.push({term, key, nodeId: id, turn: t.turn});
     }
   }
+  const g = glossaryOf(tree);
+  for (const key of Object.keys(g)){         // entries whose turn was pruned
+    if (!seen.has(key) && g[key] && g[key].term)
+      items.push({term: g[key].term, key, nodeId: g[key].node, turn: g[key].turn});
+  }
+  return items;
+}
+function termContext(tree, nodeId, turn){
+  // the exchange around the term: the tutor reply it appeared in, the
+  // learner's question, and the tutor's answer to that question
+  const node = getNode(tree, nodeId);
+  if (!node) return "";
+  const t = node.turns[turn - 1], prev = node.turns[turn - 2];
+  const lines = [];
+  if (prev && prev.tutor) lines.push("A: " + oneLine(prev.tutor, 600));
+  if (t && t.action) lines.push("Q: " + oneLine(t.action, 200));
+  if (t && t.tutor)  lines.push("A: " + oneLine(t.tutor, 600));
+  return lines.join("\n");
+}
+function autoDefine(tree, node, rec){
+  const term = (rec.new_term || "").trim();
+  if (!term) return;
+  const g = glossaryOf(tree);
+  const key = term.toLowerCase();
+  if (g[key] && g[key].def) return;
+  g[key] = {term, def: "", node: node.id, turn: rec.turn};
+  api("define", {term, topic: tree.root_topic,
+                 context: termContext(tree, node.id, rec.turn)})
+    .then(r => {
+      if (r.definition) g[key].def = r.definition;
+      node.cost += r.cost || 0;
+      saveStore(); renderTerms(); renderHeader();
+    })
+    .catch(() => {});   // best-effort; "define missing" backfills later
+}
+let definingAll = false;
+async function defineMissing(){
+  const tree = cur();
+  if (!tree || definingAll) return;
+  const g = glossaryOf(tree);
+  const missing = glossaryItems(tree).filter(i => !(g[i.key] && g[i.key].def));
+  if (!missing.length) return;
+  definingAll = true;
+  renderTerms();
+  let done = 0;
+  try {
+    for (const i of missing){
+      setStatus(`defining “${oneLine(i.term, 30)}” (${++done}/${missing.length})…`);
+      try {
+        const r = await api("define", {term: i.term, topic: tree.root_topic,
+                                       context: termContext(tree, i.nodeId, i.turn)});
+        g[i.key] = {term: i.term, def: r.definition || "",
+                    node: i.nodeId, turn: i.turn};
+        const node = getNode(tree, i.nodeId);
+        if (node) node.cost += r.cost || 0;
+        saveStore();
+      } catch (e){
+        if (e.message === "logged out") break;
+      }
+      renderTerms();
+    }
+  } finally {
+    definingAll = false;
+    clearStatus();
+    renderTerms(); renderHeader();
+  }
+}
+window.defineMissing = defineMissing;
+
+function renderTerms(){
+  const tree = cur();
+  const wrap = $("termswrap");
+  if (!tree){ wrap.style.display = "none"; return; }
+  const items = glossaryItems(tree);
   if (!items.length){ wrap.style.display = "none"; return; }
   wrap.style.display = "";
-  const extra = items.length - 40;
-  $("terms").innerHTML = items.slice(0, 40).map(i =>
-    `<span class="t" onclick="jumpToTerm(${i.nodeId},${i.turn})" tabindex="0" role="button"` +
-    ` title="node [${i.nodeId}] · turn ${i.turn}">🔍 ${esc(i.term)}</span>`).join("") +
-    (extra > 0 ? `<span class="hint">… and ${extra} more (search finds them all)</span>` : "");
+  const g = glossaryOf(tree);
+  const defined = items.filter(i => g[i.key] && g[i.key].def).length;
+  $("glossmeta").textContent = `· ${defined}/${items.length} defined`;
+  const filterBox = $("glossfilter");
+  filterBox.style.display = items.length > 8 ? "" : "none";
+  const q = filterBox.value.trim().toLowerCase();
+  const shown = q ? items.filter(i => i.key.includes(q) ||
+    (g[i.key] && (g[i.key].def || "").toLowerCase().includes(q))) : items;
+  const extra = shown.length - 60;
+  $("terms").innerHTML = shown.slice(0, 60).map(i => {
+    const e = g[i.key];
+    const def = e && e.def;
+    const jump = Number.isInteger(i.nodeId)
+      ? `<span class="cl" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>` : "";
+    const mk = def ? "" :
+      `<span class="cl" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`;
+    return `<details class="gentry${def ? "" : " undef"}">` +
+      `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}</summary>` +
+      `<div class="gdef">${def ? esc(def) : `<span class="hint">no definition yet</span>`}` +
+      `<div class="gdeflinks">${[jump, mk].filter(Boolean).join(" · ")}</div></div></details>`;
+  }).join("") +
+  (extra > 0 ? `<p class="hint">… and ${extra} more — filter or search finds them</p>` : "");
+  const missing = items.length - defined;
+  $("glossactions").innerHTML = missing > 0
+    ? `<button onclick="defineMissing()" ${definingAll || running ? "disabled" : ""}>` +
+      `${definingAll ? "defining…" : `define ${missing} missing`}</button>`
+    : "";
 }
+async function defineOne(key){
+  const tree = cur(); if (!tree) return;
+  const i = glossaryItems(tree).find(x => x.key === key);
+  if (!i) return;
+  const g = glossaryOf(tree);
+  try {
+    setStatus(`defining “${oneLine(i.term, 30)}”…`);
+    const r = await api("define", {term: i.term, topic: tree.root_topic,
+                                   context: termContext(tree, i.nodeId, i.turn)});
+    g[key] = {term: i.term, def: r.definition || "", node: i.nodeId, turn: i.turn};
+    const node = getNode(tree, i.nodeId);
+    if (node) node.cost += r.cost || 0;
+    saveStore();
+    clearStatus();
+  } catch (e){ setError(e.message); }
+  renderTerms(); renderHeader();
+}
+window.defineOne = defineOne;
+let glossTimer = null;
+$("glossfilter").addEventListener("input", () => {
+  clearTimeout(glossTimer);
+  glossTimer = setTimeout(renderTerms, 150);
+});
+
+/* in-text references: occurrences of defined terms inside tutor answers
+   become tappable — a popover shows the definition right there */
+function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function annotateTerms(){
+  const tree = cur();
+  if (!tree || !tree.glossary) return;
+  const entries = Object.values(tree.glossary).filter(e => e && e.def && e.term);
+  if (!entries.length) return;
+  const terms = entries.map(e => e.term).sort((a, b) => b.length - a.length);
+  const re = new RegExp("(^|[^\\w])(" + terms.map(escRe).join("|") + ")(?![\\w])", "gi");
+  document.querySelectorAll("#conv .tutor-b p").forEach(p => {
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.parentElement.closest("code,.gref")
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const tn of nodes){
+      re.lastIndex = 0;
+      if (!re.test(tn.textContent)) continue;
+      re.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let last = 0; let m;
+      while ((m = re.exec(tn.textContent))){
+        const start = m.index + m[1].length;
+        frag.appendChild(document.createTextNode(tn.textContent.slice(last, start)));
+        const b = document.createElement("button");
+        b.className = "gref";
+        b.type = "button";
+        b.textContent = m[2];
+        b.onclick = (ev) => { ev.stopPropagation(); showGloss(m[2], b); };
+        frag.appendChild(b);
+        last = start + m[2].length;
+      }
+      frag.appendChild(document.createTextNode(tn.textContent.slice(last)));
+      tn.replaceWith(frag);
+    }
+  });
+}
+function showGloss(term, anchor){
+  const tree = cur(); if (!tree) return;
+  const e = glossaryOf(tree)[term.toLowerCase()];
+  if (!e) return;
+  const pop = $("gpop");
+  pop.querySelector(".gname").textContent = e.term;
+  pop.querySelector(".gbody").textContent = e.def || "no definition yet";
+  pop.querySelector(".gfoot").innerHTML = Number.isInteger(e.node)
+    ? `<span class="cl" onclick="hideGloss();jumpToTerm(${e.node},${e.turn})">↪ where I met it</span>`
+    : "";
+  pop.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const pw = Math.min(340, window.innerWidth - 24);
+  pop.style.width = pw + "px";
+  let left = Math.max(12, Math.min(r.left, window.innerWidth - pw - 12));
+  pop.style.left = left + "px";
+  pop.style.top = "0px";                       // measure height first
+  const ph = pop.offsetHeight;
+  let top = r.bottom + 8;
+  if (top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 8);
+  pop.style.top = top + "px";
+}
+function hideGloss(){ $("gpop").hidden = true; }
+window.showGloss = showGloss; window.hideGloss = hideGloss;
+document.addEventListener("click", (e) => {
+  if (!$("gpop").hidden && !$("gpop").contains(e.target) &&
+      !e.target.classList?.contains("gref")) hideGloss();
+});
+window.addEventListener("scroll", () => { if (!$("gpop").hidden) hideGloss(); },
+                         {passive: true});
 function jumpToTerm(nodeId, turn){
   selectNode(nodeId);
   const el = document.querySelector(`#conv .turn[data-turn="${turn}"]`);
@@ -1821,6 +2070,7 @@ async function runInvestigation(tree, node, ctx){
                   action: L.action, confidence: L.confidence, done: L.done, tutor: "" };
     node.turns.push(rec);
     saveStore(); renderAll();
+    autoDefine(tree, node, rec);   // glossary entry, in parallel with the tutor
     if (!rec.action) break;
 
     activity = {nodeId: node.id, kind: "tutor"};
@@ -2143,6 +2393,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape"){
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
+    if (!$("gpop").hidden){ hideGloss(); return; }
     stopSpeech(); closePanel(); closeMenu();
     if (rulerActive()){ prefs.ruler = false; prefs.focus = false; applyPrefs(); }
     return;
