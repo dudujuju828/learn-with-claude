@@ -56,7 +56,7 @@ commands:
 class Shell:
     def __init__(self, knowledge_dir="knowledge", *, color=True, max_turns=20,
                  learner_model="claude-sonnet-5", tutor_model="claude-sonnet-5",
-                 effort="xhigh", vault=None, timeout=300,
+                 effort="xhigh", level="student", vault=None, timeout=300,
                  width=66, line_spacing=1) -> None:
         self.dir = Path(knowledge_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -65,6 +65,7 @@ class Shell:
         self.learner_model = learner_model
         self.tutor_model = tutor_model
         self.effort = effort
+        self.level = level
         self.vault = vault
         self.timeout = timeout
         self.kb: KnowledgeTree | None = None
@@ -134,10 +135,11 @@ class Shell:
         self.r.section(f"new tree: {topic}", f"learner={self.learner_model} tutor={self.tutor_model}")
         result = run_conversation(
             topic, max_turns=self.max_turns, learner_model=self.learner_model,
-            tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+            tutor_model=self.tutor_model, effort=self.effort, level=self.level, vault=self.vault,
             timeout=self.timeout, renderer=self.r,
         )
-        kb.add_root(topic, result, learner_model=self.learner_model, tutor_model=self.tutor_model)
+        kb.add_root(topic, result, learner_model=self.learner_model, tutor_model=self.tutor_model,
+                    learner_level=self.level)
         kb.save()
         self.kb = kb
         self.r.ok(f"saved → {kb.path}")
@@ -164,7 +166,7 @@ class Shell:
         def worker(topic: str):
             return run_conversation(
                 topic, max_turns=self.max_turns, learner_model=self.learner_model,
-                tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+                tutor_model=self.tutor_model, effort=self.effort, level=self.level, vault=self.vault,
                 timeout=self.timeout, renderer=silent,
             )
 
@@ -185,7 +187,7 @@ class Shell:
                     else:
                         kb = KnowledgeTree(topic, path=self._unique_path(topic))
                         node = kb.add_root(topic, result, learner_model=self.learner_model,
-                                           tutor_model=self.tutor_model)
+                                           tutor_model=self.tutor_model, learner_level=self.level)
                         kb.save()
                         trees[topic] = kb
                         self.r.replay(node, f"finished {done}/{total}")
@@ -251,7 +253,7 @@ class Shell:
             learner_first_msg=followup_learner_message(kb.root_topic, recap, concept, question),
             tutor_extra_system=followup_tutor_context(recap, concept),
             max_turns=self.max_turns, learner_model=self.learner_model,
-            tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+            tutor_model=self.tutor_model, effort=self.effort, level=self.level, vault=self.vault,
             timeout=self.timeout, renderer=self.r,
         )
         result.cost += pick_cost  # the picker call belongs to this node
@@ -260,6 +262,7 @@ class Shell:
         node = kb.add_branch(
             prev.id, len(prev.turns) or 1, "", concept, result,
             learner_model=self.learner_model, tutor_model=self.tutor_model,
+            learner_level=self.level,
         )
         kb.save()
         self.r.ok(f"added node [{node.id}] '{concept}'  →  {kb.path}")
@@ -303,7 +306,7 @@ class Shell:
         result = run_conversation(
             focus or "deeper dive", learner_first_msg=learner_msg, tutor_extra_system=tutor_ctx,
             max_turns=self.max_turns, learner_model=self.learner_model,
-            tutor_model=self.tutor_model, effort=self.effort, vault=self.vault,
+            tutor_model=self.tutor_model, effort=self.effort, level=self.level, vault=self.vault,
             timeout=self.timeout, renderer=self.r,
         )
 
@@ -311,6 +314,7 @@ class Shell:
         node = self.kb.add_branch(
             node_id, branch_turn, focus, label, result,
             learner_model=self.learner_model, tutor_model=self.tutor_model,
+            learner_level=self.level,
         )
         self.kb.save()
         self.r.ok(f"added node [{node.id}] '{label}'  →  {self.kb.path}")

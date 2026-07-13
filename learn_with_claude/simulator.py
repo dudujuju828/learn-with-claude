@@ -15,10 +15,11 @@ from dataclasses import dataclass, field
 from .backend import ClaudeSession
 from .diagrams import DIAGRAM_TOOL, excalidraw_mcp_config
 from .personas import (
-    LEARNER_SYSTEM,
+    LEARNER_SYSTEM,  # noqa: F401 - kept for older callers
     NEXT_CONCEPT_SYSTEM,
     feedback_message,
     first_learner_message,
+    learner_system,
     next_concept_message,
     tutor_system,
 )
@@ -119,6 +120,7 @@ def run_conversation(
     learner_model: str = "claude-sonnet-5",
     tutor_model: str = "claude-sonnet-5",
     effort: str = "xhigh",
+    level: str = "student",
     vault: str | None = None,
     timeout: int = 300,
     renderer: Renderer | None = None,
@@ -126,7 +128,7 @@ def run_conversation(
     r = renderer or Renderer(color=True)
 
     learner = ClaudeSession(
-        system_prompt=LEARNER_SYSTEM,
+        system_prompt=learner_system(level),
         model=learner_model,
         effort=effort,
         exclude_dynamic=True,

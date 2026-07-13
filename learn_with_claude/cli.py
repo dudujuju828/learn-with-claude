@@ -41,6 +41,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--effort", default="xhigh",
                    choices=["low", "medium", "high", "xhigh", "max"],
                    help="Reasoning effort for both personas (default: xhigh).")
+    p.add_argument("--level", default="student",
+                   choices=["novice", "student", "practitioner", "expert"],
+                   help="How much the simulated learner already knows — shapes the "
+                        "questions it can ask (default: student).")
     p.add_argument("--vault", default=None,
                    help="Obsidian vault path for tutor diagrams (default: "
                         "$EXCALIDRAW_VAULT_PATH or $OBSIDIAN_VAULT_PATH).")
@@ -78,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         learner_model=args.learner_model or args.model,
         tutor_model=args.tutor_model or args.model,
         effort=args.effort,
+        level=args.level,
         vault=vault,
         timeout=args.timeout,
         width=args.width,

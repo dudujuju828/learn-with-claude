@@ -78,19 +78,36 @@ directly (a local `claude` login can't run on a server), so it needs an
   (OpenDyslexic / Lexend / Atkinson / Comic Sans), five colour themes, text /
   line / letter / word spacing, keyboard-only **reading ruler** and
   **focus line** (typoscope) stepping visual lines, read aloud (per block, or
-  🔊 listen through a whole conversation), a glossary of every term the
-  learner hit, **search across every tree**, branch buttons under every
-  answer, live cost, and `.know.json` import/export compatible with the CLI
-  (plus the CLI's standalone HTML reading page via *export html*). A **tutor
-  style** picker switches the answers between balanced / highly technical /
-  precise / simple / concise (the original terse style), applied from the next
-  turn — or write your own **custom tutor** (name + how it should answer, with
-  a try-before-saving preview), which syncs across devices like the trees and
-  keeps the base rules in force. You can also **ask the tutor yourself** under
-  any conversation — your question is answered with the node's context and
-  stored as your own turn (`user: true`), which the simulated learner never
-  sees. Conversations interrupted mid-run offer **▶ continue**; URLs
-  deep-link to the exact tree and node.
+  🔊 listen through a whole conversation), **search across every tree**,
+  branch buttons under every answer, live cost, and `.know.json`
+  import/export compatible with the CLI (plus the CLI's standalone HTML
+  reading page via *export html*). A **tutor style** picker switches the
+  answers between balanced / highly technical / precise / simple / concise
+  (the original terse style), applied from the next turn — or write your own
+  **custom tutor** (name + how it should answer, with a try-before-saving
+  preview), which syncs across devices like the trees and keeps the base
+  rules in force. A **learner** picker sets how much the simulated learner
+  already knows (curious novice → student → practitioner → expert from a
+  neighbouring field), so its questions scale with the tutor; **auto** (the
+  default) derives the level from the tutor style, and each investigation
+  keeps the learner it started with. Tutor answers arrive **marked up into
+  parts**: the direct answer first, then each distinct aspect (the why, an
+  example, a caveat…) as its own labelled fold-out card, so a long answer
+  reads one idea at a time. Every term the learner hits lands in a
+  **glossary with real definitions** — written the moment the term appears
+  (a cheap haiku call in parallel with the tutor), stored inside the tree so
+  they sync, export, and travel in `.know.json`; defined terms get a dotted
+  underline wherever they appear in answers (tap for the definition in a
+  popover), the sidebar glossary unfolds each term with a jump back to where
+  it came up, and old trees backfill with one *define missing* click. You
+  can also **ask the tutor yourself** under any conversation — your question
+  is answered with the node's context and stored as your own turn
+  (`user: true`), which the simulated learner never sees. Conversations
+  interrupted mid-run offer **▶ continue**; URLs deep-link to the exact tree
+  and node. On a phone the whole thing drives from a **bottom tab bar**
+  (read / grow / tree / words / find) whose sections open as thumb-reachable
+  bottom sheets, with the ask box sticky above it and everything sized for
+  fingers.
 
 Deploy your own: `vercel deploy --prod`, then `vercel env add APP_PASSWORD
 production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob
@@ -103,6 +120,8 @@ tutor diagrams (they need a local Obsidian vault), `many`, `seeplusplus`.
 learn                       # open the interactive knowledge shell
 learn "what a hash table is" # start a tree, then drop into the shell
 learn "hash tables" --once   # start a tree and exit (non-interactive)
+learn "B-trees" --level expert  # a learner who already knows adjacent fields
+                                # (novice / student / practitioner / expert)
 
 # without installing, the equivalent is:  python learn.py [topic]
 ```

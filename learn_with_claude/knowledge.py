@@ -108,24 +108,27 @@ class KnowledgeTree:
         self._next += 1
         return i
 
-    def add_root(self, label, result, *, learner_model="sonnet", tutor_model="sonnet") -> Node:
+    def add_root(self, label, result, *, learner_model="sonnet", tutor_model="sonnet",
+                 learner_level="") -> Node:
         node = Node(
             id=self._alloc(), label=label, created=_now(), turns=result.turns,
             cost=result.cost, final_confidence=result.final_confidence,
             learner_model=learner_model, tutor_model=tutor_model,
+            learner_level=learner_level,
         )
         self.nodes[node.id] = node
         self.root_id = node.id
         return node
 
     def add_branch(self, parent_id, branch_turn, focus, label, result,
-                   *, learner_model="sonnet", tutor_model="sonnet") -> Node:
+                   *, learner_model="sonnet", tutor_model="sonnet", learner_level="") -> Node:
         parent = self.nodes[int(parent_id)]
         node = Node(
             id=self._alloc(), label=label, parent_id=parent.id, branch_from_turn=int(branch_turn),
             focus=focus, created=_now(), turns=result.turns, cost=result.cost,
             final_confidence=result.final_confidence,
             learner_model=learner_model, tutor_model=tutor_model,
+            learner_level=learner_level,
         )
         self.nodes[node.id] = node
         parent.children.append(node.id)
