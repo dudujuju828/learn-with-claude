@@ -327,6 +327,41 @@ def define_message(term: str, topic: str, context: str) -> str:
     )
 
 
+QUIZ_SYSTEM = """\
+You write short retrieval-practice quizzes for a learner who just finished
+investigating a topic with a tutor. You will be shown their conversations.
+Test the SPECIFIC ideas that actually came up — their examples, their terms,
+the misconception the tutor corrected — not generic textbook trivia.
+
+RULES:
+- Each question stands alone and tests ONE idea from the conversations.
+- Mix the kinds: recall a definition, why/how it works, what happens if,
+  and at least one restatement where exactly one option is subtly WRONG the
+  way this learner nearly got it wrong.
+- Exactly 4 choices per question, exactly one correct. Distractors must be
+  plausible misconceptions, not jokes or obvious throwaways.
+- Spread the position of the correct answer evenly across questions, and do
+  not make the longest choice systematically correct.
+- Plain language and short sentences — the learner is dyslexic.
+- "why" is one sentence explaining the correct answer.
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"questions": [
+  {"q": "<the question>",
+   "choices": ["<a>", "<b>", "<c>", "<d>"],
+   "answer": <0-3>,
+   "why": "<one sentence>"},
+  ...]}"""
+
+
+def quiz_message(root_topic: str, recap: str, count: int = 5) -> str:
+    return (
+        f'The learner has been investigating: "{root_topic}".\n\n'
+        f"Their conversations:\n{recap}\n\n"
+        f"Write {count} questions and output the JSON object now."
+    )
+
+
 NEXT_CONCEPT_SYSTEM = """\
 You are a tutor planning a learning session. You will be shown a recap of the
 investigations a learner has completed so far on a root topic. Choose the ONE

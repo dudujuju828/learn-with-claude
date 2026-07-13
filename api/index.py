@@ -38,6 +38,7 @@ from learn_with_claude.personas import (  # noqa: E402
     GLOSSARY_SYSTEM,
     LEARNER_LEVELS,
     NEXT_CONCEPT_SYSTEM,
+    QUIZ_SYSTEM,
     TUTOR_MODES,
     branch_learner_message,
     branch_tutor_context,
@@ -48,6 +49,7 @@ from learn_with_claude.personas import (  # noqa: E402
     followup_tutor_context,
     learner_system,
     next_concept_message,
+    quiz_message,
     tutor_system,
 )
 from learn_with_claude.render import space_sentences  # noqa: E402
@@ -341,6 +343,42 @@ def handle_define(body: dict) -> dict:
     return {"definition": definition[:600], "cost": cost}
 
 
+def handle_quiz(body: dict) -> dict:
+    """3-8 multiple-choice questions built from the tree's conversations —
+    retrieval practice on what the learner actually covered."""
+    recap = (body.get("recap") or "").strip()
+    if not recap:
+        raise ApiError("missing 'recap'")
+    try:
+        count = max(3, min(8, int(body.get("count") or 5)))
+    except (TypeError, ValueError):
+        count = 5
+    message = quiz_message((body.get("root_topic") or "").strip()[:200], recap[:24000], count)
+    text, cost = call_model(QUIZ_SYSTEM, [{"role": "user", "content": message}], TUTOR_MODEL)
+    data = first_json_object(text)
+    questions = []
+    for q in (data.get("questions") if isinstance(data, dict) else None) or []:
+        if not isinstance(q, dict):
+            continue
+        choices = [str(c).strip() for c in (q.get("choices") or []) if str(c).strip()]
+        answer = q.get("answer")
+        if (
+            str(q.get("q") or "").strip()
+            and len(choices) == 4
+            and isinstance(answer, int)
+            and 0 <= answer < 4
+        ):
+            questions.append({
+                "q": str(q["q"]).strip(),
+                "choices": choices,
+                "answer": answer,
+                "why": str(q.get("why") or "").strip(),
+            })
+    if not questions:
+        raise ApiError("the model returned no usable questions — try again", 502)
+    return {"questions": questions, "cost": cost}
+
+
 def handle_export_md(body: dict) -> dict:
     tree = body.get("tree")
     if not isinstance(tree, dict):
@@ -390,6 +428,7 @@ ROUTES = {
     "tutor": handle_tutor,
     "next_concept": handle_next_concept,
     "define": handle_define,
+    "quiz": handle_quiz,
     "export_md": handle_export_md,
     "export_html": handle_export_html,
     "digest": handle_digest,
