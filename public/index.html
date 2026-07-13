@@ -385,6 +385,10 @@
   deeply, growing the tree. Every turn is two real model calls (~5–7¢).</p>
   <p><b>tutor style</b> changes how the tutor answers — from highly technical
   to simple everyday words — and applies from the next turn, even mid-run.</p>
+  <p><b>learner</b> sets how much the simulated learner already knows, from a
+  curious novice to an expert from a neighbouring field — so its questions can
+  keep up with the tutor. <b>auto</b> (the default) matches the tutor style;
+  each investigation keeps the learner it started with.</p>
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
@@ -476,6 +480,13 @@
       <button id="tutoreditbtn" title="create or edit custom tutors" aria-label="create or edit custom tutors">✎</button>
     </div>
     <p class="hint">applies to the tutor's answers from the next turn on. ✎ makes your own tutor.</p>
+
+    <h2>learner</h2>
+    <div class="newrow">
+      <select id="levelsel" aria-label="learner level" style="flex:1"></select>
+    </div>
+    <p class="hint" id="levelhint">how much the simulated learner already knows — it shapes
+    the questions it can ask. <b>auto</b> matches the tutor style.</p>
 
     <h2>tree</h2>
     <div id="map"><span style="color:var(--muted)">—</span></div>
@@ -617,7 +628,7 @@ const THEMES = {
 };
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
-                       tmode: "balanced", think: true};
+                       tmode: "balanced", think: true, llevel: "auto"};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -660,6 +671,9 @@ function applyPrefs(){
   }
   $("modesel").value = prefs.tmode;
   if ($("modesel").selectedIndex < 0) $("modesel").value = prefs.tmode = "balanced";
+  $("levelsel").value = prefs.llevel || "auto";
+  if ($("levelsel").selectedIndex < 0) $("levelsel").value = prefs.llevel = "auto";
+  levelHint();
   document.body.classList.toggle("ruler-on", prefs.ruler);
   document.body.classList.toggle("focus-on", prefs.focus);
   if (rulerActive()) refreshRuler(); else clearRuler();
@@ -686,7 +700,10 @@ function buildPanel(){
   $("modesel").onchange = () => {
     const v = $("modesel").value;
     if (v === "__new"){ openTutorEditor(null); return; }
-    prefs.tmode = v; savePrefs();
+    prefs.tmode = v; savePrefs(); levelHint();
+  };
+  $("levelsel").onchange = () => {
+    prefs.llevel = $("levelsel").value; savePrefs(); levelHint();
   };
   $("tutoreditbtn").onclick = () => {
     const t = currentTutor();
@@ -742,6 +759,35 @@ const BUILTIN_MODES = [
 ];
 let tutorsDoc = loadTutorsDoc();
 let editingTutorId = null;
+
+/* learner knowledge levels — how sophisticated the simulated learner is.
+   "auto" derives the level from the tutor style, so a highly technical tutor
+   gets a learner who can actually use it. */
+const LEARNER_LEVELS = [
+  ["auto", "auto — match the tutor style"],
+  ["novice", "curious novice — no background at all"],
+  ["student", "student — some background (the classic)"],
+  ["practitioner", "practitioner — knows the fundamentals"],
+  ["expert", "expert — from a neighbouring field"],
+];
+const AUTO_LEVEL = {simple: "novice", balanced: "student", concise: "student",
+                    precise: "practitioner", technical: "expert"};
+function effectiveLevel(){
+  if (prefs.llevel && prefs.llevel !== "auto") return prefs.llevel;
+  return AUTO_LEVEL[prefs.tmode] || "student";
+}
+function buildLevelSelect(){
+  $("levelsel").innerHTML = LEARNER_LEVELS.map(([v, l]) =>
+    `<option value="${v}">${esc(l)}</option>`).join("");
+  $("levelsel").value = prefs.llevel || "auto";
+  if ($("levelsel").selectedIndex < 0){ prefs.llevel = "auto"; $("levelsel").value = "auto"; }
+}
+function levelHint(){
+  $("levelhint").innerHTML = (prefs.llevel === "auto" || !prefs.llevel)
+    ? `how much the simulated learner already knows — it shapes the questions ` +
+      `it can ask. <b>auto</b> matches the tutor style (currently → <b>${esc(effectiveLevel())}</b>).`
+    : `how much the simulated learner already knows — it shapes the questions it can ask.`;
+}
 
 function loadTutorsDoc(){
   try {
@@ -1024,7 +1070,7 @@ function makeNode(tree, label, parentId=null, branchTurn=null, focus=""){
     id: allocId(tree), label, parent_id: parentId, branch_from_turn: branchTurn,
     focus, turns: [], children: [], created: nowIso(),
     learner_model: CONFIG.learner_model, tutor_model: CONFIG.tutor_model,
-    cost: 0, final_confidence: null,
+    cost: 0, final_confidence: null, learner_level: effectiveLevel(),
   };
   tree.nodes[String(node.id)] = node;
   if (parentId == null) tree.root_id = node.id;
@@ -1320,7 +1366,8 @@ function renderConversation(keepScroll){
   }
   h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>` +
        `<div class="stats">${node.turns.length} turns · confidence ${fmtConf(node.final_confidence)}` +
-       `${sparkHtml(node.turns)} · ${fmtCost(node.cost)} · ${esc(node.learner_model)}</div>`;
+       `${sparkHtml(node.turns)} · ${fmtCost(node.cost)} · ${esc(node.learner_model)}` +
+       (node.learner_level ? ` · ${esc(node.learner_level)} learner` : "") + `</div>`;
   const nav = [];
   if (!running && canContinue(node))
     nav.push(`<span class="cl" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">▶ continue investigating</span>`);
@@ -1714,7 +1761,8 @@ async function runInvestigation(tree, node, ctx){
 
     activity = {nodeId: node.id, kind: "learner"};
     setStatus(`turn ${turn}: learner is thinking…`); renderAll();
-    const L = await api("learner", {...ctx, turns: node.turns.filter(t => !t.user)});
+    const L = await api("learner", {...ctx, turns: node.turns.filter(t => !t.user),
+                                    level: node.learner_level || effectiveLevel()});
     node.cost += L.cost;
     const rec = { turn, thinking: L.thinking, new_term: L.new_term || "",
                   action: L.action, confidence: L.confidence, done: L.done, tutor: "" };
@@ -2139,6 +2187,7 @@ async function boot(){
 
 buildPanel();
 buildModeSelect();
+buildLevelSelect();
 applyPrefs();
 renderAll(true);
 boot();

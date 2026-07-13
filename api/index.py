@@ -34,9 +34,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from learn_with_claude.knowledge import KnowledgeTree, conversation_digest  # noqa: E402
 from learn_with_claude.personas import (  # noqa: E402
-    LEARNER_SYSTEM,
+    LEARNER_LEVELS,
     NEXT_CONCEPT_SYSTEM,
     TUTOR_MODES,
+    learner_system,
     branch_learner_message,
     branch_tutor_context,
     feedback_message,
@@ -205,11 +206,14 @@ def turn_json(turn: dict) -> str:
 
 
 def handle_learner(body: dict) -> dict:
+    level = body.get("level")
+    if level not in LEARNER_LEVELS:
+        level = "student"
     messages = [{"role": "user", "content": learner_opening(body)}]
     for t in body.get("turns", []):
         messages.append({"role": "assistant", "content": turn_json(t)})
         messages.append({"role": "user", "content": feedback_message(t.get("tutor", ""))})
-    text, cost = call_model(LEARNER_SYSTEM, messages, LEARNER_MODEL)
+    text, cost = call_model(learner_system(level), messages, LEARNER_MODEL)
     data = extract_turn(text)
     return {
         "thinking": (data.get("thinking") or "").strip(),
@@ -300,6 +304,7 @@ def handle_config() -> dict:
         "effort": EFFORT,
         "max_turns": MAX_TURNS,
         "modes": list(TUTOR_MODES),
+        "levels": list(LEARNER_LEVELS),
     }
 
 

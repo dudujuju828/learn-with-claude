@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -75,10 +75,14 @@ class Node:
     tutor_model: str = "sonnet"
     cost: float = 0.0
     final_confidence: object = None
+    learner_level: str = ""
 
     @property
     def is_root(self) -> bool:
         return self.parent_id is None
+
+
+_NODE_FIELDS = {f.name for f in fields(Node)}
 
 
 # --------------------------------------------------------------------------- #
@@ -162,7 +166,12 @@ class KnowledgeTree:
     def from_dict(cls, d: dict, path=None) -> "KnowledgeTree":
         tree = cls(d["root_topic"], id=d.get("id"), created=d.get("created"), path=path)
         tree.root_id = d.get("root_id")
-        tree.nodes = {int(k): Node(**v) for k, v in d.get("nodes", {}).items()}
+        # tolerate node keys this version doesn't know (trees travel between
+        # the web app and the CLI, which don't always ship the same fields)
+        tree.nodes = {
+            int(k): Node(**{kk: vv for kk, vv in v.items() if kk in _NODE_FIELDS})
+            for k, v in d.get("nodes", {}).items()
+        }
         tree._next = d.get("next") or (max(tree.nodes, default=0) + 1)
         return tree
 
