@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbf6ea">
 <title>learn with claude</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
@@ -36,6 +36,7 @@
     font-family:var(--font),'Lexend','Atkinson Hyperlegible','Comic Sans MS',Verdana,Tahoma,sans-serif;
     font-weight:300; line-height:var(--lh);
     letter-spacing:var(--ls); word-spacing:var(--ws);
+    touch-action:manipulation; -webkit-tap-highlight-color:transparent;
   }
   button{
     font-family:inherit; font-size:.88rem; padding:.34rem .7rem; cursor:pointer;
@@ -86,22 +87,74 @@
     font-variant-numeric:tabular-nums}
   #syncbtn{color:var(--muted); font-size:.85rem; padding:.34rem .3rem; white-space:nowrap}
   #syncbtn.err{color:var(--danger)}
-  #menubtn{display:none}
+  .brand .bmini{display:none}
   #app{display:flex; align-items:flex-start}
   aside{
     width:19.5rem; flex:none; padding:1rem; border-right:1px solid var(--line);
     position:sticky; top:3.05rem; max-height:calc(100vh - 3.05rem); overflow:auto;
   }
   main{flex:1; min-width:0; padding:1.2rem 1.4rem 7rem; max-width:46rem}
+  #glossempty{display:none}
+
+  /* ---- mobile: bottom tab bar + the sidebar sections as bottom sheets ---- */
+  #tabbar{display:none}
   @media (max-width:900px){
-    #menubtn{display:inline-block}
     aside{
-      display:none; position:fixed; z-index:70; top:3.05rem; left:0; bottom:0;
-      background:var(--bg); border-right:1px solid var(--line);
-      width:min(19.5rem,86vw); max-height:none; box-shadow:0 0 40px rgba(0,0,0,.25);
+      display:none; position:fixed; z-index:70; left:0; right:0; top:auto;
+      bottom:calc(3.55rem + env(safe-area-inset-bottom));
+      width:auto; max-height:68dvh; overflow:auto; background:var(--bg);
+      border-right:none; border-top:2px solid var(--line);
+      border-radius:1.1rem 1.1rem 0 0; box-shadow:0 -12px 40px rgba(0,0,0,.28);
+      padding:.4rem 1rem 1rem;
     }
-    body.menu-open aside{display:block}
-    main{padding:1rem .9rem 7rem}
+    body.sheet-open aside{display:block}
+    aside::before{  /* grab handle */
+      content:""; display:block; width:2.6rem; height:.3rem; border-radius:.2rem;
+      background:var(--line); margin:.25rem auto .45rem;
+    }
+    aside section{display:none}
+    body[data-tab=grow] aside section[data-side=grow]{display:block}
+    body[data-tab=tree] aside section[data-side=tree]{display:block}
+    body[data-tab=gloss] aside section[data-side=gloss]{display:block}
+    body[data-tab=gloss] #glossempty.on{display:block}
+    body[data-tab=search] aside section[data-side=search]{display:block}
+    main{padding:1rem .9rem calc(8rem + env(safe-area-inset-bottom))}
+    #tabbar{
+      display:flex; position:fixed; left:0; right:0; bottom:0; z-index:75;
+      background:var(--card); border-top:2px solid var(--line);
+      padding:.25rem .35rem calc(.25rem + env(safe-area-inset-bottom));
+    }
+    #tabbar button{
+      flex:1; display:flex; flex-direction:column; align-items:center; gap:.1rem;
+      border:none; background:none; border-radius:.6rem; font-size:.68rem;
+      color:var(--muted); padding:.3rem 0 .2rem; letter-spacing:.03em; min-height:3rem;
+    }
+    #tabbar button .ico{font-size:1.15rem; line-height:1.15}
+    #tabbar button.active{color:var(--fg); background:var(--bg)}
+    #statusbar{bottom:calc(3.55rem + env(safe-area-inset-bottom))}
+    #jumpbtn{bottom:calc(7.6rem + env(safe-area-inset-bottom))}
+    #askrow{
+      position:sticky; bottom:calc(3.8rem + env(safe-area-inset-bottom));
+      background:var(--bg); padding:.5rem 0;
+    }
+    header{padding:.45rem .6rem; gap:.5rem}
+    #helppanel,#aapanel{right:.4rem; left:.4rem; width:auto}
+    #gpop{max-width:calc(100vw - 1.2rem)}
+  }
+  @media (max-width:600px){
+    .brand .bfull{display:none}
+    .brand .bmini{display:inline; font-size:1.15rem}
+    header .cost{display:none}
+  }
+  /* touch niceties: real finger targets, no zoom on input focus */
+  @media (pointer:coarse){
+    button{min-height:2.5rem}
+    .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico{min-height:0}
+    input[type=text],input[type=password],select{font-size:max(1rem,16px); min-height:2.7rem}
+    #treelist .item{padding:.5rem .55rem}
+    #map .noderow{padding:.2rem .3rem}
+    #terms details.gentry summary{min-height:2.5rem}
+    .branchrow input{max-width:none; flex:1}
   }
   h2{font-size:.8rem; font-weight:600; text-transform:lowercase; color:var(--muted);
     letter-spacing:.07em; margin:1.25rem 0 .45rem}
@@ -416,8 +469,7 @@
 </div>
 
 <header>
-  <button id="menubtn" class="ghost" aria-label="menu">☰</button>
-  <span class="brand">learn <span class="with">with claude</span></span>
+  <span class="brand"><span class="bfull">learn <span class="with">with claude</span></span><span class="bmini" aria-hidden="true">🌱</span></span>
   <span class="treename" id="treename">no tree</span>
   <span class="cost" id="treecost" title="total spend on this tree"></span>
   <button id="syncbtn" class="ghost" title="trees sync to the server so every device sees them — click to sync now">☁</button>
@@ -523,56 +575,68 @@
 
 <div id="app">
   <aside id="sidebar">
-    <h2>start</h2>
-    <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic"></div>
-    <div class="btnrow">
-      <button class="primary" id="newbtn" title="one investigation">new</button>
-      <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
-    </div>
-    <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
-    related concepts to explore. Each turn is two real model calls (~5–7¢).</p>
+    <section data-side="grow">
+      <h2>start</h2>
+      <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic"></div>
+      <div class="btnrow">
+        <button class="primary" id="newbtn" title="one investigation">new</button>
+        <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
+      </div>
+      <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
+      related concepts to explore. Each turn is two real model calls (~5–7¢).</p>
 
-    <h2>tutor style</h2>
-    <div class="newrow">
-      <select id="modesel" aria-label="tutor style" style="flex:1"></select>
-      <button id="tutoreditbtn" title="create or edit custom tutors" aria-label="create or edit custom tutors">✎</button>
-    </div>
-    <p class="hint">applies to the tutor's answers from the next turn on. ✎ makes your own tutor.</p>
+      <h2>tutor style</h2>
+      <div class="newrow">
+        <select id="modesel" aria-label="tutor style" style="flex:1"></select>
+        <button id="tutoreditbtn" title="create or edit custom tutors" aria-label="create or edit custom tutors">✎</button>
+      </div>
+      <p class="hint">applies to the tutor's answers from the next turn on. ✎ makes your own tutor.</p>
 
-    <h2>learner</h2>
-    <div class="newrow">
-      <select id="levelsel" aria-label="learner level" style="flex:1"></select>
-    </div>
-    <p class="hint" id="levelhint">how much the simulated learner already knows — it shapes
-    the questions it can ask. <b>auto</b> matches the tutor style.</p>
+      <h2>learner</h2>
+      <div class="newrow">
+        <select id="levelsel" aria-label="learner level" style="flex:1"></select>
+      </div>
+      <p class="hint" id="levelhint">how much the simulated learner already knows — it shapes
+      the questions it can ask. <b>auto</b> matches the tutor style.</p>
+    </section>
 
-    <h2>tree</h2>
-    <div id="map"><span style="color:var(--muted)">—</span></div>
+    <section data-side="tree">
+      <h2>tree</h2>
+      <div id="map"><span style="color:var(--muted)">—</span></div>
+    </section>
 
-    <div id="termswrap" style="display:none">
-      <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span></h2>
-      <input id="glossfilter" type="text" placeholder="filter terms…"
-             aria-label="filter glossary" style="display:none; margin-bottom:.4rem">
-      <div id="terms"></div>
-      <div class="btnrow" id="glossactions" style="margin-top:.45rem"></div>
-    </div>
+    <section data-side="gloss">
+      <div id="termswrap" style="display:none">
+        <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span></h2>
+        <input id="glossfilter" type="text" placeholder="filter terms…"
+               aria-label="filter glossary" style="display:none; margin-bottom:.4rem">
+        <div id="terms"></div>
+        <div class="btnrow" id="glossactions" style="margin-top:.45rem"></div>
+      </div>
+      <p class="hint" id="glossempty">no terms yet — the glossary fills itself as the
+      learner hits words it doesn't know.</p>
+    </section>
 
-    <h2>search</h2>
-    <input id="searchbox" type="text" placeholder="search every tree…" aria-label="search all trees">
-    <div id="searchresults"></div>
+    <section data-side="search">
+      <h2>search</h2>
+      <input id="searchbox" type="text" placeholder="search every tree…" aria-label="search all trees">
+      <div id="searchresults"></div>
+    </section>
 
-    <h2>trees <span id="alltreescost"></span></h2>
-    <div id="treelist"></div>
+    <section data-side="tree">
+      <h2>trees <span id="alltreescost"></span></h2>
+      <div id="treelist"></div>
 
-    <h2>file</h2>
-    <div class="btnrow">
-      <button id="exportjson" title="download this tree as a portable .know.json">save .know.json</button>
-      <button id="exportmd" title="download this tree as readable markdown">export md</button>
-      <button id="exporthtml" title="download the standalone dyslexia-friendly reading page (the CLI's HTML export)">export html</button>
-      <button id="importbtn" title="open a .know.json from the CLI or another device">import</button>
-      <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
-    </div>
-    <p class="hint">trees live in this browser. save the file to move one to your PC or the CLI.</p>
+      <h2>file</h2>
+      <div class="btnrow">
+        <button id="exportjson" title="download this tree as a portable .know.json">save .know.json</button>
+        <button id="exportmd" title="download this tree as readable markdown">export md</button>
+        <button id="exporthtml" title="download the standalone dyslexia-friendly reading page (the CLI's HTML export)">export html</button>
+        <button id="importbtn" title="open a .know.json from the CLI or another device">import</button>
+        <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
+      </div>
+      <p class="hint">trees live in this browser. save the file to move one to your PC or the CLI.</p>
+    </section>
   </aside>
 
   <main>
@@ -618,6 +682,14 @@
 
 <div id="ruler" aria-hidden="true"></div>
 <button id="jumpbtn" aria-label="jump to the latest turn">↓ latest</button>
+
+<nav id="tabbar" aria-label="app sections">
+  <button data-tab=""><span class="ico" aria-hidden="true">💬</span>read</button>
+  <button data-tab="grow"><span class="ico" aria-hidden="true">🌱</span>grow</button>
+  <button data-tab="tree"><span class="ico" aria-hidden="true">🌳</span>tree</button>
+  <button data-tab="gloss"><span class="ico" aria-hidden="true">📖</span>words</button>
+  <button data-tab="search"><span class="ico" aria-hidden="true">🔍</span>find</button>
+</nav>
 
 <div id="statusbar">
   <span class="dot" aria-hidden="true"></span>
@@ -1738,9 +1810,10 @@ window.defineMissing = defineMissing;
 function renderTerms(){
   const tree = cur();
   const wrap = $("termswrap");
-  if (!tree){ wrap.style.display = "none"; return; }
+  const empty = !tree || !glossaryItems(tree).length;
+  $("glossempty").classList.toggle("on", empty);
+  if (empty){ wrap.style.display = "none"; return; }
   const items = glossaryItems(tree);
-  if (!items.length){ wrap.style.display = "none"; return; }
   wrap.style.display = "";
   const g = glossaryOf(tree);
   const defined = items.filter(i => g[i.key] && g[i.key].def).length;
@@ -2372,16 +2445,29 @@ for (const id of ["map", "treelist", "terms"]){
   });
 }
 
-/* mobile menu */
-function closeMenu(){ document.body.classList.remove("menu-open"); }
-$("menubtn").onclick = (e) => {
-  e.stopPropagation();
-  document.body.classList.toggle("menu-open");
-};
-document.addEventListener("click", (e) => {
-  if (document.body.classList.contains("menu-open") &&
-      !$("sidebar").contains(e.target) && e.target !== $("menubtn")) closeMenu();
+/* mobile bottom tabs — each sidebar section opens as a bottom sheet;
+   "read" (or tapping the active tab, or anywhere outside) closes it */
+function setTab(tab){
+  document.body.dataset.tab = tab || "";
+  document.body.classList.toggle("sheet-open", !!tab);
+  document.querySelectorAll("#tabbar button").forEach(b =>
+    b.classList.toggle("active", (b.dataset.tab || "") === (tab || "")));
+}
+function closeMenu(){ setTab(""); }
+document.querySelectorAll("#tabbar button").forEach(b => {
+  b.onclick = (e) => {
+    e.stopPropagation();
+    const t = b.dataset.tab || "";
+    const was = document.body.dataset.tab || "";
+    setTab(t === was ? "" : t);
+    if (t === "search" && t !== was) setTimeout(() => $("searchbox").focus(), 80);
+  };
 });
+document.addEventListener("click", (e) => {
+  if (document.body.classList.contains("sheet-open") &&
+      !$("sidebar").contains(e.target) && !$("tabbar").contains(e.target)) closeMenu();
+});
+setTab("");
 
 /* read aloud + Esc */
 document.addEventListener("click", (e) => {
@@ -2405,7 +2491,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "/" && !typing){
     e.preventDefault();
-    if (matchMedia("(max-width:900px)").matches) document.body.classList.add("menu-open");
+    if (matchMedia("(max-width:900px)").matches) setTab("grow");
     $("topic").focus();
   }
   if (e.key === "?" && !typing){
