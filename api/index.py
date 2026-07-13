@@ -25,6 +25,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
 import time
 from http.server import BaseHTTPRequestHandler
@@ -225,6 +226,39 @@ def handle_learner(body: dict) -> dict:
     }
 
 
+# A part tag: a short bracketed label alone at the start of a line, e.g.
+# "[why]" or "[so where does the copy live?]". Purely numeric labels (citation
+# style, "[1]") don't count, and code fences are skipped while scanning.
+_PART_TAG = re.compile(r"^\s*\[([^\[\]\n]{2,60})\]\s*(.*)$")
+
+
+def split_tutor_parts(text: str) -> list:
+    """Split a tutor reply on its [label] markup lines into
+    [{"label": str, "text": str}, ...]. The opening (untagged) answer comes
+    back as a part with label "". Returns [] when there is no markup at all."""
+    parts = [{"label": "", "lines": []}]
+    in_code = False
+    for line in (text or "").split("\n"):
+        if line.lstrip().startswith("```"):
+            in_code = not in_code
+            parts[-1]["lines"].append(line)
+            continue
+        m = None if in_code else _PART_TAG.match(line)
+        label = (m.group(1).strip() if m else "")
+        if m and label and not label.isdigit():
+            parts.append({"label": label, "lines": [m.group(2)] if m.group(2).strip() else []})
+        else:
+            parts[-1]["lines"].append(line)
+    out = []
+    for p in parts:
+        body = "\n".join(p["lines"]).strip()
+        if body or p["label"]:
+            out.append({"label": p["label"], "text": body})
+    if len(out) < 2:
+        return []
+    return out
+
+
 def handle_tutor(body: dict) -> dict:
     action = (body.get("action") or "").strip()
     if not action:
@@ -237,7 +271,7 @@ def handle_tutor(body: dict) -> dict:
         custom = None
     elif len(custom) > 4000:
         custom = custom[:4000]
-    system = tutor_system(diagrams=False, mode=mode, custom_style=custom)
+    system = tutor_system(diagrams=False, mode=mode, custom_style=custom, segments=True)
     extra = tutor_extra_context(body)
     if extra:
         system += f"\n\n{extra}"
@@ -248,7 +282,15 @@ def handle_tutor(body: dict) -> dict:
             messages.append({"role": "assistant", "content": t["tutor"]})
     messages.append({"role": "user", "content": action})
     text, cost = call_model(system, messages, TUTOR_MODEL)
-    return {"tutor": space_sentences(text), "cost": cost}
+    parts = split_tutor_parts(text)
+    if not parts:
+        return {"tutor": space_sentences(text), "cost": cost}
+    # the stored/plain answer is the parts joined without their tags, so the
+    # learner sim, digests, search, and exports all keep seeing clean text
+    for p in parts:
+        p["text"] = space_sentences(p["text"])
+    clean = "\n\n".join(p["text"] for p in parts if p["text"])
+    return {"tutor": clean, "parts": parts, "cost": cost}
 
 
 def handle_next_concept(body: dict) -> dict:

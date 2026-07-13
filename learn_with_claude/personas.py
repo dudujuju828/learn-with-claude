@@ -198,6 +198,27 @@ TUTOR_NO_TOOLS = """\
 This is a pure text conversation: do not use any tools or the filesystem."""
 
 
+# Web-only markup: the reading UI splits a tagged reply into small labelled
+# cards (the direct answer stays on top, each aspect becomes its own card), so
+# the learner can take the answer one piece at a time instead of one wall.
+TUTOR_SEGMENTS = """\
+MARKUP — the learner's reading app shows your reply in small pieces:
+- START with the direct answer to the question: 1-3 sentences, NO tag.
+- When (and only when) your reply genuinely contains distinct aspects, split
+  each one into its own part, introduced by a tag alone on its own line:
+  [why]
+  [how it works]
+  [example]
+  [analogy]
+  [watch out]
+  [in context]
+  You may also coin a tag that names the sub-question a part answers, a few
+  words in the same square-bracket form, e.g. [so where does the copy live?]
+- At most 3 tagged parts per reply, usually 1-2. A short reply needs NO tags —
+  never pad an answer just to use tags.
+- Tags sit alone at the start of a line, never mid-sentence, never in code."""
+
+
 TUTOR_DIAGRAM_SYSTEM = """\
 DIAGRAMS — you have exactly one tool: create_diagram (Excalidraw). It draws a
 small flowchart/graph as a note in the learner's Obsidian vault from nodes and
@@ -214,11 +235,13 @@ directed edges.
 - Never draw the same thing twice; never announce that you are "about to" draw."""
 
 
-def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str | None" = None) -> str:
+def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str | None" = None,
+                 segments: bool = False) -> str:
     """The tutor's full system prompt: base rules, a style addendum (a built-in
     TUTOR_MODES entry, or the caller's own custom style text, which wins), and
     the tool clause. The base rules — answer what was asked, no menu endings,
-    dyslexia-friendly layout — always apply."""
+    dyslexia-friendly layout — always apply. `segments` adds the web reading
+    UI's part-markup contract (the CLI renders plain text, so it stays off)."""
     if custom_style and custom_style.strip():
         style = "STYLE — CUSTOM (defined by the learner's operator):\n" + custom_style.strip()
     else:
@@ -226,6 +249,8 @@ def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str |
     parts = [TUTOR_SYSTEM]
     if style:
         parts.append(style)
+    if segments:
+        parts.append(TUTOR_SEGMENTS)
     parts.append(TUTOR_DIAGRAM_SYSTEM if diagrams else TUTOR_NO_TOOLS)
     return "\n\n".join(parts)
 
