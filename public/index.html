@@ -2209,8 +2209,12 @@ function statusTick(){
 function setStatus(msg){
   const bar = $("statusbar");
   bar.classList.add("on"); bar.classList.remove("err");
+  const runNode = activeRun && store[activeRun.treeId] &&
+                  getNode(store[activeRun.treeId], activeRun.nodeId);
+  const lvl = runNode && runNode.learner_level && runNode.learner_level !== "student"
+    ? runNode.learner_level + " learner · " : "";
   statusBase = (runLabel ? runLabel + " · " : "") +
-               (styleName() ? styleName() + " · " : "") + msg;
+               (styleName() ? styleName() + " · " : "") + lvl + msg;
   statusStart = Date.now();
   if (!statusTimer) statusTimer = setInterval(statusTick, 1000);
   statusTick();

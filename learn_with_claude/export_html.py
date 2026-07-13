@@ -125,6 +125,10 @@ a{{color:var(--ans);}}
 .block.ans .label{{color:var(--ans);}} .block.ans{{border-color:var(--ans);}}
 .term{{display:inline-block; background:var(--term-bg); color:var(--term);
   border:1px solid var(--term-line); border-radius:.45rem; padding:.12rem .55rem; font-weight:bold; margin:.2rem 0 1rem;}}
+details.part{{border:1px solid var(--line); border-radius:.6rem; background:var(--bg);
+  margin:.7rem 0; padding:0 .8rem;}}
+details.part summary{{cursor:pointer; padding:.45rem 0; color:var(--muted); font-size:.9em;}}
+details.part[open] summary{{color:var(--fg);}}
 pre{{background:var(--pre-bg); border:1px solid var(--line); border-radius:.55rem; padding:.85rem; overflow:auto; line-height:1.5;}}
 code{{font-family:'Cascadia Code',Consolas,'Courier New',monospace; font-size:.95em; letter-spacing:0;}}
 .conf{{color:var(--muted); font-weight:normal; font-size:.85em;}}
@@ -547,9 +551,32 @@ def _turn_html(t: dict) -> str:
         f'<p>{_esc_sent(t["action"])}</p></div>'
     )
     if t.get("tutor"):
+        answer_parts = t.get("parts") if isinstance(t.get("parts"), list) else None
+        labelled = answer_parts and any(
+            isinstance(p, dict) and p.get("label") for p in answer_parts
+        )
+        if labelled:
+            inner = []
+            for p in answer_parts:
+                if not isinstance(p, dict):
+                    continue
+                text = str(p.get("text") or "").strip()
+                if not text:
+                    continue
+                body = _md_lite(space_sentences(text))
+                label = str(p.get("label") or "").strip()
+                if label:
+                    inner.append(
+                        f'<details class="part" open><summary>{_esc(label)}</summary>{body}</details>'
+                    )
+                else:
+                    inner.append(body)
+            answer_html = "".join(inner)
+        else:
+            answer_html = _md_lite(space_sentences(t["tutor"]))
         parts.append(
             '<div class="block ans"><div class="label">📘 Claude answers</div>'
-            f'{_md_lite(space_sentences(t["tutor"]))}</div>'
+            f"{answer_html}</div>"
         )
     parts.append("</div>")
     return "".join(parts)
