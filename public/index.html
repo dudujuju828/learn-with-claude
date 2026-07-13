@@ -644,7 +644,9 @@
 
     <section data-side="gloss">
       <div id="termswrap" style="display:none">
-        <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span></h2>
+        <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span>
+          <span class="cl" id="glossscope" style="float:right;font-weight:300;text-transform:none"
+                title="switch between this tree's terms and every tree's">all trees</span></h2>
         <input id="glossfilter" type="text" placeholder="filter terms…"
                aria-label="filter glossary" style="display:none; margin-bottom:.4rem">
         <div id="terms"></div>
@@ -1728,7 +1730,8 @@ function runSearch(){
           const text = t[field] || "";
           const i = text.toLowerCase().indexOf(q);
           if (i >= 0){
-            hits.push({tree, node, turn: t.turn, html: snippetHtml(text, i, q.length)});
+            hits.push({tree, nodeId: node.id, turn: t.turn, where: `[${node.id}] turn ${t.turn}`,
+                       html: snippetHtml(text, i, q.length)});
             break;
           }
         }
@@ -1736,15 +1739,31 @@ function runSearch(){
       }
     }
   }
+  // glossary definitions match too
+  if (hits.length < 25){
+    glossHits:
+    for (const tree of Object.values(store)){
+      for (const e of Object.values(tree.glossary || {})){
+        if (!e || !e.term) continue;
+        const text = e.term + " — " + (e.def || "");
+        const i = text.toLowerCase().indexOf(q);
+        if (i < 0) continue;
+        hits.push({tree, nodeId: Number.isInteger(e.node) ? e.node : tree.root_id,
+                   turn: e.turn || 1, where: "glossary",
+                   html: snippetHtml(text, i, q.length)});
+        if (hits.length >= 25) break glossHits;
+      }
+    }
+  }
   box.innerHTML = hits.length
     ? hits.map((h, i) =>
         `<div class="hit" tabindex="0" role="button" data-hit="${i}">` +
-        `<div class="where">${esc(oneLine(h.tree.root_topic, 30))} · [${h.node.id}] turn ${h.turn}</div>` +
+        `<div class="where">${esc(oneLine(h.tree.root_topic, 30))} · ${esc(h.where)}</div>` +
         `${h.html}</div>`).join("")
     : `<div class="none">no matches</div>`;
   box.querySelectorAll(".hit").forEach((el) => {
     const h = hits[+el.dataset.hit];
-    el.onclick = () => openSearchHit(h.tree.id, h.node.id, h.turn);
+    el.onclick = () => openSearchHit(h.tree.id, h.nodeId, h.turn);
     el.onkeydown = (e) => {
       if (e.key === "Enter" || e.key === " "){ e.preventDefault(); el.onclick(); }
     };
@@ -1862,46 +1881,67 @@ async function defineMissing(){
 }
 window.defineMissing = defineMissing;
 
+let glossAll = false;   // words tab scope: this tree, or every tree
 function renderTerms(){
   const tree = cur();
   const wrap = $("termswrap");
-  const empty = !tree || !glossaryItems(tree).length;
-  $("glossempty").classList.toggle("on", empty);
-  if (empty){ wrap.style.display = "none"; return; }
-  const items = glossaryItems(tree);
+  let items;
+  if (glossAll){
+    items = [];
+    for (const t of Object.values(store))
+      for (const i of glossaryItems(t)) items.push({...i, tree: t});
+    items.sort((a, b) => a.term.toLowerCase().localeCompare(b.term.toLowerCase()));
+  } else {
+    items = tree ? glossaryItems(tree).map(i => ({...i, tree})) : [];
+  }
+  const empty = !items.length;
+  const anyAnywhere = empty
+    ? Object.values(store).some(t => glossaryItems(t).length) : true;
+  $("glossempty").classList.toggle("on", empty && !anyAnywhere);
+  $("glossscope").textContent = glossAll ? "this tree" : "all trees";
+  if (empty && !anyAnywhere){ wrap.style.display = "none"; return; }
   wrap.style.display = "";
-  const g = glossaryOf(tree);
-  const defined = items.filter(i => g[i.key] && g[i.key].def).length;
-  $("glossmeta").textContent = `· ${defined}/${items.length} defined`;
+  const entry = (i) => glossaryOf(i.tree)[i.key];
+  const defined = items.filter(i => entry(i) && entry(i).def).length;
+  $("glossmeta").textContent = glossAll
+    ? `· ${items.length} across ${new Set(items.map(i => i.tree.id)).size} trees`
+    : `· ${defined}/${items.length} defined`;
   const filterBox = $("glossfilter");
   filterBox.style.display = items.length > 8 ? "" : "none";
   const q = filterBox.value.trim().toLowerCase();
   const shown = q ? items.filter(i => i.key.includes(q) ||
-    (g[i.key] && (g[i.key].def || "").toLowerCase().includes(q))) : items;
+    (entry(i) && (entry(i).def || "").toLowerCase().includes(q))) : items;
   const extra = shown.length - 60;
   $("terms").innerHTML = shown.slice(0, 60).map(i => {
-    const e = g[i.key];
+    const e = entry(i);
     const def = e && e.def;
-    const jump = Number.isInteger(i.nodeId)
-      ? `<span class="cl" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>` : "";
-    const mk = def ? "" :
-      `<span class="cl" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`;
+    const links = [];
+    if (Number.isInteger(i.nodeId))
+      links.push(glossAll
+        ? `<span class="cl" onclick="openSearchHit('${esc(i.tree.id)}',${i.nodeId},${i.turn})">` +
+          `↪ ${esc(oneLine(i.tree.root_topic, 26))}</span>`
+        : `<span class="cl" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>`);
+    if (!def && !glossAll)
+      links.push(`<span class="cl" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`);
     return `<details class="gentry${def ? "" : " undef"}">` +
       `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}</summary>` +
       `<div class="gdef">${def ? esc(def) : `<span class="hint">no definition yet</span>`}` +
-      `<div class="gdeflinks">${[jump, mk].filter(Boolean).join(" · ")}</div></div></details>`;
+      `<div class="gdeflinks">${links.join(" · ")}</div></div></details>`;
   }).join("") +
-  (extra > 0 ? `<p class="hint">… and ${extra} more — filter or search finds them</p>` : "");
+  (extra > 0 ? `<p class="hint">… and ${extra} more — filter or search finds them</p>` : "") +
+  (empty ? `<p class="hint">${glossAll ? "no terms in any tree yet"
+    : "no terms in this tree yet — try “all trees”"}</p>` : "");
   const missing = items.length - defined;
   const acts = [];
-  if (missing > 0)
+  if (!glossAll && missing > 0)
     acts.push(`<button onclick="defineMissing()" ${definingAll || running ? "disabled" : ""}>` +
               `${definingAll ? "defining…" : `define ${missing} missing`}</button>`);
-  if (defined > 0)
+  if (!glossAll && defined > 0)
     acts.push(`<button onclick="exportAnki()" title="download the defined terms as a` +
               ` tab-separated file Anki imports as Basic cards">anki cards</button>`);
   $("glossactions").innerHTML = acts.join("");
 }
+$("glossscope").onclick = () => { glossAll = !glossAll; renderTerms(); };
 /* the defined glossary as an Anki-importable TSV (term -> definition) */
 function exportAnki(){
   const tree = cur(); if (!tree) return;
@@ -1917,7 +1957,7 @@ function exportAnki(){
 }
 window.exportAnki = exportAnki;
 async function defineOne(key){
-  const tree = cur(); if (!tree) return;
+  const tree = cur(); if (!tree || running || definingAll) return;
   const i = glossaryItems(tree).find(x => x.key === key);
   if (!i) return;
   const g = glossaryOf(tree);

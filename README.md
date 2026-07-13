@@ -99,7 +99,11 @@ directly (a local `claude` login can't run on a server), so it needs an
   they sync, export, and travel in `.know.json`; defined terms get a dotted
   underline wherever they appear in answers (tap for the definition in a
   popover), the sidebar glossary unfolds each term with a jump back to where
-  it came up, and old trees backfill with one *define missing* click. You
+  it came up, old trees backfill with one *define missing* click, and **anki
+  cards** downloads the defined terms as a file Anki imports directly. **🎓
+  quiz me** writes a handful of multiple-choice questions from what the tree
+  actually covered (one model call, kept with the tree — retakes just
+  reshuffle), explains every answer, and records your scores. You
   can also **ask the tutor yourself** under any conversation — your question
   is answered with the node's context and stored as your own turn
   (`user: true`), which the simulated learner never sees. Conversations
