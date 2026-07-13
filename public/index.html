@@ -2023,7 +2023,10 @@ async function startQuiz(regen){
   renderQuiz();
 }
 window.startQuiz = startQuiz;
-function closeQuiz(){ $("quizbox").classList.remove("open"); quiz = null; }
+function closeQuiz(){
+  $("quizbox").classList.remove("open"); quiz = null;
+  renderAll(true);   // the "quiz me (last: x/y)" link picks up the new score
+}
 $("quizclose").onclick = closeQuiz;
 $("quizbox").addEventListener("click", (e) => { if (e.target === $("quizbox")) closeQuiz(); });
 
@@ -2118,15 +2121,16 @@ function annotateTerms(){
       const frag = document.createDocumentFragment();
       let last = 0; let m;
       while ((m = re.exec(tn.textContent))){
+        const matched = m[2];   // captured per iteration — m is null after the loop
         const start = m.index + m[1].length;
         frag.appendChild(document.createTextNode(tn.textContent.slice(last, start)));
         const b = document.createElement("button");
         b.className = "gref";
         b.type = "button";
-        b.textContent = m[2];
-        b.onclick = (ev) => { ev.stopPropagation(); showGloss(m[2], b); };
+        b.textContent = matched;
+        b.onclick = (ev) => { ev.stopPropagation(); showGloss(matched, b); };
         frag.appendChild(b);
-        last = start + m[2].length;
+        last = start + matched.length;
       }
       frag.appendChild(document.createTextNode(tn.textContent.slice(last)));
       tn.replaceWith(frag);
