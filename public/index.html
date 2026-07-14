@@ -1130,8 +1130,10 @@ function applyPrefs(){
   document.body.classList.toggle("ruler-on", prefs.ruler);
   document.body.classList.toggle("focus-on", prefs.focus);
   if (rulerActive()) refreshRuler(); else clearRuler();
-  document.querySelectorAll(".swatch").forEach(b =>
-    b.classList.toggle("active", b.dataset.theme === prefs.theme));
+  document.querySelectorAll(".swatch").forEach(b => {
+    b.classList.toggle("active", b.dataset.theme === prefs.theme);
+    b.setAttribute("aria-checked", String(b.dataset.theme === prefs.theme));
+  });
   savePrefs();
 }
 
@@ -1621,6 +1623,9 @@ function setSync(state){
   b.textContent = state === "saving" ? "☁ …"
                 : state === "err"    ? "☁ offline"
                 : "☁";
+  b.setAttribute("aria-label", state === "saving" ? "syncing…"
+                             : state === "err"    ? "sync offline — click to retry"
+                             : "synced — click to sync now");
   b.title = state === "err"
     ? "couldn't reach the server — trees are safe in this browser; click to retry"
     : "trees sync to the server so every device sees them — click to sync now";
@@ -1795,30 +1800,34 @@ function confHtml(t, prev){
          `<span class="confnum">${t.confidence}%${delta}</span>`;
 }
 
+/* decorative emoji stay visual — aria-hidden keeps them out of the
+   screen-reader transcript, which already has the words */
+const ico = (e) => `<span aria-hidden="true">${e}</span> `;
+
 function turnHtml(node, t, prevConf, allowBranch){
   let h = `<article class="turn" data-turn="${t.turn}">`;
   h += `<div class="turnhead"><span>turn ${t.turn}</span>${confHtml(t, prevConf)}</div>`;
   const copyBtn = `<button class="copy" onclick="copyBlock(this)" title="copy text" aria-label="copy text">⧉</button>`;
   if (t.thinking){
-    h += `<div class="block thinking"><div class="who">💭 thinking to myself${copyBtn}</div>${esc(t.thinking)}</div>`;
+    h += `<div class="block thinking"><div class="who">${ico("💭")}thinking to myself${copyBtn}</div>${esc(t.thinking)}</div>`;
   }
   if (t.action){
     h += `<div class="block action${t.user ? " user-q" : ""}">` +
-         `<div class="who">${t.user ? "🧑 you ask claude" : "🙋 I ask claude"}` +
+         `<div class="who">${t.user ? ico("🧑") + "you ask claude" : ico("🙋") + "I ask claude"}` +
          (t.new_term ? `<span class="term" role="button" tabindex="0" ` +
            `onclick="event.stopPropagation();showGloss(this.dataset.term, this)" ` +
-           `data-term="${esc(t.new_term)}" title="show in glossary">🔍 ${esc(t.new_term)}</span>` : "") +
+           `data-term="${esc(t.new_term)}" title="show in glossary">${ico("🔍")}${esc(t.new_term)}</span>` : "") +
          `${copyBtn}</div>${esc(t.action)}</div>`;
   }
   if (t.tutor){
-    h += `<div class="block tutor-b"><div class="who">📘 claude answers${copyBtn}</div>` +
+    h += `<div class="block tutor-b"><div class="who">${ico("📘")}claude answers${copyBtn}</div>` +
          `${tutorBodyHtml(t, `${node.id}:${t.turn}`)}</div>`;
     if (t.done){
-      h += `<div class="donechip">✓ the learner can now explain it in their own words</div>`;
+      h += `<div class="donechip">${ico("✓")}the learner can now explain it in their own words</div>`;
     }
     if (allowBranch){
       h += `<div class="branchrow">` +
-           `<button onclick="startBranchUI(${node.id},${t.turn},this)">⤵ branch — dig into this answer</button>` +
+           `<button onclick="startBranchUI(${node.id},${t.turn},this)">${ico("⤵")}branch — dig into this answer</button>` +
            `</div>`;
     }
   }
@@ -1830,7 +1839,7 @@ function activityHtml(){
   if (!activity) return "";
   const learner = activity.kind === "learner";
   return `<div class="turn pending"><div class="block ${learner ? "thinking" : "tutor-b"}">` +
-         `<div class="who">${learner ? "💭 learner is thinking" : "📘 claude is answering"}` +
+         `<div class="who">${learner ? ico("💭") + "learner is thinking" : ico("📘") + "claude is answering"}` +
          `<span class="dots"></span><span class="elapsed"></span></div></div></div>`;
 }
 
@@ -1898,25 +1907,25 @@ function renderConversation(keepScroll){
   h += `<div class="nchips">${chips.join("")}</div>`;
   const acts = [];
   if (!running && canContinue(node))
-    acts.push(`<button class="primary" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">▶ continue</button>`);
+    acts.push(`<button class="primary" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">${ico("▶")}continue</button>`);
   if (!running && node.turns.length){
-    acts.push(`<button onclick="listenNode()" title="read the whole conversation aloud — Esc stops">🔊 listen</button>`);
-    acts.push(`<button onclick="copyLink(this)" title="copy a link straight to this conversation">🔗 link</button>`);
+    acts.push(`<button onclick="listenNode()" title="read the whole conversation aloud — Esc stops">${ico("🔊")}listen</button>`);
+    acts.push(`<button onclick="copyLink(this)" title="copy a link straight to this conversation">${ico("🔗")}link</button>`);
   }
   const totalTurns = Object.values(tree.nodes).reduce((s, n) => s + n.turns.length, 0);
   if (!running && totalTurns >= 2){
     const last = Array.isArray(tree.quizzes) && tree.quizzes[tree.quizzes.length - 1];
     acts.push(`<button onclick="startQuiz()" title="a few questions on what this whole tree covered` +
-              `${tree.quiz ? "" : " (one model call to write them)"}">🎓 quiz` +
+              `${tree.quiz ? "" : " (one model call to write them)"}">${ico("🎓")}quiz` +
               `${last ? ` · ${last.score}/${last.total}` : ""}</button>`);
   }
   if (node.parent_id != null)
-    acts.push(`<button class="kid" onclick="selectNode(${node.parent_id})" title="up to the conversation this branched from">↩ up</button>`);
+    acts.push(`<button class="kid" onclick="selectNode(${node.parent_id})" title="up to the conversation this branched from">${ico("↩")}up</button>`);
   for (const c of node.children)
     acts.push(`<button class="kid" onclick="selectNode(${c})" title="open this branch">` +
-              `⤷ ${esc(oneLine(getNode(tree, c).label, 22))}</button>`);
+              `${ico("⤷")}${esc(oneLine(getNode(tree, c).label, 22))}</button>`);
   if (!running && node.parent_id != null && !node.children.length)
-    acts.push(`<button class="rm" onclick="removeBranch(${node.id})">✕ remove</button>`);
+    acts.push(`<button class="rm" onclick="removeBranch(${node.id})">${ico("✕")}remove</button>`);
   if (acts.length) h += `<div class="nacts">${acts.join("")}</div>`;
   h += `</div>`;
   let prevConf = null;
