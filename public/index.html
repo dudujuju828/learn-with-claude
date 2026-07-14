@@ -38,6 +38,7 @@
     font-weight:300; line-height:var(--lh);
     letter-spacing:var(--ls); word-spacing:var(--ws);
     touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+    transition:background-color .2s ease, color .2s ease;
   }
   button{
     font-family:inherit; font-size:.88rem; padding:.34rem .7rem; cursor:pointer;
@@ -3191,6 +3192,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")){
+    if ($("login").style.display !== "none") return;   // not while logged out
     e.preventDefault();
     if ($("palette").classList.contains("open")) closePalette(); else openPalette();
     return;
