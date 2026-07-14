@@ -65,7 +65,10 @@
   *{box-sizing:border-box}
   /* stable gutter: the centred column doesn't lurch when the page grows a
      scrollbar (welcome → conversation, or turns arriving during a run) */
-  html{font-size:var(--fs); scrollbar-gutter:stable}
+  html{font-size:var(--fs); scrollbar-gutter:stable; -webkit-text-size-adjust:100%}
+  /* scrolling inside panels, sheets, and lists never chain-scrolls the page */
+  aside, #aapanel, #helppanel, #plist, #quizbox .box, #osvg, #tutoreditor .box{
+    overscroll-behavior:contain}
   body{
     margin:0; background:var(--bg); color:var(--fg);
     font-family:var(--font),'Lexend','Atkinson Hyperlegible','Comic Sans MS',Verdana,Tahoma,sans-serif;
@@ -982,6 +985,7 @@
   <button id="retrybtn" style="display:none">retry</button>
   <button id="giveupbtn" style="display:none">give up</button>
   <button id="stopbtn">stop after this turn</button>
+  <button id="statusdismiss" class="ghost" style="display:none" aria-label="dismiss">✕</button>
 </div>
 
 <script>
@@ -2762,6 +2766,7 @@ function setStatus(msg){
   statusTick();
   $("stopbtn").style.display = running ? "" : "none";
   $("retrybtn").style.display = $("giveupbtn").style.display = "none";
+  $("statusdismiss").style.display = "none";
 }
 function stopTicker(){
   if (statusTimer){ clearInterval(statusTimer); statusTimer = null; }
@@ -2772,8 +2777,14 @@ function setError(msg){
   bar.classList.add("on", "err");
   $("statusmsg").textContent = msg;
   $("stopbtn").style.display = "none";
+  $("statusdismiss").style.display = "";
 }
-function clearStatus(){ stopTicker(); $("statusbar").classList.remove("on", "err"); }
+function clearStatus(){
+  stopTicker();
+  $("statusbar").classList.remove("on", "err");
+  $("statusdismiss").style.display = "none";
+}
+$("statusdismiss").onclick = () => clearStatus();
 
 /* ------------------------------------------------------------------ */
 /* run queue — sequential thunks with pause-and-retry on failure       */
@@ -2868,6 +2879,7 @@ function offerRetry(err){
   activity = null; renderAll(true);
   setError(oneLine(err.message, 300) + " — nothing is lost; you can retry this step.");
   $("retrybtn").style.display = $("giveupbtn").style.display = "";
+  $("statusdismiss").style.display = "none";   // dismissing would strand the run
   return new Promise((resolve) => {
     $("retrybtn").onclick = () => { cleanup(); resolve(false); };
     $("giveupbtn").onclick = () => { cleanup(); resolve(true); };
@@ -3104,7 +3116,7 @@ function startBranchUI(nodeId, turn, btn){
   const row = btn.parentElement;
   row.innerHTML =
     `<input type="text" id="focusinput" placeholder="focus (optional — else the learner picks)"` +
-    ` aria-label="branch focus">` +
+    ` aria-label="branch focus" enterkeyhint="go">` +
     `<button class="primary" onclick="cmdBranch(${nodeId},${turn})">go</button>` +
     `<button onclick="renderConversation(true)">cancel</button>` +
     `<span class="why">the learner re-investigates this answer, going deeper</span>`;
