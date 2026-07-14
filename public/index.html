@@ -280,11 +280,23 @@
 
   .nodeinfo{
     background:var(--card); border:1px solid var(--line); border-radius:.9rem;
-    padding:.8rem 1.1rem; color:var(--muted); font-size:.88rem; margin-bottom:1.4rem;
+    padding:.8rem 1.1rem .9rem; color:var(--muted); font-size:.88rem; margin-bottom:1.4rem;
   }
-  .nodeinfo b{color:var(--fg); font-weight:600; font-size:1.02rem}
+  .nodeinfo b{color:var(--fg); font-weight:600; font-size:1.08rem}
   .nodeinfo .crumb{margin-top:.15rem}
-  .nodeinfo .stats{margin-top:.25rem; font-variant-numeric:tabular-nums}
+  .nodeinfo .nchips{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.55rem}
+  .nodeinfo .chip{
+    display:inline-flex; align-items:center; gap:.35rem;
+    background:var(--bg); border:1px solid var(--line); border-radius:2rem;
+    padding:.12rem .65rem; font-size:.8rem; font-variant-numeric:tabular-nums;
+    white-space:nowrap;
+  }
+  .nodeinfo .nacts{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.6rem}
+  .nodeinfo .nacts button{font-size:.82rem; padding:.28rem .65rem}
+  .nodeinfo .nacts button.kid{color:var(--muted)}
+  .nodeinfo .nacts button.kid:hover{color:var(--fg)}
+  .nodeinfo .nacts button.rm{color:var(--danger); border-color:transparent; background:none}
+  .nodeinfo .nacts button.rm:hover{border-color:var(--danger)}
 
   .turn{margin:1.9rem 0}
   .turnhead{display:flex; align-items:center; gap:.7rem;
@@ -1315,9 +1327,10 @@ function playNext(){
 window.listenNode = listenNode;
 
 async function copyLink(el){
+  const orig = el.textContent;
   try { await navigator.clipboard.writeText(location.href); el.textContent = "✓ copied"; }
   catch { el.textContent = "✗ couldn't copy"; }
-  setTimeout(() => { el.textContent = "🔗 copy link"; }, 1400);
+  setTimeout(() => { el.textContent = orig; }, 1400);
 }
 window.copyLink = copyLink;
 
@@ -1781,33 +1794,39 @@ function renderConversation(keepScroll){
          ` title="show that answer">[${node.parent_id}] turn ${node.branch_from_turn}</span>` +
          (node.focus ? ` · focus: ${esc(node.focus)}` : "") + `</div>`;
   }
-  h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>` +
-       `<div class="stats">${node.turns.length} turns · confidence ${fmtConf(node.final_confidence)}` +
-       `${sparkHtml(node.turns)} · ${fmtCost(node.cost)} · ${esc(node.learner_model)}` +
-       (node.learner_level ? ` · ${esc(node.learner_level)} learner` : "") + `</div>`;
-  const nav = [];
+  h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>`;
+  const chips = [
+    `<span class="chip">${node.turns.length} turn${node.turns.length === 1 ? "" : "s"}</span>`,
+  ];
+  if (Number.isInteger(node.final_confidence) || sparkHtml(node.turns))
+    chips.push(`<span class="chip" title="the learner's confidence across this conversation">` +
+               `${fmtConf(node.final_confidence)}${sparkHtml(node.turns)}</span>`);
+  chips.push(`<span class="chip" title="spend on this node · ${esc(node.learner_model)}">${fmtCost(node.cost)}</span>`);
+  if (node.learner_level)
+    chips.push(`<span class="chip" title="how much the simulated learner already knew">${esc(node.learner_level)} learner</span>`);
+  h += `<div class="nchips">${chips.join("")}</div>`;
+  const acts = [];
   if (!running && canContinue(node))
-    nav.push(`<span class="cl" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">▶ continue investigating</span>`);
-  if (node.parent_id != null)
-    nav.push(`<span class="cl" onclick="selectNode(${node.parent_id})">↩ up to [${node.parent_id}]</span>`);
-  if (node.children.length)
-    nav.push("branches: " + node.children.map(c =>
-      `<span class="cl" onclick="selectNode(${c})">[${c}] ${esc(oneLine(getNode(tree, c).label, 24))}</span>`
-    ).join(" · "));
+    acts.push(`<button class="primary" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">▶ continue</button>`);
   if (!running && node.turns.length){
-    nav.push(`<span class="cl" onclick="listenNode()" title="read the whole conversation aloud — Esc stops">🔊 listen</span>`);
-    nav.push(`<span class="cl" onclick="copyLink(this)" title="copy a link straight to this conversation">🔗 copy link</span>`);
+    acts.push(`<button onclick="listenNode()" title="read the whole conversation aloud — Esc stops">🔊 listen</button>`);
+    acts.push(`<button onclick="copyLink(this)" title="copy a link straight to this conversation">🔗 link</button>`);
   }
   const totalTurns = Object.values(tree.nodes).reduce((s, n) => s + n.turns.length, 0);
   if (!running && totalTurns >= 2){
     const last = Array.isArray(tree.quizzes) && tree.quizzes[tree.quizzes.length - 1];
-    nav.push(`<span class="cl" onclick="startQuiz()" title="a few questions on what this whole tree covered` +
-             `${tree.quiz ? "" : " (one model call to write them)"}">🎓 quiz me` +
-             `${last ? ` (last: ${last.score}/${last.total})` : ""}</span>`);
+    acts.push(`<button onclick="startQuiz()" title="a few questions on what this whole tree covered` +
+              `${tree.quiz ? "" : " (one model call to write them)"}">🎓 quiz` +
+              `${last ? ` · ${last.score}/${last.total}` : ""}</button>`);
   }
+  if (node.parent_id != null)
+    acts.push(`<button class="kid" onclick="selectNode(${node.parent_id})" title="up to the conversation this branched from">↩ up</button>`);
+  for (const c of node.children)
+    acts.push(`<button class="kid" onclick="selectNode(${c})" title="open this branch">` +
+              `⤷ ${esc(oneLine(getNode(tree, c).label, 22))}</button>`);
   if (!running && node.parent_id != null && !node.children.length)
-    nav.push(`<span class="cl danger" onclick="removeBranch(${node.id})">✕ remove this branch</span>`);
-  if (nav.length) h += `<div class="crumb">${nav.join(" · ")}</div>`;
+    acts.push(`<button class="rm" onclick="removeBranch(${node.id})">✕ remove</button>`);
+  if (acts.length) h += `<div class="nacts">${acts.join("")}</div>`;
   h += `</div>`;
   let prevConf = null;
   for (const t of node.turns){
@@ -2112,7 +2131,7 @@ function renderTerms(){
   const defined = items.filter(i => entry(i) && entry(i).def).length;
   $("glossmeta").textContent = glossAll
     ? `· ${items.length} across ${new Set(items.map(i => i.tree.id)).size} trees`
-    : `· ${defined}/${items.length} defined`;
+    : tree ? `· ${defined}/${items.length} defined` : "";
   const filterBox = $("glossfilter");
   filterBox.style.display = items.length > 8 ? "" : "none";
   const q = filterBox.value.trim().toLowerCase();
@@ -3023,19 +3042,28 @@ function cmdBranch(nodeId, branchTurn){
 /* ------------------------------------------------------------------ */
 /* tree list / import / export                                         */
 /* ------------------------------------------------------------------ */
+/* remember how far you'd read in each conversation, per session */
+const nodeScroll = new Map();
+function rememberScroll(){
+  if (currentId != null && currentNode != null)
+    nodeScroll.set(currentId + ":" + currentNode, window.scrollY);
+}
 function openTree(id){
   if (running) return;
   const changed = currentId !== id;
+  rememberScroll();
   currentId = id;
   currentNode = store[id]?.root_id ?? null;
   renderAll(true);
-  if (changed) window.scrollTo({top: 0});
+  if (changed) window.scrollTo({top: nodeScroll.get(currentId + ":" + currentNode) || 0});
   closeMenu();
 }
 function selectNode(id){
   const changed = currentNode !== id;
+  if (changed && !running) rememberScroll();
   currentNode = id; renderAll(true);
-  if (changed && !running) window.scrollTo({top: 0});
+  if (changed && !running)
+    window.scrollTo({top: nodeScroll.get(currentId + ":" + id) || 0});
   if (!running) closeMenu();
 }
 function deleteTree(id){
