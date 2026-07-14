@@ -24,7 +24,8 @@
     // first visit on a dark system starts dark (mirrors loadPrefs)
     v = {bg:'#20221f', card:'#2a2d29', fg:'#e9e4da', line:'#44483f', muted:'#a9a294',
          think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
-         termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e'};
+         termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e',
+         primary:'#d4b45e', onprim:'#20221f'};
   }
   const r = document.documentElement.style;
   for (const k in v) if (typeof v[k] === "string") r.setProperty("--" + k, v[k]);
@@ -54,6 +55,7 @@
     --bg:#fbf6ea; --card:#fffdf6; --fg:#2c2620; --line:#e7dcc7; --muted:#6f6657;
     --think:#8a6d12; --ask:#1c6b46; --ans:#1b4f86; --term:#8a2b6b;
     --termbg:#f7e6f1; --prebg:#f3ecda; --danger:#a2452f; --accent:#8a6d1f;
+    --primary:#7a6019; --onprim:#fffdf6;
     --fs:17px; --lh:1.75; --ls:.02em; --ws:.07em;
     --font:'Lexend';
   }
@@ -78,7 +80,11 @@
   button:focus-visible,input:focus-visible,select:focus-visible{
     outline:2px solid var(--accent); outline-offset:2px}
   button:disabled{opacity:.45; cursor:default}
-  button.primary{border-color:var(--accent); font-weight:400}
+  button.primary{
+    background:var(--primary); border-color:var(--primary);
+    color:var(--onprim); font-weight:400;
+  }
+  button.primary:hover:not(:disabled){filter:brightness(1.12)}
   button.ghost{border:none; background:none}
   input[type=text],input[type=search],input[type=password],select{
     font-family:inherit; font-size:1rem; color:var(--fg); background:var(--card);
@@ -93,6 +99,16 @@
   @media (pointer:fine){
     *{scrollbar-width:thin; scrollbar-color:var(--line) transparent}
   }
+
+  /* skip link — first tab stop, visible only while focused */
+  #skiplink{
+    position:fixed; top:.6rem; left:.6rem; z-index:65;
+    background:var(--card); color:var(--fg); border:2px solid var(--accent);
+    border-radius:.55rem; padding:.45rem .8rem; text-decoration:none;
+    transform:translateY(-200%);
+  }
+  #skiplink:focus{transform:none}
+  #maincol:focus, #aapanel:focus, #helppanel:focus{outline:none}
 
   /* reading progress — a hairline across the very top of the page */
   #readbar{
@@ -683,6 +699,8 @@
   </div>
 </div>
 
+<a id="skiplink" href="#maincol">skip to the conversation</a>
+
 <header>
   <h1 class="brand"><span class="bfull">learn <span class="with">with claude</span></span><span class="bmini" aria-hidden="true">🌱</span></h1>
   <span class="treename" id="treename">no tree</span>
@@ -694,7 +712,7 @@
   <button id="logoutbtn">log out</button>
 </header>
 
-<div id="helppanel" role="dialog" aria-label="help">
+<div id="helppanel" role="dialog" aria-label="help" tabindex="-1">
   <h3>how this works</h3>
   <p><b>new</b> runs one investigation: a simulated human learner asks your tutor
   one scoped question at a time until it can explain the idea in its own words.</p>
@@ -739,7 +757,7 @@
   <div style="text-align:right; margin-top:.6rem"><button id="helpclose">close</button></div>
 </div>
 
-<div id="aapanel" role="dialog" aria-label="reading settings">
+<div id="aapanel" role="dialog" aria-label="reading settings" tabindex="-1">
   <div class="row">
     <label for="fontsel">typeface</label>
     <select id="fontsel">
@@ -862,7 +880,7 @@
     </section>
   </aside>
 
-  <main>
+  <main id="maincol" tabindex="-1">
     <div id="conv"></div>
     <div id="askrow" style="display:none">
       <input id="askinput" type="text" placeholder="ask the tutor yourself…"
@@ -1012,19 +1030,24 @@ function download(name, text, mime){
 const THEMES = {
   cream:{bg:'#fbf6ea', card:'#fffdf6', fg:'#2c2620', line:'#e7dcc7', muted:'#6f6657',
          think:'#8a6d12', ask:'#1c6b46', ans:'#1b4f86', term:'#8a2b6b',
-         termbg:'#f7e6f1', prebg:'#f3ecda', danger:'#a2452f', accent:'#8a6d1f'},
+         termbg:'#f7e6f1', prebg:'#f3ecda', danger:'#a2452f', accent:'#8a6d1f',
+         primary:'#7a6019', onprim:'#fffdf6'},
   blue: {bg:'#e9f1f9', card:'#f6fafd', fg:'#22303c', line:'#cfdfec', muted:'#5c6f80',
          think:'#7a6210', ask:'#176546', ans:'#175a94', term:'#7d2a62',
-         termbg:'#f0e2ec', prebg:'#dfeaf3', danger:'#a2452f', accent:'#4a6d8f'},
+         termbg:'#f0e2ec', prebg:'#dfeaf3', danger:'#a2452f', accent:'#4a6d8f',
+         primary:'#3f5f7e', onprim:'#f6fafd'},
   green:{bg:'#ecf4e9', card:'#f8fbf6', fg:'#26302a', line:'#d4e3cd', muted:'#5f7160',
          think:'#7a6210', ask:'#186a3b', ans:'#1b5e86', term:'#7d2a62',
-         termbg:'#eee3ea', prebg:'#e2ecdc', danger:'#a2452f', accent:'#5a7d4e'},
+         termbg:'#eee3ea', prebg:'#e2ecdc', danger:'#a2452f', accent:'#5a7d4e',
+         primary:'#4c6b41', onprim:'#f8fbf6'},
   grey: {bg:'#e9e9e7', card:'#f5f5f3', fg:'#26262a', line:'#d2d2cf', muted:'#63635f',
          think:'#77620f', ask:'#1a6244', ans:'#1a5583', term:'#7d2a62',
-         termbg:'#ece1e8', prebg:'#dededa', danger:'#a2452f', accent:'#6d6d68'},
+         termbg:'#ece1e8', prebg:'#dededa', danger:'#a2452f', accent:'#6d6d68',
+         primary:'#5f5f5a', onprim:'#f5f5f3'},
   dark: {bg:'#20221f', card:'#2a2d29', fg:'#e9e4da', line:'#44483f', muted:'#a9a294',
          think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
-         termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e'},
+         termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e',
+         primary:'#d4b45e', onprim:'#20221f'},
 };
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
@@ -1138,28 +1161,38 @@ function buildPanel(){
   $("focusbtn").onclick = () => { prefs.focus = !prefs.focus; applyPrefs(); };
   $("thinkbtn").onclick = () => { prefs.think = !prefs.think; applyPrefs(); if (rulerActive()) refreshRuler(); };
   $("aareset").onclick = () => { prefs = Object.assign({}, PREF_DEFAULTS); applyPrefs(); };
-  $("aaclose").onclick = closePanel;
   $("aabtn").onclick = (e) => {
     e.stopPropagation();
     const wasOpen = $("aapanel").classList.contains("open");
     closePanel();
-    if (!wasOpen) $("aapanel").classList.add("open");
+    if (!wasOpen) openPanel($("aapanel"), $("aabtn"));
   };
   $("helpbtn").onclick = (e) => {
     e.stopPropagation();
     const wasOpen = $("helppanel").classList.contains("open");
     closePanel();
-    if (!wasOpen) $("helppanel").classList.add("open");
+    if (!wasOpen) openPanel($("helppanel"), $("helpbtn"));
   };
-  $("helpclose").onclick = closePanel;
+  $("helpclose").onclick = () => closePanel(true);
+  $("aaclose").onclick = () => closePanel(true);
   document.addEventListener("click", (e) => {
     if (!$("aapanel").contains(e.target) && !$("helppanel").contains(e.target) &&
         e.target !== $("aabtn") && e.target !== $("helpbtn")) closePanel();
   });
 }
-function closePanel(){
+let panelPrevFocus = null;
+function openPanel(panel, opener){
+  panel.classList.add("open");
+  panelPrevFocus = opener;
+  panel.focus();   // reading starts at the top of the panel
+}
+function closePanel(restoreFocus){
+  const wasOpen = $("aapanel").classList.contains("open") ||
+                  $("helppanel").classList.contains("open");
   $("aapanel").classList.remove("open");
   $("helppanel").classList.remove("open");
+  if (restoreFocus && wasOpen && panelPrevFocus && document.contains(panelPrevFocus))
+    panelPrevFocus.focus();
 }
 
 /* ------------------------------------------------------------------ */
@@ -3247,7 +3280,7 @@ document.addEventListener("keydown", (e) => {
     if ($("quizbox").classList.contains("open")){ closeQuiz(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
-    stopSpeech(); closePanel(); closeMenu();
+    stopSpeech(); closePanel(true); closeMenu();
     if (rulerActive()){ prefs.ruler = false; prefs.focus = false; applyPrefs(); }
     return;
   }
