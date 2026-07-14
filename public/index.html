@@ -224,12 +224,27 @@
   #treelist .item .del{border:none; background:none; color:var(--muted);
     padding:0 .2rem; font-size:.9rem}
   #treelist .item .del:hover{color:var(--danger)}
-  #map{font-size:.88rem; line-height:1.9; overflow-x:auto}
-  #map .noderow{white-space:pre; cursor:pointer; border-radius:.45rem; padding:0 .3rem}
+  #map{font-size:.88rem}
+  #map .maptree, #map .maptree ul{list-style:none; margin:0; padding:0}
+  #map .maptree ul{margin-left:.55rem; padding-left:.6rem; border-left:1px solid var(--line)}
+  #map .noderow{
+    display:flex; align-items:center; gap:.45rem; cursor:pointer; min-width:0;
+    border-radius:.5rem; padding:.22rem .4rem; margin:.06rem 0;
+  }
   #map .noderow:hover{background:var(--card)}
   #map .noderow.active{background:var(--card); outline:1px solid var(--line)}
-  #map .noderow .meta{color:var(--muted); font-size:.8em}
-  #map .live{color:var(--accent); animation:pulse 1.2s ease-in-out infinite}
+  /* the dot is a tiny confidence pie: filled share = how confident the
+     learner got on that branch */
+  #map .mdot{width:.8rem; height:.8rem; border-radius:50%; flex:none;
+    border:1px solid var(--line)}
+  #map .mdot.live{background:var(--accent); border-color:var(--accent);
+    animation:pulse 1.2s ease-in-out infinite}
+  #map .mlabel{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap}
+  #map .mbadge{flex:none; font-size:.7rem}
+  #map .noderow .meta{flex:none; color:var(--muted); font-size:.74rem;
+    font-variant-numeric:tabular-nums}
+  #map .maplinks{margin-top:.35rem; color:var(--muted); font-size:.8rem}
   #alltreescost{font-weight:300; text-transform:none; letter-spacing:0}
   #searchresults .hit{
     padding:.3rem .5rem; margin:.2rem 0; border-radius:.55rem; cursor:pointer;
@@ -362,6 +377,28 @@
     padding:.5rem .65rem; resize:vertical; line-height:1.5;
   }
   #tutoreditor .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
+
+  /* ---- tree overview ---- */
+  #overview{
+    display:none; position:fixed; inset:0; z-index:94;
+    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #overview.open{display:flex}
+  #overview .obox{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1rem 1.2rem 1.1rem; width:min(62rem, 96vw); max-height:92dvh;
+    box-shadow:0 10px 40px rgba(0,0,0,.25); display:flex; flex-direction:column;
+  }
+  #overview .ohead{display:flex; align-items:center; gap:.6rem; margin-bottom:.4rem}
+  #overview .ohead span{flex:1; font-weight:600}
+  #osvg{overflow:auto; border:1px solid var(--line); border-radius:.7rem; background:var(--bg)}
+  #osvg svg{display:block}
+  #osvg .onode{cursor:pointer}
+  #osvg .onode:hover circle{stroke:var(--accent); stroke-width:2.5}
+  #osvg text{font-size:13px; fill:var(--fg); letter-spacing:0; word-spacing:0}
+  #osvg .osub{fill:var(--muted); font-size:11px}
+  #osvg .oedge{fill:none; stroke:var(--line); stroke-width:1.5}
 
   /* ---- command palette ---- */
   #palette{
@@ -792,6 +829,17 @@
            placeholder="jump to a tree, node, or term — or run a command…"
            aria-label="jump anywhere">
     <div id="plist" role="listbox" aria-label="results"></div>
+  </div>
+</div>
+
+<div id="overview" role="dialog" aria-modal="true" aria-label="tree overview">
+  <div class="obox">
+    <div class="ohead">
+      <span id="otitle"></span>
+      <button id="oclose" class="ghost" aria-label="close overview">✕</button>
+    </div>
+    <div id="osvg"></div>
+    <p class="hint" style="margin:.4rem 0 0">node size = turns · colour = confidence · tap a node to open it</p>
   </div>
 </div>
 
@@ -1733,37 +1781,44 @@ function renderConversation(keepScroll){
   updateReadbar();
 }
 
+function confColor(conf){
+  const dark = prefs.theme === "dark";
+  return `hsl(${Math.round(conf * 1.2)},48%,${dark ? 58 : 40}%)`;
+}
 function renderMap(){
   const tree = cur();
   const map = $("map");
   if (!tree || tree.root_id == null){
     map.innerHTML = `<span style="color:var(--muted)">—</span>`; return;
   }
-  const rows = [];
-  const dark = prefs.theme === "dark";
-  const walk = (nid, prefix, isLast, isRoot) => {
-    const n = getNode(tree, nid);
-    const live = running && activity && activity.nodeId === nid;
-    const meta = (isRoot ? "" : `↳T${n.branch_from_turn} · `) +
-                 `${n.turns.length}t · ${fmtConf(n.final_confidence)}` +
-                 (!live && canContinue(n) ? " · unfinished" : "");
-    const connector = isRoot ? "" : prefix + (isLast ? "└─ " : "├─ ");
-    // dot tinted by how confident the learner got: red → green
-    const dot = live ? '<span class="live">●</span>'
-      : Number.isInteger(n.final_confidence)
-        ? `<span style="color:hsl(${Math.round(n.final_confidence * 1.2)},48%,${dark ? 58 : 38}%)">●</span>`
-        : "●";
-    rows.push(
-      `<div class="noderow${nid === currentNode ? " active" : ""}" onclick="selectNode(${nid})"` +
-      ` tabindex="0" role="button" title="${esc(n.label)}">` +
-      `${esc(connector)}${dot} [${n.id}] ` +
-      `${esc(oneLine(n.label, 26))} <span class="meta">(${esc(meta)})</span></div>`
-    );
-    const childPrefix = isRoot ? "" : prefix + (isLast ? "   " : "│  ");
-    n.children.forEach((c, i) => walk(c, childPrefix, i === n.children.length - 1, false));
+  const row = (n) => {
+    const live = running && activity && activity.nodeId === n.id;
+    const conf = Number.isInteger(n.final_confidence) ? n.final_confidence : null;
+    const dot = live
+      ? `<span class="mdot live" aria-hidden="true"></span>`
+      : `<span class="mdot" aria-hidden="true"${conf != null
+          ? ` style="background:conic-gradient(${confColor(conf)} ${conf}%, transparent 0)"` : ""}></span>`;
+    const firstQ = (n.turns[0] && n.turns[0].action) || "";
+    const title = `[${n.id}] ${n.label}` +
+      (firstQ ? `\n“${oneLine(firstQ, 90)}”` : "") +
+      `\n${n.turns.length} turns · confidence ${fmtConf(n.final_confidence)} · ${fmtCost(n.cost)}` +
+      (!live && canContinue(n) ? "\nunfinished — can continue" : "");
+    return `<div class="noderow${n.id === currentNode ? " active" : ""}"` +
+      ` onclick="selectNode(${n.id})" tabindex="0" role="button" title="${esc(title)}">` +
+      dot + `<span class="mlabel">${esc(oneLine(n.label, 30))}</span>` +
+      (!live && canContinue(n) ? `<span class="mbadge" aria-label="unfinished">⏸</span>` : "") +
+      `<span class="meta">${n.turns.length}t</span></div>`;
   };
-  walk(tree.root_id, "", true, true);
-  map.innerHTML = rows.join("");
+  const walk = (nid) => {
+    const n = getNode(tree, nid);
+    let h = "<li>" + row(n);
+    if (n.children.length) h += "<ul>" + n.children.map(walk).join("") + "</ul>";
+    return h + "</li>";
+  };
+  map.innerHTML = `<ul class="maptree">${walk(tree.root_id)}</ul>` +
+    (Object.keys(tree.nodes).length > 1
+      ? `<div class="maplinks"><span class="cl" onclick="openOverview()"` +
+        ` title="the whole tree as a picture">◉ overview</span></div>` : "");
 }
 
 function renderTreeList(){
@@ -2299,6 +2354,68 @@ function jumpToTerm(nodeId, turn){
 window.jumpToTerm = jumpToTerm;
 
 /* ------------------------------------------------------------------ */
+/* bird's-eye overview — the whole tree as one picture                 */
+/* ------------------------------------------------------------------ */
+function openOverview(){
+  const tree = cur();
+  if (!tree || tree.root_id == null) return;
+  // tidy layout: leaves take consecutive rows, parents centre on their kids
+  const pos = new Map();
+  let leafY = 0;
+  const measure = (nid, depth) => {
+    const n = getNode(tree, nid);
+    let y;
+    if (!n.children.length){
+      y = leafY++;
+    } else {
+      const ys = n.children.map(c => measure(c, depth + 1));
+      y = (Math.min(...ys) + Math.max(...ys)) / 2;
+    }
+    pos.set(nid, {x: depth, y, n});
+    return y;
+  };
+  measure(tree.root_id, 0);
+  const COLX = 200, ROWY = 62, PADX = 46, PADY = 40, LABEL = 150;
+  const maxD = Math.max(...[...pos.values()].map(p => p.x));
+  const w = PADX * 2 + maxD * COLX + LABEL;
+  const h = PADY * 2 + Math.max(0, leafY - 1) * ROWY;
+  const X = (p) => PADX + p.x * COLX;
+  const Y = (p) => PADY + p.y * ROWY;
+  let edges = "", nodes = "";
+  for (const [nid, p] of pos){
+    const n = p.n;
+    if (n.parent_id != null){
+      const pp = pos.get(n.parent_id);
+      const mx = (X(pp) + X(p)) / 2;
+      edges += `<path class="oedge" d="M${X(pp)} ${Y(pp)} C${mx} ${Y(pp)}, ${mx} ${Y(p)}, ${X(p)} ${Y(p)}"/>`;
+    }
+    const conf = Number.isInteger(n.final_confidence) ? n.final_confidence : null;
+    const r = Math.min(17, 7 + n.turns.length);
+    const fill = conf != null ? confColor(conf) : "var(--line)";
+    const ring = nid === currentNode ? ` stroke="var(--accent)" stroke-width="2.5"` : ` stroke="var(--line)"`;
+    nodes +=
+      `<g class="onode" onclick="selectNode(${nid});closeOverview()" tabindex="0" role="button">` +
+      `<title>[${esc(String(nid))}] ${esc(n.label)} — ${n.turns.length} turns · ` +
+      `confidence ${fmtConf(n.final_confidence)}</title>` +
+      `<circle cx="${X(p)}" cy="${Y(p)}" r="${r}" fill="${fill}" fill-opacity=".85"${ring}/>` +
+      `<text x="${X(p) + r + 7}" y="${Y(p) - 1}">${esc(oneLine(n.label, 22))}</text>` +
+      `<text class="osub" x="${X(p) + r + 7}" y="${Y(p) + 14}">${n.turns.length}t · ${fmtConf(n.final_confidence)}</text>` +
+      `</g>`;
+  }
+  $("otitle").textContent = oneLine(tree.root_topic, 60);
+  $("osvg").innerHTML =
+    `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img"` +
+    ` aria-label="tree overview">${edges}${nodes}</svg>`;
+  $("overview").classList.add("open");
+}
+function closeOverview(){ $("overview").classList.remove("open"); }
+window.openOverview = openOverview; window.closeOverview = closeOverview;
+$("oclose").onclick = closeOverview;
+$("overview").addEventListener("click", (e) => {
+  if (e.target === $("overview")) closeOverview();
+});
+
+/* ------------------------------------------------------------------ */
 /* command palette — Ctrl+K: jump to any tree, node, or term, run any  */
 /* command, or land on a content match, without leaving the keyboard   */
 /* ------------------------------------------------------------------ */
@@ -2312,6 +2429,7 @@ function paletteActions(){
      run(){ if (mobile()) setTab("grow"); $("topic").focus(); }},
   ];
   if (tree && !running){
+    acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
     acts.push({icon: "🔊", label: "listen", sub: "read this conversation aloud", run(){ listenNode(); }});
     acts.push({icon: "💾", label: "save .know.json", sub: "", run(){ $("exportjson").click(); }});
@@ -2983,6 +3101,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape"){
     if ($("palette").classList.contains("open")){ closePalette(); return; }
+    if ($("overview").classList.contains("open")){ closeOverview(); return; }
     if ($("quizbox").classList.contains("open")){ closeQuiz(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
