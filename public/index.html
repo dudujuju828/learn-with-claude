@@ -30,7 +30,11 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@300;400;600&display=swap" rel="stylesheet">
+<!-- fonts load without blocking first paint: preload starts the fetch early,
+     the print-media trick defers applying it until it has arrived -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@300;400;600&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@300;400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@300;400;600&display=swap" rel="stylesheet"></noscript>
 <style>
   /* OpenDyslexic loads from CDN with graceful fallback (same source as the
      CLI's HTML export). */
