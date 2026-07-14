@@ -126,7 +126,9 @@
     width:19.5rem; flex:none; padding:1rem; border-right:1px solid var(--line);
     position:sticky; top:3.05rem; max-height:calc(100vh - 3.05rem); overflow:auto;
   }
-  main{flex:1; min-width:0; padding:1.2rem 1.4rem 7rem; max-width:46rem}
+  /* auto margins centre the capped column in the space right of the sidebar,
+     instead of leaving all the slack as dead space on wide screens */
+  main{flex:1; min-width:0; padding:1.2rem 1.4rem 7rem; max-width:46rem; margin-inline:auto}
   #glossempty{display:none}
 
   /* ---- mobile: bottom tab bar + the sidebar sections as bottom sheets ---- */
