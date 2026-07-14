@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fbf6ea">
 <title>learn with claude</title>
+<meta name="description" content="Grow a branchable tree of knowledge: watch a simulated learner investigate any topic with Claude, one scoped question at a time.">
+<meta property="og:title" content="learn with claude">
+<meta property="og:description" content="Grow a branchable tree of knowledge: watch a simulated learner investigate any topic with Claude, one scoped question at a time.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -55,7 +58,9 @@
     --font:'Lexend';
   }
   *{box-sizing:border-box}
-  html{font-size:var(--fs)}
+  /* stable gutter: the centred column doesn't lurch when the page grows a
+     scrollbar (welcome → conversation, or turns arriving during a run) */
+  html{font-size:var(--fs); scrollbar-gutter:stable}
   body{
     margin:0; background:var(--bg); color:var(--fg);
     font-family:var(--font),'Lexend','Atkinson Hyperlegible','Comic Sans MS',Verdana,Tahoma,sans-serif;
@@ -75,10 +80,11 @@
   button:disabled{opacity:.45; cursor:default}
   button.primary{border-color:var(--accent); font-weight:400}
   button.ghost{border:none; background:none}
-  input[type=text],input[type=password],select{
+  input[type=text],input[type=search],input[type=password],select{
     font-family:inherit; font-size:1rem; color:var(--fg); background:var(--card);
     border:1px solid var(--line); border-radius:.55rem; padding:.45rem .65rem; width:100%;
   }
+  input[type=search]{-webkit-appearance:none; appearance:none}
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{animation:none !important; transition:none !important}
   }
@@ -116,7 +122,7 @@
     border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:.7rem; padding:.5rem .9rem;
   }
-  header .brand{font-weight:600; font-size:1rem; white-space:nowrap}
+  header .brand{font-weight:600; font-size:1rem; white-space:nowrap; margin:0}
   header .brand .with{color:var(--muted); font-weight:300}
   header .treename{color:var(--muted); font-size:.9rem; overflow:hidden;
     text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:3rem}
@@ -200,7 +206,7 @@
   @media (pointer:coarse){
     button{min-height:2.5rem}
     .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico{min-height:0}
-    input[type=text],input[type=password],select{font-size:max(1rem,16px); min-height:2.7rem}
+    input[type=text],input[type=search],input[type=password],select{font-size:max(1rem,16px); min-height:2.7rem}
     #treelist .item{padding:.5rem .55rem}
     #map .noderow{padding:.2rem .3rem}
     #terms details.gentry summary{min-height:2.5rem}
@@ -559,6 +565,7 @@
   #terms details.gentry summary::-webkit-details-marker{display:none}
   #terms details.gentry summary:hover{background:var(--card)}
   #terms details.gentry[open] summary{color:var(--term)}
+  #terms details.gentry.undef summary{color:var(--muted)}
   #terms .gdot{width:.5rem; height:.5rem; border-radius:50%; flex:none;
     border:1px solid var(--term); background:transparent}
   #terms .gdot.on{background:var(--term)}
@@ -677,7 +684,7 @@
 </div>
 
 <header>
-  <span class="brand"><span class="bfull">learn <span class="with">with claude</span></span><span class="bmini" aria-hidden="true">🌱</span></span>
+  <h1 class="brand"><span class="bfull">learn <span class="with">with claude</span></span><span class="bmini" aria-hidden="true">🌱</span></h1>
   <span class="treename" id="treename">no tree</span>
   <span class="cost" id="treecost" title="total spend on this tree"></span>
   <button id="syncbtn" class="ghost" title="trees sync to the server so every device sees them — click to sync now">☁</button>
@@ -791,7 +798,7 @@
   <aside id="sidebar">
     <section data-side="grow">
       <h2>start</h2>
-      <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic"></div>
+      <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic" enterkeyhint="go"></div>
       <div class="btnrow">
         <button class="primary" id="newbtn" title="one investigation">new</button>
         <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
@@ -824,7 +831,7 @@
         <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span>
           <span class="cl" tabindex="0" role="button" id="glossscope" style="float:right;font-weight:300;text-transform:none"
                 title="switch between this tree's terms and every tree's">all trees</span></h2>
-        <input id="glossfilter" type="text" placeholder="filter terms…"
+        <input id="glossfilter" type="search" placeholder="filter terms…" enterkeyhint="search"
                aria-label="filter glossary" style="display:none; margin-bottom:.4rem">
         <div id="terms"></div>
         <div class="btnrow" id="glossactions" style="margin-top:.45rem"></div>
@@ -835,7 +842,7 @@
 
     <section data-side="search">
       <h2>search</h2>
-      <input id="searchbox" type="text" placeholder="search every tree…" aria-label="search all trees">
+      <input id="searchbox" type="search" placeholder="search every tree…" aria-label="search all trees" enterkeyhint="search">
       <div id="searchresults"></div>
     </section>
 
@@ -859,7 +866,7 @@
     <div id="conv"></div>
     <div id="askrow" style="display:none">
       <input id="askinput" type="text" placeholder="ask the tutor yourself…"
-             aria-label="ask the tutor yourself">
+             aria-label="ask the tutor yourself" enterkeyhint="send">
       <button id="askbtn" class="primary">ask</button>
     </div>
   </main>
@@ -894,7 +901,8 @@
   <div class="pbox">
     <input id="pinput" type="text" autocomplete="off" spellcheck="false"
            placeholder="jump to a tree, node, or term — or run a command…"
-           aria-label="jump anywhere">
+           aria-label="jump anywhere" role="combobox" aria-expanded="true"
+           aria-controls="plist" aria-autocomplete="list" enterkeyhint="go">
     <div id="plist" role="listbox" aria-label="results"></div>
   </div>
 </div>
@@ -2610,16 +2618,17 @@ function paletteRender(){
   let html = "", lastGroup = null;
   palItems.forEach((it, i) => {
     if (it.group !== lastGroup){
-      html += `<div class="pgroup">${esc(it.group)}</div>`;
+      html += `<div class="pgroup" role="presentation">${esc(it.group)}</div>`;
       lastGroup = it.group;
     }
-    html += `<div class="pi${i === palSel ? " sel" : ""}" data-i="${i}" role="option"` +
+    html += `<div class="pi${i === palSel ? " sel" : ""}" id="pi-${i}" data-i="${i}" role="option"` +
             ` aria-selected="${i === palSel}">` +
             `<span class="ic" aria-hidden="true">${it.icon}</span>` +
             `<span class="lb">${esc(it.label)}</span>` +
             `<span class="sb">${it.subHtml || esc(it.sub || "")}</span></div>`;
   });
   list.innerHTML = html;
+  $("pinput").setAttribute("aria-activedescendant", palItems.length ? "pi-" + palSel : "");
   list.querySelectorAll(".pi").forEach(el => {
     el.onclick = () => paletteRun(+el.dataset.i);
     el.onmousemove = () => {
