@@ -57,6 +57,17 @@
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{animation:none !important; transition:none !important}
   }
+  button:active:not(:disabled){transform:translateY(1px)}
+  ::selection{background:var(--termbg); color:var(--term)}
+  @media (pointer:fine){
+    *{scrollbar-width:thin; scrollbar-color:var(--line) transparent}
+  }
+
+  /* reading progress — a hairline across the very top of the page */
+  #readbar{
+    position:fixed; top:0; left:0; height:3px; width:0; z-index:60;
+    background:var(--accent); opacity:.55; pointer-events:none;
+  }
 
   /* ---- login ---- */
   #login{
@@ -247,8 +258,10 @@
   .block{
     background:var(--card); border:1px solid var(--line); border-radius:.95rem;
     padding:.85rem 1.1rem; margin:.7rem 0; border-left-width:5px;
-    animation:appear .3s ease-out;
   }
+  /* only the newest turn animates in — re-renders during a run must not
+     make the whole conversation flicker */
+  #conv .turn:last-child .block{animation:appear .3s ease-out}
   @keyframes appear{from{opacity:0; transform:translateY(6px)} to{opacity:1}}
   .block .who{font-size:.76rem; letter-spacing:.06em; color:var(--muted);
     margin-bottom:.3rem; display:flex; align-items:center; gap:.45rem; flex-wrap:wrap}
@@ -299,8 +312,19 @@
   .branchrow input{max-width:18rem; font-size:.88rem; padding:.3rem .5rem}
   .branchrow .why{color:var(--muted); font-size:.8rem}
 
-  /* live activity block */
+  /* live activity block — soft shimmer while a model call is in flight */
   .pending .who{color:var(--muted)}
+  .pending .block{position:relative; overflow:hidden; min-height:3.4rem}
+  .pending .block::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(100deg, transparent 25%,
+      color-mix(in srgb, var(--fg) 5%, transparent) 50%, transparent 75%);
+    animation:shimmer 1.8s linear infinite;
+  }
+  @keyframes shimmer{from{transform:translateX(-100%)} to{transform:translateX(100%)}}
+  .pending .elapsed{font-variant-numeric:tabular-nums; margin-left:auto}
+  .donechip{animation:pop .5s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes pop{from{transform:scale(.55); opacity:0} to{transform:scale(1); opacity:1}}
   .dots::after{
     content:""; display:inline-block; width:1.4em; text-align:left;
     animation:dots 1.4s steps(4,end) infinite;
@@ -730,6 +754,7 @@
   <div class="gfoot"></div>
 </div>
 
+<div id="readbar" aria-hidden="true"></div>
 <div id="ruler" aria-hidden="true"></div>
 <button id="jumpbtn" aria-label="jump to the latest turn">↓ latest</button>
 
@@ -1461,19 +1486,30 @@ function partIcon(label){
   for (const [re, ic] of PART_ICONS) if (re.test(l)) return ic;
   return "↳";
 }
-function tutorBodyHtml(t){
+/* remembers which answer parts the reader opened or closed, so re-renders
+   during a run don't undo their reading position */
+const partFold = new Map();
+function tutorBodyHtml(t, foldPrefix){
   const parts = Array.isArray(t.parts) ? t.parts.filter(p => p && (p.text || p.label)) : null;
   if (!parts || parts.length < 2) return tutorHtml(t.tutor);
-  const open = !matchMedia("(max-width:900px)").matches;
+  const defaultOpen = !matchMedia("(max-width:900px)").matches;
   let h = "";
-  for (const p of parts){
-    if (!p.label){ h += tutorHtml(p.text); continue; }
-    h += `<details class="part"${open ? " open" : ""}>` +
+  parts.forEach((p, idx) => {
+    if (!p.label){ h += tutorHtml(p.text); return; }
+    const key = foldPrefix ? `${foldPrefix}:${idx}` : "";
+    const open = key && partFold.has(key) ? partFold.get(key) : defaultOpen;
+    h += `<details class="part"${open ? " open" : ""}${key ? ` data-fold="${esc(key)}"` : ""}>` +
          `<summary><span aria-hidden="true">${partIcon(p.label)}</span>${esc(p.label)}</summary>` +
          `<div class="parttext">${tutorHtml(p.text)}</div></details>`;
-  }
+  });
   return h;
 }
+/* click fires before the native toggle, so !open is the state the user chose */
+$("conv").addEventListener("click", (e) => {
+  const sum = e.target.closest("details.part > summary");
+  if (sum && sum.parentElement.dataset.fold)
+    partFold.set(sum.parentElement.dataset.fold, !sum.parentElement.open);
+});
 window.addEventListener("beforeprint", () =>
   document.querySelectorAll("#conv details.part").forEach(d => { d.open = true; }));
 
@@ -1525,7 +1561,8 @@ function turnHtml(node, t, prevConf, allowBranch){
          `${copyBtn}</div>${esc(t.action)}</div>`;
   }
   if (t.tutor){
-    h += `<div class="block tutor-b"><div class="who">📘 claude answers${copyBtn}</div>${tutorBodyHtml(t)}</div>`;
+    h += `<div class="block tutor-b"><div class="who">📘 claude answers${copyBtn}</div>` +
+         `${tutorBodyHtml(t, `${node.id}:${t.turn}`)}</div>`;
     if (t.done){
       h += `<div class="donechip">✓ the learner can now explain it in their own words</div>`;
     }
@@ -1544,7 +1581,7 @@ function activityHtml(){
   const learner = activity.kind === "learner";
   return `<div class="turn pending"><div class="block ${learner ? "thinking" : "tutor-b"}">` +
          `<div class="who">${learner ? "💭 learner is thinking" : "📘 claude is answering"}` +
-         `<span class="dots"></span></div></div></div>`;
+         `<span class="dots"></span><span class="elapsed"></span></div></div></div>`;
 }
 
 const EXAMPLES = ["what a hash table is", "how DNS resolution works",
@@ -1628,6 +1665,7 @@ function renderConversation(keepScroll){
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
   if (rulerActive()) refreshRuler();
   updateJump();
+  updateReadbar();
 }
 
 function renderMap(){
@@ -1915,6 +1953,7 @@ function renderTerms(){
   $("terms").innerHTML = shown.slice(0, 60).map(i => {
     const e = entry(i);
     const def = e && e.def;
+    const foldKey = (glossAll ? i.tree.id + ":" : "") + i.key;
     const links = [];
     if (Number.isInteger(i.nodeId))
       links.push(glossAll
@@ -1923,7 +1962,8 @@ function renderTerms(){
         : `<span class="cl" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>`);
     if (!def && !glossAll)
       links.push(`<span class="cl" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`);
-    return `<details class="gentry${def ? "" : " undef"}">` +
+    return `<details class="gentry${def ? "" : " undef"}" data-gfold="${esc(foldKey)}"` +
+      `${glossOpen.has(foldKey) ? " open" : ""}>` +
       `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}</summary>` +
       `<div class="gdef">${def ? esc(def) : `<span class="hint">no definition yet</span>`}` +
       `<div class="gdeflinks">${links.join(" · ")}</div></div></details>`;
@@ -1942,6 +1982,16 @@ function renderTerms(){
   $("glossactions").innerHTML = acts.join("");
 }
 $("glossscope").onclick = () => { glossAll = !glossAll; renderTerms(); };
+/* glossary entries stay open across the re-renders that definitions and
+   filters trigger */
+const glossOpen = new Set();
+$("terms").addEventListener("click", (e) => {
+  const sum = e.target.closest("details.gentry > summary");
+  if (!sum) return;
+  const d = sum.parentElement;
+  if (d.open) glossOpen.delete(d.dataset.gfold);   // click precedes the toggle
+  else glossOpen.add(d.dataset.gfold);
+});
 /* the defined glossary as an Anki-importable TSV (term -> definition) */
 function exportAnki(){
   const tree = cur(); if (!tree) return;
@@ -2209,6 +2259,8 @@ let statusBase = "", statusStart = 0, statusTimer = null;
 function statusTick(){
   const s = Math.floor((Date.now() - statusStart) / 1000);
   $("statusmsg").textContent = statusBase + (s >= 4 ? ` — ${s}s` : "");
+  const inline = document.querySelector("#conv .pending .elapsed");
+  if (inline) inline.textContent = s >= 3 ? `${s}s` : "";
 }
 function setStatus(msg){
   const bar = $("statusbar");
@@ -2770,6 +2822,15 @@ function updateJump(){
   $("jumpbtn").classList.toggle("on", running && !nearBottom());
 }
 window.addEventListener("scroll", updateJump, {passive: true});
+
+/* reading progress hairline across the top */
+function updateReadbar(){
+  const max = document.documentElement.scrollHeight - window.innerHeight;
+  const pct = max > 300 ? Math.min(100, window.scrollY / max * 100) : 0;
+  $("readbar").style.width = pct + "%";
+}
+window.addEventListener("scroll", updateReadbar, {passive: true});
+window.addEventListener("resize", updateReadbar);
 $("jumpbtn").onclick = () =>
   window.scrollTo({top: document.body.scrollHeight, behavior: reducedMotion() ? "auto" : "smooth"});
 
