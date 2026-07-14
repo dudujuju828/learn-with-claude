@@ -8,6 +8,26 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
+<script>
+/* Restore the saved look before first paint. applyPrefs() lives at the end of
+   the body, so without this every load of a non-default theme cross-fades in
+   from cream (the body's background transition catches the late var swap). */
+(() => {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem("lwc.boot.v1")); } catch {}
+  if (!v || typeof v !== "object"){
+    try { if (localStorage.getItem("lwc.prefs.v1")) return; } catch { return; }
+    if (!matchMedia("(prefers-color-scheme: dark)").matches) return;
+    // first visit on a dark system starts dark (mirrors loadPrefs)
+    v = {bg:'#20221f', card:'#2a2d29', fg:'#e9e4da', line:'#44483f', muted:'#a9a294',
+         think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
+         termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e'};
+  }
+  const r = document.documentElement.style;
+  for (const k in v) if (typeof v[k] === "string") r.setProperty("--" + k, v[k]);
+  if (v.bg) document.querySelector('meta[name="theme-color"]').content = v.bg;
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Lexend:wght@300;400;600&display=swap" rel="stylesheet">
@@ -1028,6 +1048,13 @@ function applyPrefs(){
   r.setProperty("--ws", prefs.ws + "em");
   r.setProperty("--font", `'${prefs.font}'`);
   document.querySelector('meta[name="theme-color"]').content = t.bg;
+  // remember the resolved vars so the head boot script can restore the whole
+  // look (colours and text metrics) before the next load's first paint
+  try {
+    localStorage.setItem("lwc.boot.v1", JSON.stringify({...t,
+      fs: prefs.fs + "px", lh: String(prefs.lh), ls: prefs.ls + "em",
+      ws: prefs.ws + "em", font: `'${prefs.font}'`}));
+  } catch {}
   // panel widgets
   $("fontsel").value = prefs.font;
   $("fsval").textContent = PREF_STEPS.fs.fmt(prefs.fs);
