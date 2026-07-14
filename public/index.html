@@ -535,6 +535,8 @@
     color:var(--muted); font-size:.85rem}
   #quizbox .qhead #quizscore{flex:1; text-align:right}
   .qdots{display:inline-flex; gap:.28rem; margin-left:.4rem; vertical-align:middle}
+  .qkbd{margin-left:.7rem; font-size:.76rem; white-space:nowrap}
+  @media (max-width:900px){ .qkbd{display:none} }
   .qdot{width:.5rem; height:.5rem; border-radius:50%; background:var(--line)}
   .qdot.now{background:var(--accent)}
   .qdot.right{background:var(--ask)}
@@ -1016,7 +1018,10 @@ function fmtConf(v){ return Number.isInteger(v) ? v + "%" : "—"; }
 function fmtCost(v){ return "$" + (v || 0).toFixed(v >= 1 ? 2 : 4); }
 function fmtDate(iso){
   const d = new Date(iso);
-  return isNaN(d) ? "" : d.toLocaleDateString(undefined, {month: "short", day: "numeric"});
+  if (isNaN(d)) return "";
+  const opts = {month: "short", day: "numeric"};
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString(undefined, opts);
 }
 function nowIso(){ return new Date().toISOString().slice(0, 19); }
 function slug(text){
@@ -2360,6 +2365,10 @@ function quizDots(){
   }
   return `<span class="qdots" aria-hidden="true">${h}</span>`;
 }
+function quizProgHtml(){
+  return `${quiz.i + 1}/${quiz.qs.length} ${quizDots()}` +
+         `<span class="qkbd"><kbd>1</kbd>–<kbd>4</kbd> answer · <kbd>Enter</kbd> next</span>`;
+}
 function closeQuiz(){
   $("quizbox").classList.remove("open"); quiz = null;
   renderAll(true);   // the "quiz me (last: x/y)" link picks up the new score
@@ -2398,7 +2407,7 @@ function renderQuiz(){
   }
   const q = quiz.qs[quiz.order[quiz.i]];
   const perm = quiz.perm[quiz.order[quiz.i]];
-  $("quizprog").innerHTML = `${quiz.i + 1}/${n} ${quizDots()}`;
+  $("quizprog").innerHTML = quizProgHtml();
   $("quizscore").textContent = quiz.i ? `${quiz.score} right so far` : "";
   $("quizbody").innerHTML =
     `<div class="qq">${esc(q.q)}</div>` +
@@ -2428,7 +2437,7 @@ function answerQuiz(orig){
   const right = orig === q.answer;
   if (right) quiz.score++;
   quiz.results.push(right);
-  $("quizprog").innerHTML = `${quiz.i + 1}/${quiz.qs.length} ${quizDots()}`;
+  $("quizprog").innerHTML = quizProgHtml();
   document.querySelectorAll("#quizbody .qc").forEach((b, pos) => {
     b.disabled = true;
     if (perm[pos] === q.answer) b.classList.add("correct");
@@ -2762,6 +2771,7 @@ function setStatus(msg){
   statusBase = (runLabel ? runLabel + " · " : "") +
                (styleName() ? styleName() + " · " : "") + lvl + msg;
   statusStart = Date.now();
+  $("statusmsg").setAttribute("role", "status");
   if (!statusTimer) statusTimer = setInterval(statusTick, 1000);
   statusTick();
   $("stopbtn").style.display = running ? "" : "none";
@@ -2776,6 +2786,7 @@ function setError(msg){
   const bar = $("statusbar");
   bar.classList.add("on", "err");
   $("statusmsg").textContent = msg;
+  $("statusmsg").setAttribute("role", "alert");   // errors interrupt politely-queued status
   $("stopbtn").style.display = "none";
   $("statusdismiss").style.display = "";
 }
@@ -3436,6 +3447,8 @@ async function boot(){
     if (latest){ currentId = latest.id; currentNode = latest.root_id; }
   }
   renderAll(true);
+  // an empty desktop app invites typing a first topic straight away
+  if (!currentId && !matchMedia("(max-width:900px)").matches) $("topic").focus();
   syncFromServer();
 }
 
