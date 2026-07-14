@@ -256,11 +256,27 @@
   #searchresults .none{color:var(--muted); font-size:.84rem; padding:.2rem .5rem}
 
   /* ---- conversation ---- */
-  .empty{color:var(--muted); margin-top:2.4rem; max-width:32rem}
-  .empty .seed{font-size:2rem}
-  .empty h3{color:var(--fg); font-weight:600; font-size:1.05rem; margin:.5rem 0 .4rem}
-  .examples{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem}
+  .empty{color:var(--muted); margin:3rem auto 0; max-width:33rem}
+  .empty .seed{font-size:2.6rem; text-align:center}
+  .empty h3{color:var(--fg); font-weight:600; font-size:1.25rem; margin:.5rem 0 .4rem;
+    text-align:center}
+  .empty > p{text-align:center}
+  .empty .steps{display:flex; flex-direction:column; gap:.55rem; margin:1.3rem 0}
+  .empty .step{
+    display:flex; align-items:baseline; gap:.7rem; background:var(--card);
+    border:1px solid var(--line); border-radius:.8rem; padding:.65rem .9rem;
+    font-size:.92rem;
+  }
+  .empty .step > span{flex:none; width:1.4rem; text-align:center}
+  .empty .step b{color:var(--fg); font-weight:600; margin-right:.35rem}
+  .examples{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem;
+    justify-content:center}
   .examples button{font-size:.86rem}
+  .empty .kbdhint{text-align:center; margin-top:1.2rem; font-size:.82rem}
+  kbd{
+    background:var(--card); border:1px solid var(--line); border-radius:.3rem;
+    padding:0 .35rem; font-family:Consolas,monospace; font-size:.85em;
+  }
 
   .nodeinfo{
     background:var(--card); border:1px solid var(--line); border-radius:.9rem;
@@ -449,6 +465,17 @@
   #quizbox .qhead{display:flex; align-items:center; gap:.7rem; margin-bottom:.6rem;
     color:var(--muted); font-size:.85rem}
   #quizbox .qhead #quizscore{flex:1; text-align:right}
+  .qdots{display:inline-flex; gap:.28rem; margin-left:.4rem; vertical-align:middle}
+  .qdot{width:.5rem; height:.5rem; border-radius:50%; background:var(--line)}
+  .qdot.now{background:var(--accent)}
+  .qdot.right{background:var(--ask)}
+  .qdot.wrong{background:var(--danger)}
+  #quizbox .qc .qn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:1.35rem; height:1.35rem; border-radius:.4rem; margin-right:.6rem;
+    background:var(--bg); border:1px solid var(--line); color:var(--muted);
+    font-size:.78rem; flex:none; vertical-align:middle;
+  }
   #quizbox .qq{font-weight:400; font-size:1.02rem; margin:.4rem 0 .9rem}
   #quizbox .qc{
     display:block; width:100%; text-align:left; margin:.45rem 0;
@@ -798,7 +825,7 @@
   </main>
 </div>
 
-<div id="tutoreditor" role="dialog" aria-label="custom tutor editor">
+<div id="tutoreditor" role="dialog" aria-modal="true" aria-label="custom tutor editor">
   <div class="box">
     <h3 id="tutoreditortitle">new custom tutor</h3>
     <label for="tutorname">name</label>
@@ -843,7 +870,7 @@
   </div>
 </div>
 
-<div id="quizbox" role="dialog" aria-label="quiz">
+<div id="quizbox" role="dialog" aria-modal="true" aria-label="quiz">
   <div class="box">
     <div class="qhead">
       <span id="quizprog"></span>
@@ -962,11 +989,19 @@ let prefs = loadPrefs();
 
 function loadPrefs(){
   let p = {};
-  try { p = JSON.parse(localStorage.getItem("lwc.prefs.v1")) || {}; } catch {}
+  let stored = false;
+  try {
+    const raw = localStorage.getItem("lwc.prefs.v1");
+    if (raw){ stored = true; p = JSON.parse(raw) || {}; }
+  } catch {}
   // migrate the v1 UI's separate keys
   if (!("fs" in p) && localStorage.getItem("lwc.font")) p.fs = +localStorage.getItem("lwc.font");
   if (!("theme" in p) && localStorage.getItem("lwc.theme") === "dark") p.theme = "dark";
-  return Object.assign({}, PREF_DEFAULTS, p);
+  const defaults = Object.assign({}, PREF_DEFAULTS);
+  // first visit on a dark system starts dark; an explicit choice always wins
+  if (!stored && !("theme" in p) && matchMedia("(prefers-color-scheme: dark)").matches)
+    defaults.theme = "dark";
+  return Object.assign(defaults, p);
 }
 function savePrefs(){ try { localStorage.setItem("lwc.prefs.v1", JSON.stringify(prefs)); } catch {} }
 
@@ -1699,16 +1734,26 @@ const EXAMPLES = ["what a hash table is", "how DNS resolution works",
                   "why compilers need linkers", "what a mutex actually does"];
 
 function emptyHtml(){
+  const mobile = matchMedia("(max-width:900px)").matches;
   return `<div class="empty">
     <div class="seed" aria-hidden="true">🌱</div>
     <h3>grow a tree of knowledge</h3>
-    <p>Type a topic on the left and press <b>new</b>. A simulated human learner will
-    investigate it with your tutor, one scoped question at a time — and whenever an
-    answer deserves a deeper look, you can branch into it.</p>
-    <p>Pick a <b>tutor style</b> (highly technical → simple), search every past tree
-    from the sidebar, and press <kbd>?</kbd> for the full tour.</p>
+    <p>A simulated human learner investigates any topic with your tutor —
+    one scoped question at a time, chasing every word it can't define.</p>
+    <div class="steps">
+      <div class="step"><span aria-hidden="true">🌱</span><div><b>start</b>type a topic
+        ${mobile ? "under the <b>grow</b> tab" : "on the left"} and press <b>new</b> —
+        then watch the investigation unfold, turn by turn</div></div>
+      <div class="step"><span aria-hidden="true">⤵</span><div><b>branch</b>any answer that
+        deserves a closer look becomes its own deeper conversation</div></div>
+      <div class="step"><span aria-hidden="true">📖</span><div><b>keep it</b>every term lands
+        in a glossary with a real definition — and <b>quiz me</b> checks what stuck</div></div>
+    </div>
     <div class="examples">${EXAMPLES.map(t =>
       `<button onclick="useExample('${esc(t)}')">${esc(t)}</button>`).join("")}</div>
+    <p class="kbdhint">${mobile
+      ? "the tabs below take you everywhere · <b>?</b> in the header gives the tour"
+      : `<kbd>Ctrl</kbd>+<kbd>K</kbd> jumps anywhere · <kbd>?</kbd> gives the tour`}</p>
   </div>`;
 }
 
@@ -2192,14 +2237,30 @@ async function startQuiz(regen){
   }
   const qs = tree.quiz.questions;
   quiz = {qs, perm: qs.map(q => shuffledIdx(q.choices.length)),
-          order: shuffledIdx(qs.length), i: 0, score: 0, answered: false};
+          order: shuffledIdx(qs.length), i: 0, score: 0, answered: false,
+          results: []};
+  quizPrevFocus = document.activeElement;
   $("quizbox").classList.add("open");
   renderQuiz();
 }
 window.startQuiz = startQuiz;
+let quizPrevFocus = null;
+function quizDots(){
+  const n = quiz.qs.length;
+  let h = "";
+  for (let i = 0; i < n; i++){
+    const cls = i < quiz.results.length ? (quiz.results[i] ? "right" : "wrong")
+              : i === quiz.i ? "now" : "";
+    h += `<span class="qdot ${cls}"></span>`;
+  }
+  return `<span class="qdots" aria-hidden="true">${h}</span>`;
+}
 function closeQuiz(){
   $("quizbox").classList.remove("open"); quiz = null;
   renderAll(true);   // the "quiz me (last: x/y)" link picks up the new score
+  if (quizPrevFocus && quizPrevFocus.focus && document.contains(quizPrevFocus))
+    quizPrevFocus.focus();
+  quizPrevFocus = null;
 }
 $("quizclose").onclick = closeQuiz;
 $("quizbox").addEventListener("click", (e) => { if (e.target === $("quizbox")) closeQuiz(); });
@@ -2232,22 +2293,25 @@ function renderQuiz(){
   }
   const q = quiz.qs[quiz.order[quiz.i]];
   const perm = quiz.perm[quiz.order[quiz.i]];
-  $("quizprog").textContent = `question ${quiz.i + 1} of ${n}`;
+  $("quizprog").innerHTML = `${quiz.i + 1}/${n} ${quizDots()}`;
   $("quizscore").textContent = quiz.i ? `${quiz.score} right so far` : "";
   $("quizbody").innerHTML =
     `<div class="qq">${esc(q.q)}</div>` +
     perm.map((orig, pos) =>
-      `<button class="qc" data-pos="${pos}" onclick="answerQuiz(${orig})">${esc(q.choices[orig])}</button>`
+      `<button class="qc" data-pos="${pos}" onclick="answerQuiz(${orig})">` +
+      `<span class="qn" aria-hidden="true">${pos + 1}</span>${esc(q.choices[orig])}</button>`
     ).join("") +
     `<div id="quizwhy"></div><div class="qnext" id="quiznext"></div>`;
   quiz.answered = false;
+  $("quizbody").querySelector(".qc")?.focus();
 }
 function retryQuiz(){
   const tree = cur();
   if (!tree || !tree.quiz) return;
   const qs = tree.quiz.questions;
   quiz = {qs, perm: qs.map(q => shuffledIdx(q.choices.length)),
-          order: shuffledIdx(qs.length), i: 0, score: 0, answered: false};
+          order: shuffledIdx(qs.length), i: 0, score: 0, answered: false,
+          results: []};
   renderQuiz();
 }
 window.retryQuiz = retryQuiz;
@@ -2258,6 +2322,8 @@ function answerQuiz(orig){
   const perm = quiz.perm[quiz.order[quiz.i]];
   const right = orig === q.answer;
   if (right) quiz.score++;
+  quiz.results.push(right);
+  $("quizprog").innerHTML = `${quiz.i + 1}/${quiz.qs.length} ${quizDots()}`;
   document.querySelectorAll("#quizbody .qc").forEach((b, pos) => {
     b.disabled = true;
     if (perm[pos] === q.answer) b.classList.add("correct");
@@ -2266,6 +2332,7 @@ function answerQuiz(orig){
   if (q.why) $("quizwhy").innerHTML = `<div class="qwhy">${right ? "✓" : "✗"} ${esc(q.why)}</div>`;
   $("quiznext").innerHTML =
     `<button class="primary" onclick="nextQuiz()">${quiz.i + 1 >= quiz.qs.length ? "see score" : "next"}</button>`;
+  $("quiznext").querySelector("button").focus();
   $("quizscore").textContent = `${quiz.score} right so far`;
 }
 window.answerQuiz = answerQuiz;
@@ -2981,6 +3048,7 @@ function deleteTree(id){
   saveStore(); renderAll(true);
 }
 function useExample(topic){
+  if (matchMedia("(max-width:900px)").matches) setTab("grow");
   $("topic").value = topic;
   $("topic").focus();
 }
@@ -3110,6 +3178,19 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   const typing = e.target.closest?.("input,select,textarea");
+  /* quiz: 1-4 answers, Enter advances */
+  if ($("quizbox").classList.contains("open") && !typing){
+    if (/^[1-4]$/.test(e.key)){
+      const b = document.querySelectorAll("#quizbody .qc")[+e.key - 1];
+      if (b && !b.disabled){ e.preventDefault(); b.click(); }
+      return;
+    }
+    if (e.key === "Enter"){
+      const nb = document.querySelector("#quiznext button");
+      if (nb){ e.preventDefault(); nb.click(); }
+      return;
+    }
+  }
   if (rulerActive() && !typing){
     if (e.key === "ArrowDown" || e.key === "ArrowRight"){ e.preventDefault(); rlStep(1); return; }
     if (e.key === "ArrowUp" || e.key === "ArrowLeft"){ e.preventDefault(); rlStep(-1); return; }
@@ -3127,6 +3208,24 @@ document.addEventListener("keydown", (e) => {
       !e.ctrlKey && !e.metaKey && !e.altKey){
     e.preventDefault();
     stepTurn(e.key === "j" ? 1 : -1);
+  }
+});
+
+/* keep Tab inside whichever modal is open */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab") return;
+  for (const id of ["palette", "quizbox", "tutoreditor", "overview"]){
+    const box = $(id);
+    if (!box.classList.contains("open")) continue;
+    const focusables = [...box.querySelectorAll(
+      "button,input,textarea,select,[tabindex]:not([tabindex='-1'])")]
+      .filter(el => !el.disabled && el.offsetParent !== null);
+    if (!focusables.length) return;
+    const first = focusables[0], last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    else if (!box.contains(document.activeElement)){ e.preventDefault(); first.focus(); }
+    return;
   }
 });
 
