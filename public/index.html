@@ -639,8 +639,9 @@
     padding:0 .15rem; font-size:.95rem; cursor:pointer; line-height:1;
   }
   .who .copy:hover{color:var(--fg)}
-  #map .noderow:focus-visible, #treelist .item:focus-visible{
-    outline:2px solid var(--accent); outline-offset:1px}
+  .cl:focus-visible, summary:focus-visible, [role=button]:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px}
+  #map .noderow:focus-visible, #treelist .item:focus-visible{outline-offset:1px}
 
   /* ---- status bar ---- */
   #statusbar{
@@ -817,7 +818,7 @@
     <section data-side="gloss">
       <div id="termswrap" style="display:none">
         <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span>
-          <span class="cl" id="glossscope" style="float:right;font-weight:300;text-transform:none"
+          <span class="cl" tabindex="0" role="button" id="glossscope" style="float:right;font-weight:300;text-transform:none"
                 title="switch between this tree's terms and every tree's">all trees</span></h2>
         <input id="glossfilter" type="text" placeholder="filter terms…"
                aria-label="filter glossary" style="display:none; margin-bottom:.4rem">
@@ -1717,7 +1718,7 @@ function sparkHtml(turns){
 
 function crumbHtml(tree, id){
   return lineage(tree, id).map(n =>
-    `<span class="cl" onclick="selectNode(${n.id})" title="show node [${n.id}]">${esc(n.label)}</span>`
+    `<span class="cl" tabindex="0" role="button" onclick="selectNode(${n.id})" title="show node [${n.id}]">${esc(n.label)}</span>`
   ).join(" › ");
 }
 
@@ -1820,7 +1821,7 @@ function renderConversation(keepScroll){
             ` title="rename this node" aria-label="rename this node">✎</button>`);
   if (node.parent_id != null){
     h += `<div class="crumb">branched from ` +
-         `<span class="cl" onclick="jumpToTerm(${node.parent_id},${node.branch_from_turn})"` +
+         `<span class="cl" tabindex="0" role="button" onclick="jumpToTerm(${node.parent_id},${node.branch_from_turn})"` +
          ` title="show that answer">[${node.parent_id}] turn ${node.branch_from_turn}</span>` +
          (node.focus ? ` · focus: ${esc(node.focus)}` : "") + `</div>`;
   }
@@ -1911,7 +1912,7 @@ function renderMap(){
   };
   map.innerHTML = `<ul class="maptree">${walk(tree.root_id)}</ul>` +
     (Object.keys(tree.nodes).length > 1
-      ? `<div class="maplinks"><span class="cl" onclick="openOverview()"` +
+      ? `<div class="maplinks"><span class="cl" tabindex="0" role="button" onclick="openOverview()"` +
         ` title="the whole tree as a picture">◉ overview</span></div>` : "");
 }
 
@@ -2020,9 +2021,7 @@ function runSearch(){
   box.querySelectorAll(".hit").forEach((el) => {
     const h = hits[+el.dataset.hit];
     el.onclick = () => openSearchHit(h.tree.id, h.nodeId, h.turn);
-    el.onkeydown = (e) => {
-      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); el.onclick(); }
-    };
+    // Enter/Space come from the global role=button delegate
   });
 }
 function openSearchHit(treeId, nodeId, turn){
@@ -2175,11 +2174,11 @@ function renderTerms(){
     const links = [];
     if (Number.isInteger(i.nodeId))
       links.push(glossAll
-        ? `<span class="cl" onclick="openSearchHit('${esc(i.tree.id)}',${i.nodeId},${i.turn})">` +
+        ? `<span class="cl" tabindex="0" role="button" onclick="openSearchHit('${esc(i.tree.id)}',${i.nodeId},${i.turn})">` +
           `↪ ${esc(oneLine(i.tree.root_topic, 26))}</span>`
-        : `<span class="cl" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>`);
+        : `<span class="cl" tabindex="0" role="button" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>`);
     if (!def && !glossAll)
-      links.push(`<span class="cl" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`);
+      links.push(`<span class="cl" tabindex="0" role="button" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`);
     return `<details class="gentry${def ? "" : " undef"}" data-gfold="${esc(foldKey)}"` +
       `${glossOpen.has(foldKey) ? " open" : ""}>` +
       `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}</summary>` +
@@ -2435,7 +2434,7 @@ function showGloss(term, anchor){
   pop.querySelector(".gname").textContent = e.term;
   pop.querySelector(".gbody").textContent = e.def || "no definition yet";
   pop.querySelector(".gfoot").innerHTML = Number.isInteger(e.node)
-    ? `<span class="cl" onclick="hideGloss();jumpToTerm(${e.node},${e.turn})">↪ where I met it</span>`
+    ? `<span class="cl" tabindex="0" role="button" onclick="hideGloss();jumpToTerm(${e.node},${e.turn})">↪ where I met it</span>`
     : "";
   pop.hidden = false;
   const r = anchor.getBoundingClientRect();
@@ -3168,14 +3167,17 @@ $("importfile").onchange = (e) => {
   e.target.value = "";
 };
 
-/* keyboard access for the map, tree list, and term chips */
-for (const id of ["map", "treelist", "terms"]){
-  $(id).addEventListener("keydown", (e) => {
-    if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".noderow,.item,.t")){
-      e.preventDefault(); e.target.click();
-    }
-  });
-}
+/* Enter/Space activate the span-styled links (.cl) and every role=button
+   element — map rows, tree items, term chips, overview nodes — anywhere */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const el = e.target;
+  if (!el.matches?.(".cl,[role=button]") ||
+      el.closest("input,textarea,select,button,a,summary")) return;
+  e.preventDefault();
+  if (el.click) el.click();
+  else el.dispatchEvent(new MouseEvent("click", {bubbles: true}));  // SVG nodes
+});
 
 /* mobile bottom tabs — each sidebar section opens as a bottom sheet;
    "read" (or tapping the active tab, or anywhere outside) closes it */
