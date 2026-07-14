@@ -145,6 +145,17 @@
     #tabbar button.active{color:var(--fg); background:var(--bg)}
     #statusbar{bottom:calc(3.55rem + env(safe-area-inset-bottom))}
     #jumpbtn{bottom:calc(7.6rem + env(safe-area-inset-bottom))}
+    /* thumb-reachable previous/next turn, shown when there's enough to hop */
+    body.has-turns:not(.sheet-open):not(.running) #hopper{display:flex}
+    #hopper{
+      position:fixed; right:.7rem; bottom:calc(7.8rem + env(safe-area-inset-bottom));
+      z-index:55; flex-direction:column; gap:.45rem;
+    }
+    #hopper button{
+      width:2.7rem; height:2.7rem; padding:0; border-radius:50%;
+      background:color-mix(in srgb, var(--card) 82%, transparent);
+      box-shadow:0 3px 14px rgba(0,0,0,.16); color:var(--muted); font-size:.9rem;
+    }
     #askrow{
       position:sticky; bottom:calc(3.8rem + env(safe-area-inset-bottom));
       background:var(--bg); padding:.5rem 0;
@@ -352,6 +363,40 @@
   }
   #tutoreditor .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
 
+  /* ---- command palette ---- */
+  #palette{
+    display:none; position:fixed; inset:0; z-index:96;
+    background:color-mix(in srgb, var(--bg) 70%, transparent);
+    justify-content:center; align-items:flex-start; padding:1rem;
+  }
+  #palette.open{display:flex}
+  #palette .pbox{
+    margin-top:min(12vh, 7rem); width:min(34rem, 94vw);
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    box-shadow:0 14px 50px rgba(0,0,0,.28); overflow:hidden;
+  }
+  #pinput{
+    width:100%; border:none; border-bottom:1px solid var(--line); border-radius:0;
+    padding:.85rem 1.1rem; font-size:1.05rem; background:var(--card);
+  }
+  #pinput:focus-visible{outline:none}
+  #plist{max-height:min(24rem, 55dvh); overflow:auto; padding:.35rem}
+  #plist .pi{
+    display:flex; align-items:center; gap:.65rem; padding:.5rem .75rem;
+    border-radius:.6rem; cursor:pointer;
+  }
+  #plist .pi .ic{flex:none; width:1.5rem; text-align:center}
+  #plist .pi .lb{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #plist .pi .sb{flex:none; max-width:45%; color:var(--muted); font-size:.8rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #plist .pi .sb mark{background:var(--termbg); color:var(--term); border-radius:.2rem}
+  #plist .pi.sel{background:var(--bg); outline:1px solid var(--line)}
+  #plist .pgroup{color:var(--muted); font-size:.72rem; letter-spacing:.07em;
+    text-transform:lowercase; padding:.5rem .8rem .15rem}
+  #plist .pnone{color:var(--muted); padding:.7rem .9rem; font-size:.9rem}
+  #palbtn{font-family:Consolas,monospace; font-size:.8rem; color:var(--muted)}
+  @media (max-width:900px){ #palbtn{display:none} }
+
   /* ---- quiz ---- */
   #quizbox{
     display:none; position:fixed; inset:0; z-index:95;
@@ -460,6 +505,8 @@
   }
   body.focus-on:not(.ruler-on) #ruler{background:transparent; border-color:transparent}
 
+  #hopper{display:none}
+
   /* jump to latest */
   #jumpbtn{
     display:none; position:fixed; right:1rem; bottom:3.4rem; z-index:55;
@@ -530,6 +577,7 @@
   <span class="treename" id="treename">no tree</span>
   <span class="cost" id="treecost" title="total spend on this tree"></span>
   <button id="syncbtn" class="ghost" title="trees sync to the server so every device sees them — click to sync now">☁</button>
+  <button id="palbtn" class="ghost" title="jump anywhere — Ctrl+K" aria-label="jump anywhere">⌘K</button>
   <button id="helpbtn" title="help" aria-label="help">?</button>
   <button id="aabtn" title="reading settings" aria-label="reading settings">Aa</button>
   <button id="logoutbtn">log out</button>
@@ -570,6 +618,7 @@
   another device or the CLI — the file format is identical.</p>
   <h3>keyboard</h3>
   <table>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>jump anywhere — trees, nodes, terms, commands</td></tr>
     <tr><td><kbd>/</kbd></td><td>jump to the topic box</td></tr>
     <tr><td><kbd>?</kbd></td><td>open this help</td></tr>
     <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>hop to the next / previous turn</td></tr>
@@ -737,6 +786,15 @@
   </div>
 </div>
 
+<div id="palette" role="dialog" aria-modal="true" aria-label="jump anywhere">
+  <div class="pbox">
+    <input id="pinput" type="text" autocomplete="off" spellcheck="false"
+           placeholder="jump to a tree, node, or term — or run a command…"
+           aria-label="jump anywhere">
+    <div id="plist" role="listbox" aria-label="results"></div>
+  </div>
+</div>
+
 <div id="quizbox" role="dialog" aria-label="quiz">
   <div class="box">
     <div class="qhead">
@@ -752,6 +810,11 @@
   <div class="gname"></div>
   <div class="gbody"></div>
   <div class="gfoot"></div>
+</div>
+
+<div id="hopper">
+  <button id="hopup" aria-label="previous turn">▲</button>
+  <button id="hopdown" aria-label="next turn">▼</button>
 </div>
 
 <div id="readbar" aria-hidden="true"></div>
@@ -1610,6 +1673,7 @@ function renderConversation(keepScroll){
   const conv = $("conv");
   if (!tree || currentNode == null || !getNode(tree, currentNode)){
     conv.innerHTML = emptyHtml();
+    document.body.classList.remove("has-turns");
     $("askrow").style.display = "none";
     return;
   }
@@ -1659,6 +1723,7 @@ function renderConversation(keepScroll){
   }
   if (activity && activity.nodeId === node.id) h += activityHtml();
   conv.innerHTML = h;
+  document.body.classList.toggle("has-turns", node.turns.length >= 3);
   hideGloss();
   annotateTerms();
   $("askrow").style.display = (!running && node.turns.some(t => t.tutor)) ? "" : "none";
@@ -1754,10 +1819,7 @@ function snippetHtml(text, i, qlen){
          esc(text.slice(i + qlen, end)) +
          (end < text.length ? "…" : "");
 }
-function runSearch(){
-  const q = $("searchbox").value.trim().toLowerCase();
-  const box = $("searchresults");
-  if (q.length < 2){ box.innerHTML = ""; return; }
+function searchHits(q, cap){
   const hits = [];
   outer:
   for (const tree of Object.values(store)){
@@ -1773,12 +1835,12 @@ function runSearch(){
             break;
           }
         }
-        if (hits.length >= 25) break outer;
+        if (hits.length >= cap) break outer;
       }
     }
   }
   // glossary definitions match too
-  if (hits.length < 25){
+  if (hits.length < cap){
     glossHits:
     for (const tree of Object.values(store)){
       for (const e of Object.values(tree.glossary || {})){
@@ -1789,10 +1851,17 @@ function runSearch(){
         hits.push({tree, nodeId: Number.isInteger(e.node) ? e.node : tree.root_id,
                    turn: e.turn || 1, where: "glossary",
                    html: snippetHtml(text, i, q.length)});
-        if (hits.length >= 25) break glossHits;
+        if (hits.length >= cap) break glossHits;
       }
     }
   }
+  return hits;
+}
+function runSearch(){
+  const q = $("searchbox").value.trim().toLowerCase();
+  const box = $("searchresults");
+  if (q.length < 2){ box.innerHTML = ""; return; }
+  const hits = searchHits(q, 25);
   box.innerHTML = hits.length
     ? hits.map((h, i) =>
         `<div class="hit" tabindex="0" role="button" data-hit="${i}">` +
@@ -2229,6 +2298,136 @@ function jumpToTerm(nodeId, turn){
 }
 window.jumpToTerm = jumpToTerm;
 
+/* ------------------------------------------------------------------ */
+/* command palette — Ctrl+K: jump to any tree, node, or term, run any  */
+/* command, or land on a content match, without leaving the keyboard   */
+/* ------------------------------------------------------------------ */
+let palSel = 0, palItems = [], palPrevFocus = null;
+
+function paletteActions(){
+  const tree = cur();
+  const mobile = () => matchMedia("(max-width:900px)").matches;
+  const acts = [
+    {icon: "🌱", label: "new investigation…", sub: "type a topic",
+     run(){ if (mobile()) setTab("grow"); $("topic").focus(); }},
+  ];
+  if (tree && !running){
+    acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
+    acts.push({icon: "🔊", label: "listen", sub: "read this conversation aloud", run(){ listenNode(); }});
+    acts.push({icon: "💾", label: "save .know.json", sub: "", run(){ $("exportjson").click(); }});
+    acts.push({icon: "📄", label: "export markdown", sub: "", run(){ $("exportmd").click(); }});
+    acts.push({icon: "📖", label: "export reading page", sub: "standalone html", run(){ $("exporthtml").click(); }});
+  }
+  acts.push({icon: "Aa", label: "reading settings", sub: "font · size · themes", run(){ $("aabtn").click(); }});
+  acts.push({icon: "?", label: "help", sub: "", run(){ $("helpbtn").click(); }});
+  return acts;
+}
+function paletteBuild(q){
+  const ql = q.toLowerCase();
+  const match = (s) => !ql || String(s).toLowerCase().includes(ql);
+  const items = [];
+  const push = (group, it) => items.push({...it, group});
+  for (const a of paletteActions()) if (match(a.label)) push("commands", a);
+  const stamp = (t) => t.saved_at || t.created || "";
+  const trees = Object.values(store).sort((a, b) => stamp(b).localeCompare(stamp(a)))
+    .filter(t => match(t.root_topic)).slice(0, ql ? 12 : 5);
+  for (const t of trees){
+    const n = Object.keys(t.nodes).length;
+    push("trees", {icon: "🌳", label: oneLine(t.root_topic, 56),
+      sub: `${n} node${n === 1 ? "" : "s"}`,
+      run(){ openTree(t.id); }});
+  }
+  const tree = cur();
+  if (tree){
+    for (const id of Object.keys(tree.nodes).map(Number).sort((a, b) => a - b)){
+      const node = getNode(tree, id);
+      if (!match(node.label) || (!ql && id === tree.root_id)) continue;
+      push("nodes here", {icon: "●", label: `[${id}] ${oneLine(node.label, 50)}`,
+        sub: `${node.turns.length}t · ${fmtConf(node.final_confidence)}`,
+        run(){ selectNode(id); }});
+    }
+    if (ql){
+      for (const i of glossaryItems(tree).filter(i => i.key.includes(ql)).slice(0, 8)){
+        const e = glossaryOf(tree)[i.key];
+        push("glossary", {icon: "🔍", label: i.term,
+          sub: e && e.def ? oneLine(e.def, 60) : "no definition yet",
+          run(){ if (Number.isInteger(i.nodeId)) jumpToTerm(i.nodeId, i.turn); }});
+      }
+    }
+  }
+  if (ql.length >= 2){
+    for (const h of searchHits(ql, 8)){
+      push("in conversations", {icon: "❞", label: oneLine(h.tree.root_topic, 30) + " · " + h.where,
+        subHtml: h.html,
+        run(){ openSearchHit(h.tree.id, h.nodeId, h.turn); }});
+    }
+  }
+  return items.slice(0, 40);
+}
+function paletteRender(){
+  const list = $("plist");
+  if (!palItems.length){
+    list.innerHTML = `<div class="pnone">nothing matches</div>`;
+    return;
+  }
+  let html = "", lastGroup = null;
+  palItems.forEach((it, i) => {
+    if (it.group !== lastGroup){
+      html += `<div class="pgroup">${esc(it.group)}</div>`;
+      lastGroup = it.group;
+    }
+    html += `<div class="pi${i === palSel ? " sel" : ""}" data-i="${i}" role="option"` +
+            ` aria-selected="${i === palSel}">` +
+            `<span class="ic" aria-hidden="true">${it.icon}</span>` +
+            `<span class="lb">${esc(it.label)}</span>` +
+            `<span class="sb">${it.subHtml || esc(it.sub || "")}</span></div>`;
+  });
+  list.innerHTML = html;
+  list.querySelectorAll(".pi").forEach(el => {
+    el.onclick = () => paletteRun(+el.dataset.i);
+    el.onmousemove = () => {
+      if (palSel !== +el.dataset.i){ palSel = +el.dataset.i; paletteRender(); }
+    };
+  });
+  list.querySelector(".pi.sel")?.scrollIntoView({block: "nearest"});
+}
+function paletteRun(i){
+  const it = palItems[i];
+  closePalette();
+  it?.run();
+}
+function paletteRefresh(){
+  palItems = paletteBuild($("pinput").value.trim());
+  palSel = 0;
+  paletteRender();
+}
+function openPalette(){
+  palPrevFocus = document.activeElement;
+  $("palette").classList.add("open");
+  $("pinput").value = "";
+  paletteRefresh();
+  setTimeout(() => $("pinput").focus(), 30);
+}
+function closePalette(){
+  $("palette").classList.remove("open");
+  if (palPrevFocus && palPrevFocus.focus && document.contains(palPrevFocus))
+    palPrevFocus.focus();
+  palPrevFocus = null;
+}
+window.openPalette = openPalette;
+$("palbtn").onclick = openPalette;
+$("palette").addEventListener("click", (e) => {
+  if (e.target === $("palette")) closePalette();
+});
+$("pinput").addEventListener("input", paletteRefresh);
+$("pinput").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown"){ e.preventDefault(); palSel = Math.min(palItems.length - 1, palSel + 1); paletteRender(); }
+  else if (e.key === "ArrowUp"){ e.preventDefault(); palSel = Math.max(0, palSel - 1); paletteRender(); }
+  else if (e.key === "Enter"){ e.preventDefault(); paletteRun(palSel); }
+  else if (e.key === "Escape"){ e.stopPropagation(); closePalette(); }
+  else if (e.key === "Tab"){ e.preventDefault(); }   // focus stays in the box
+});
+
 function updateHash(){
   const h = currentId
     ? "#t=" + currentId + (currentNode != null ? "&n=" + currentNode : "")
@@ -2394,6 +2593,7 @@ function offerRetry(err){
 }
 function setRunning(on){
   running = on;
+  document.body.classList.toggle("running", on);
   $("newbtn").disabled = $("fullbtn").disabled = $("topic").disabled = on;
   $("importbtn").disabled = on;
 }
@@ -2776,7 +2976,13 @@ document.addEventListener("click", (e) => {
   if (block && !block.closest(".pending")) speakBlock(block);
 });
 document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === "k" || e.key === "K")){
+    e.preventDefault();
+    if ($("palette").classList.contains("open")) closePalette(); else openPalette();
+    return;
+  }
   if (e.key === "Escape"){
+    if ($("palette").classList.contains("open")){ closePalette(); return; }
     if ($("quizbox").classList.contains("open")){ closeQuiz(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
@@ -2805,7 +3011,9 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-/* j/k hop between turns */
+/* j/k hop between turns (the mobile hopper buttons use the same step) */
+$("hopup").onclick = () => stepTurn(-1);
+$("hopdown").onclick = () => stepTurn(1);
 function stepTurn(d){
   const turns = [...document.querySelectorAll("#conv .turn:not(.pending)")];
   if (!turns.length) return;
