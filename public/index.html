@@ -244,8 +244,9 @@
   @media (pointer:coarse){
     button{min-height:2.5rem}
     .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico{min-height:0}
-    /* the copy glyph stays small but its touch target grows outward */
+    /* small glyphs keep their size but their touch targets grow outward */
     .who .copy{padding:.5rem .55rem; margin:-.5rem -.55rem -.5rem auto}
+    #treelist .del{padding:.45rem .5rem; margin:-.45rem -.35rem -.45rem 0}
     input[type=text],input[type=search],input[type=password],select{font-size:max(1rem,16px); min-height:2.7rem}
     #treelist .item{padding:.5rem .55rem}
     #map .noderow{padding:.2rem .3rem}
@@ -683,7 +684,8 @@
 
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
-    #hopper, #askrow, #readbar, #skiplink, #helppanel{display:none !important}
+    #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
+    #quizbox, #tutoreditor, #overview, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -694,7 +696,6 @@
   .spark circle{fill:var(--ask)}
   .crumb .cl{cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px}
   .crumb .cl:hover{color:var(--fg)}
-  .crumb .danger{color:var(--danger)}
   .who .copy{
     margin-left:auto; border:none; background:none; color:var(--muted);
     padding:0 .15rem; font-size:.95rem; cursor:pointer; line-height:1;
@@ -1998,7 +1999,7 @@ function renderMap(){
   const tree = cur();
   const map = $("map");
   if (!tree || tree.root_id == null){
-    map.innerHTML = `<span style="color:var(--muted)">—</span>`; return;
+    map.innerHTML = `<span class="hint">no tree yet — start one with a topic</span>`; return;
   }
   const row = (n) => {
     const live = running && activity && activity.nodeId === n.id;
