@@ -600,6 +600,13 @@
   #quizbox .qnext{margin-top:.9rem; display:flex; gap:.5rem; justify-content:flex-end}
   #quizbox .qsum{text-align:center; padding:1rem 0 .4rem}
   #quizbox .qsum .big{font-size:2rem; margin-bottom:.4rem}
+  #quizbox .qmiss{
+    text-align:left; margin:.55rem 0; padding:.6rem .8rem; border-radius:.7rem;
+    background:var(--bg); border:1px solid var(--line); font-size:.9rem;
+  }
+  #quizbox .qmiss .qmq{font-weight:600; margin-bottom:.25rem}
+  #quizbox .qmiss .qma{color:var(--ask)}
+  #quizbox .qmiss .qmw{color:var(--muted); margin-top:.2rem; font-size:.86rem}
 
   /* ---- review (spaced flashcards over the glossary) ---- */
   #reviewbox{
@@ -2593,7 +2600,7 @@ async function startQuiz(regen){
 window.startQuiz = startQuiz;
 let quizPrevFocus = null;
 function quizDots(){
-  const n = quiz.qs.length;
+  const n = quiz.order.length;
   let h = "";
   for (let i = 0; i < n; i++){
     const cls = i < quiz.results.length ? (quiz.results[i] ? "right" : "wrong")
@@ -2603,7 +2610,7 @@ function quizDots(){
   return `<span class="qdots" aria-hidden="true">${h}</span>`;
 }
 function quizProgHtml(){
-  return `${quiz.i + 1}/${quiz.qs.length} ${quizDots()}` +
+  return `${quiz.i + 1}/${quiz.order.length} ${quizDots()}` +
          `<span class="qkbd"><kbd>1</kbd>–<kbd>4</kbd> answer · <kbd>Enter</kbd> next</span>`;
 }
 function closeQuiz(){
@@ -2618,14 +2625,16 @@ $("quizbox").addEventListener("click", (e) => { if (e.target === $("quizbox")) c
 
 function renderQuiz(){
   if (!quiz) return;
-  const n = quiz.qs.length;
+  const n = quiz.order.length;
   if (quiz.i >= n){   // summary
     const tree = cur();
-    if (tree){
+    // subset retries (just the misses) don't count as a real attempt
+    if (tree && !quiz.subset){
       if (!Array.isArray(tree.quizzes)) tree.quizzes = [];
       tree.quizzes.push({ts: nowIso(), score: quiz.score, total: n});
       saveStore();
     }
+    const missed = quiz.order.filter((qi, i) => !quiz.results[i]);
     const frac = quiz.score / n;
     const face = frac === 1 ? "🌳" : frac >= 0.8 ? "🌿" : frac >= 0.5 ? "🌱" : "🍂";
     $("quizprog").textContent = "done";
@@ -2636,10 +2645,19 @@ function renderQuiz(){
         : frac >= 0.8 ? "solid recall. the misses below deserve a branch."
         : frac >= 0.5 ? "the shape is there — re-read the answers you missed, or branch into them."
         : "worth re-reading the tree, then trying again."}</p>` +
-      `<div class="qnext" style="justify-content:center">` +
-      `<button onclick="retryQuiz()">try again</button>` +
+      missed.map(qi => {
+        const q = quiz.qs[qi];
+        return `<div class="qmiss"><div class="qmq">${esc(q.q)}</div>` +
+               `<div class="qma">✓ ${esc(q.choices[q.answer])}</div>` +
+               (q.why ? `<div class="qmw">${esc(q.why)}</div>` : "") + `</div>`;
+      }).join("") +
+      `<div class="qnext" style="justify-content:center; flex-wrap:wrap">` +
+      (missed.length && missed.length < quiz.qs.length
+        ? `<button class="primary" onclick="retryQuiz(true)">retry the ${missed.length} missed</button>` : "") +
+      `<button ${missed.length === quiz.qs.length ? 'class="primary" ' : ""}onclick="retryQuiz()">try again</button>` +
       `<button onclick="startQuiz(true)" title="one model call">write new questions</button>` +
-      `<button class="primary" onclick="closeQuiz()">close</button></div></div>`;
+      `<button ${missed.length ? "" : 'class="primary" '}onclick="closeQuiz()">close</button></div></div>`;
+    quiz.lastMissed = missed;
     return;
   }
   const q = quiz.qs[quiz.order[quiz.i]];
@@ -2656,13 +2674,18 @@ function renderQuiz(){
   quiz.answered = false;
   $("quizbody").querySelector(".qc")?.focus();
 }
-function retryQuiz(){
+function retryQuiz(missesOnly){
   const tree = cur();
   if (!tree || !tree.quiz) return;
   const qs = tree.quiz.questions;
+  const subset = missesOnly && quiz && quiz.lastMissed && quiz.lastMissed.length
+    ? quiz.lastMissed : null;
+  const order = subset
+    ? shuffledIdx(subset.length).map(i => subset[i])
+    : shuffledIdx(qs.length);
   quiz = {qs, perm: qs.map(q => shuffledIdx(q.choices.length)),
-          order: shuffledIdx(qs.length), i: 0, score: 0, answered: false,
-          results: []};
+          order, i: 0, score: 0, answered: false, results: [],
+          subset: !!subset};
   renderQuiz();
 }
 window.retryQuiz = retryQuiz;
@@ -2682,7 +2705,7 @@ function answerQuiz(orig){
   });
   if (q.why) $("quizwhy").innerHTML = `<div class="qwhy">${right ? "✓" : "✗"} ${esc(q.why)}</div>`;
   $("quiznext").innerHTML =
-    `<button class="primary" onclick="nextQuiz()">${quiz.i + 1 >= quiz.qs.length ? "see score" : "next"}</button>`;
+    `<button class="primary" onclick="nextQuiz()">${quiz.i + 1 >= quiz.order.length ? "see score" : "next"}</button>`;
   $("quiznext").querySelector("button").focus();
   $("quizscore").textContent = `${quiz.score} right so far`;
 }
