@@ -103,6 +103,13 @@
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{animation:none !important; transition:none !important}
   }
+  /* Windows High Contrast strips background colours; these tiny elements say
+     everything through colour (confidence fills, quiz dots, theme swatches),
+     so they keep their own */
+  @media (forced-colors: active){
+    .confbar i, #map .mdot, .qdot, .gdot, .swatch, #readbar,
+    #statusbar .dot{forced-color-adjust:none}
+  }
   button:active:not(:disabled){transform:translateY(1px)}
   ::selection{background:var(--termbg); color:var(--term)}
   @media (pointer:fine){
