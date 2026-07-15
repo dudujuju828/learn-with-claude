@@ -28,10 +28,11 @@
     v = {bg:'#20221f', card:'#2a2d29', fg:'#e9e4da', line:'#44483f', muted:'#a9a294',
          think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
          termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e',
-         primary:'#d4b45e', onprim:'#20221f'};
+         primary:'#d4b45e', onprim:'#20221f', scheme:'dark'};
   }
   const r = document.documentElement.style;
-  for (const k in v) if (typeof v[k] === "string") r.setProperty("--" + k, v[k]);
+  for (const k in v) if (k !== "scheme" && typeof v[k] === "string") r.setProperty("--" + k, v[k]);
+  if (v.scheme) r.colorScheme = v.scheme;   // native widgets match the theme
   if (v.bg) document.querySelector('meta[name="theme-color"]').content = v.bg;
 })();
 </script>
@@ -61,6 +62,7 @@
     --primary:#7a6019; --onprim:#fffdf6;
     --fs:17px; --lh:1.75; --ls:.02em; --ws:.07em;
     --font:'Lexend';
+    color-scheme:light;   /* JS flips this to dark with the dark theme */
   }
   *{box-sizing:border-box}
   /* stable gutter: the centred column doesn't lurch when the page grows a
@@ -1100,11 +1102,14 @@ function applyPrefs(){
   r.setProperty("--ls", prefs.ls + "em");
   r.setProperty("--ws", prefs.ws + "em");
   r.setProperty("--font", `'${prefs.font}'`);
+  // scrollbars, select dropdowns, autofill — native widgets follow the theme
+  const scheme = prefs.theme === "dark" ? "dark" : "light";
+  r.colorScheme = scheme;
   document.querySelector('meta[name="theme-color"]').content = t.bg;
   // remember the resolved vars so the head boot script can restore the whole
   // look (colours and text metrics) before the next load's first paint
   try {
-    localStorage.setItem("lwc.boot.v1", JSON.stringify({...t,
+    localStorage.setItem("lwc.boot.v1", JSON.stringify({...t, scheme,
       fs: prefs.fs + "px", lh: String(prefs.lh), ls: prefs.ls + "em",
       ws: prefs.ws + "em", font: `'${prefs.font}'`}));
   } catch {}
