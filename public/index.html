@@ -3434,12 +3434,16 @@ function showLogin(){ $("login").style.display = "flex"; setTimeout(() => $("pw"
 function hideLogin(){ $("login").style.display = "none"; }
 $("loginform").onsubmit = async (e) => {
   e.preventDefault();
+  const btn = $("loginform").querySelector("button[type=submit]");
+  if (btn.disabled) return;   // a submit is already in flight
   $("loginerr").textContent = "";
+  btn.disabled = true; btn.textContent = "logging in…";
   try {
     await api("login", {password: $("pw").value});
     $("pw").value = "";
     await boot();
   } catch (err){ $("loginerr").textContent = err.message; }
+  finally { btn.disabled = false; btn.textContent = "log in"; }
 };
 $("logoutbtn").onclick = async () => {
   try { await flushDirty(); } catch {}
