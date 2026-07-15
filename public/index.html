@@ -836,7 +836,10 @@
   <p><b>glossary</b> — every term the learner hits gets a short definition
   (written the moment it appears) and lives in the tree, so it syncs and
   exports with it. Dotted-underlined words in answers are glossary terms —
-  tap one to see its definition right there. <b>anki cards</b> downloads the
+  tap one to see its definition right there. And it's yours too: select a
+  word or two in any answer and a <b>✎ define</b> chip adds it to the
+  glossary (and to review) — <b>✕ forget</b> in the sidebar takes it back
+  out. <b>anki cards</b> downloads the
   defined terms as a file Anki imports directly.</p>
   <p><b>🎓 quiz me</b> — a few multiple-choice questions written from what
   this tree actually covered (your examples, your terms, your near-misses).
@@ -1710,6 +1713,14 @@ function saveStore(){
   try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
   catch (e) { setError("could not save to browser storage: " + e.message); }
 }
+/* like saveStore, but for changes to a tree that may not be the current
+   one (review grades, forgetting a term from the all-trees glossary) */
+function persistTree(t){
+  t.saved_at = new Date().toISOString();
+  markDirty(t.id);
+  try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
+  catch (e) { setError("could not save to browser storage: " + e.message); }
+}
 
 /* ------------------------------------------------------------------ */
 /* server sync — trees mirror to /api/trees (Vercel Blob) so any       */
@@ -2387,6 +2398,10 @@ function renderTerms(){
         : `<span class="cl" tabindex="0" role="button" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>`);
     if (!def && !glossAll)
       links.push(`<span class="cl" tabindex="0" role="button" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`);
+    if (e && e.src === "you")
+      links.push(`<span class="cl" tabindex="0" role="button" data-tree="${esc(i.tree.id)}" data-key="${esc(i.key)}"` +
+                 ` title="you added this one — remove it and its review schedule"` +
+                 ` onclick="forgetTerm(this.dataset.tree,this.dataset.key)">✕ forget</span>`);
     return `<details class="gentry${def ? "" : " undef"}" data-gfold="${esc(foldKey)}"` +
       `${glossOpen.has(foldKey) ? " open" : ""}>` +
       `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}</summary>` +
@@ -2449,6 +2464,15 @@ async function defineOne(key){
   renderTerms(); renderHeader();
 }
 window.defineOne = defineOne;
+/* hand-added terms can be taken back out (the learner's own can't —
+   they mark where its understanding actually snagged) */
+function forgetTerm(treeId, key){
+  const t = store[treeId]; if (!t) return;
+  delete glossaryOf(t)[key];
+  persistTree(t);
+  renderTerms(); renderConversation(true);   // drop its underlines too
+}
+window.forgetTerm = forgetTerm;
 let glossTimer = null;
 $("glossfilter").addEventListener("input", () => {
   clearTimeout(glossTimer);
@@ -2740,8 +2764,7 @@ function gradeReview(g){
   if (e){
     e.rev = nextRev(e.rev, g);
     const t = store[c.treeId];
-    if (t){ t.saved_at = new Date().toISOString(); markDirty(t.id); }
-    try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
+    if (t) persistTree(t);
   }
   review.done++;
   if (g === 0){ review.again++; review.queue.push(c); }

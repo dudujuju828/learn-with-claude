@@ -99,7 +99,10 @@ directly (a local `claude` login can't run on a server), so it needs an
   they sync, export, and travel in `.know.json`; defined terms get a dotted
   underline wherever they appear in answers (tap for the definition in a
   popover), the sidebar glossary unfolds each term with a jump back to where
-  it came up, old trees backfill with one *define missing* click, and **anki
+  it came up, old trees backfill with one *define missing* click, and your
+  own unknowns count too: **select a word or two in any answer** and a
+  floating *✎ define* chip adds it to the glossary with the same machinery
+  (underlines, flashcards, export; *✕ forget* removes it again). **anki
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term in every tree into
   an in-app flashcard (recall → flip → grade yourself again / good / easy),
