@@ -1899,7 +1899,10 @@ function renderConversation(keepScroll){
          ` title="show that answer">[${node.parent_id}] turn ${node.branch_from_turn}</span>` +
          (node.focus ? ` · focus: ${esc(node.focus)}` : "") + `</div>`;
   }
-  h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>`;
+  // the path is only worth a line once there are ancestors — on the root
+  // it would just repeat the title
+  if (node.parent_id != null)
+    h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>`;
   const chips = [
     `<span class="chip">${node.turns.length} turn${node.turns.length === 1 ? "" : "s"}</span>`,
   ];
