@@ -3974,9 +3974,13 @@ $("logoutbtn").onclick = async () => {
 $("syncbtn").onclick = () => { setSync("saving"); syncFromServer(); };
 
 async function boot(){
-  const res = await fetch("/api/me");
-  if (!res.ok){ showLogin(); return; }
-  CONFIG = await res.json();
+  let res = null;
+  try { res = await fetch("/api/me"); }
+  catch {}   // offline: the trees in this browser still read fine
+  if (res && !res.ok){ showLogin(); return; }
+  if (res){
+    try { CONFIG = await res.json(); } catch {}
+  }
   hideLogin();
   // deep link first, else reopen the most recent local tree; the server sync
   // then merges in anything grown on other devices
@@ -3988,7 +3992,7 @@ async function boot(){
   renderAll(true);
   // an empty desktop app invites typing a first topic straight away
   if (!currentId && !matchMedia("(max-width:900px)").matches) $("topic").focus();
-  syncFromServer();
+  if (res) syncFromServer(); else setSync("err");
 }
 
 buildPanel();
@@ -4013,6 +4017,13 @@ document.addEventListener("visibilitychange", () => {
     syncFromServer();
   }
 });
+
+/* offline: a small service worker keeps the shell and fonts openable with
+   no network — trees live in this browser anyway. /api stays live-only. */
+if ("serviceWorker" in navigator &&
+    (location.protocol === "https:" || location.hostname === "localhost")){
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
 
 window.addEventListener("beforeunload", (e) => {
   // best-effort push of unsynced trees on the way out

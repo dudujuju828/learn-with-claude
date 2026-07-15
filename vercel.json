@@ -5,6 +5,12 @@
       "maxDuration": 300
     }
   },
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:route(login|logout|me|learner|tutor|next_concept|define|quiz|export_md|export_html|digest)",
