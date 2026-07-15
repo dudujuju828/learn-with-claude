@@ -100,7 +100,12 @@ directly (a local `claude` login can't run on a server), so it needs an
   underline wherever they appear in answers (tap for the definition in a
   popover), the sidebar glossary unfolds each term with a jump back to where
   it came up, old trees backfill with one *define missing* click, and **anki
-  cards** downloads the defined terms as a file Anki imports directly. **🎓
+  cards** downloads the defined terms as a file Anki imports directly — or
+  skip the export: **🔁 review** turns every defined term in every tree into
+  an in-app flashcard (recall → flip → grade yourself again / good / easy),
+  scheduled out on a spaced-repetition ladder (1d → 3d → ×2.5) so each card
+  comes back just before you'd forget it; the schedule lives on the glossary
+  entry, so it syncs across devices and travels in `.know.json`. **🎓
   quiz me** writes a handful of multiple-choice questions from what the tree
   actually covered (one model call, kept with the tree — retakes just
   reshuffle), explains every answer, and records your scores. You

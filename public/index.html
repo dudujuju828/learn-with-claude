@@ -215,6 +215,12 @@
       color:var(--muted); padding:.3rem 0 .2rem; letter-spacing:.03em; min-height:3rem;
     }
     #tabbar button .ico{font-size:1.15rem; line-height:1.15}
+    #tabbar button{position:relative}
+    .tabdue{   /* cards-due count riding the words tab */
+      position:absolute; top:.1rem; left:50%; margin-left:.5rem;
+      background:var(--primary); color:var(--onprim); border-radius:.6rem;
+      font-size:.62rem; line-height:1; padding:.16rem .32rem; font-weight:600;
+    }
     #tabbar button.active{color:var(--fg); background:var(--bg);
       box-shadow:inset 0 2px 0 var(--accent)}
     /* thumb-reachable previous/next turn, shown when there's enough to hop */
@@ -826,6 +832,11 @@
   <p><b>🎓 quiz me</b> — a few multiple-choice questions written from what
   this tree actually covered (your examples, your terms, your near-misses).
   Questions are written once and kept with the tree; retakes just reshuffle.</p>
+  <p><b>🔁 review</b> — every defined term, in every tree, is a flashcard.
+  Recall it, flip, grade yourself (again / good / easy), and the card is
+  scheduled further out each time — spaced repetition without leaving the
+  app. The schedule syncs with the trees, so any device continues where
+  you stopped.</p>
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
@@ -1071,7 +1082,7 @@
   <button data-tab=""><span class="ico" aria-hidden="true">💬</span>read</button>
   <button data-tab="grow"><span class="ico" aria-hidden="true">🌱</span>grow</button>
   <button data-tab="tree"><span class="ico" aria-hidden="true">🌳</span>tree</button>
-  <button data-tab="gloss"><span class="ico" aria-hidden="true">📖</span>words</button>
+  <button data-tab="gloss"><span class="ico" aria-hidden="true">📖</span>words<span id="tabdue" class="tabdue" aria-hidden="true" hidden></span></button>
   <button data-tab="search"><span class="ico" aria-hidden="true">🔍</span>find</button>
 </nav>
 
@@ -2730,10 +2741,13 @@ window.gradeReview = gradeReview;
 /* the sidebar row: how many cards are waiting, or when the next one is */
 function updateRevRow(){
   const cards = allCards();
+  const due = cards.filter(c => cardDue(cardEntry(c))).length;
+  const badge = $("tabdue");
+  badge.hidden = !due;
+  badge.textContent = due ? String(due) : "";
   const wrap = $("revwrap");
   if (!cards.length){ wrap.style.display = "none"; return; }
   wrap.style.display = "";
-  const due = cards.filter(c => cardDue(cardEntry(c))).length;
   const btn = $("revbtn");
   if (due){
     btn.style.display = "";
