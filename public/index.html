@@ -1384,12 +1384,12 @@ async function tryTutor(){
   const q = $("tutortest").value.trim() || "why is the sky blue?";
   const box = $("tutorpreview");
   box.style.display = "";
-  box.innerHTML = `<div class="who">📘 asking<span class="dots"></span></div>`;
+  box.innerHTML = `<div class="who">${ico("📘")}asking<span class="dots"></span></div>`;
   $("tutortry").disabled = true;
   try {
     const r = await api("tutor", {kind: "root", turns: [], action: q,
                                   custom_style: style.slice(0, 4000)});
-    box.innerHTML = `<div class="who">📘 ${esc(oneLine(q, 60))} · ${fmtCost(r.cost)}</div>` +
+    box.innerHTML = `<div class="who">${ico("📘")}${esc(oneLine(q, 60))} · ${fmtCost(r.cost)}</div>` +
                     tutorBodyHtml({tutor: r.tutor, parts: r.parts});
   } catch (e){
     box.innerHTML = `<div class="who" style="color:var(--danger)">${esc(e.message)}</div>`;
@@ -2463,7 +2463,7 @@ function renderQuiz(){
     $("quizprog").textContent = "done";
     $("quizscore").textContent = "";
     $("quizbody").innerHTML =
-      `<div class="qsum"><div class="big">${face} ${quiz.score} / ${n}</div>` +
+      `<div class="qsum"><div class="big"><span aria-hidden="true">${face}</span> ${quiz.score} / ${n}</div>` +
       `<p class="hint">${frac === 1 ? "every single one — you could teach this now."
         : frac >= 0.8 ? "solid recall. the misses below deserve a branch."
         : frac >= 0.5 ? "the shape is there — re-read the answers you missed, or branch into them."
