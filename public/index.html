@@ -146,6 +146,9 @@
     position:sticky; top:0; z-index:50; background:var(--bg);
     border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:.7rem; padding:.5rem .9rem;
+    /* installed as an app (display:standalone + viewport-fit=cover) the page
+       starts under the phone's status bar — pad the notch area away */
+    padding-top:calc(.5rem + env(safe-area-inset-top));
   }
   header .brand{font-weight:600; font-size:1rem; white-space:nowrap; margin:0}
   header .brand .with{color:var(--muted); font-weight:300}
@@ -162,7 +165,8 @@
   #app{display:flex; align-items:flex-start}
   aside{
     width:19.5rem; flex:none; padding:1rem; border-right:1px solid var(--line);
-    position:sticky; top:3.05rem; max-height:calc(100vh - 3.05rem); overflow:auto;
+    position:sticky; top:calc(3.05rem + env(safe-area-inset-top));
+    max-height:calc(100vh - 3.05rem - env(safe-area-inset-top)); overflow:auto;
   }
   /* auto margins centre the capped column in the space right of the sidebar,
      instead of leaving all the slack as dead space on wide screens */
@@ -220,7 +224,8 @@
       position:sticky; bottom:calc(3.8rem + env(safe-area-inset-bottom));
       background:var(--bg); padding:.5rem 0;
     }
-    header{padding:.45rem .6rem; gap:.5rem}
+    header{padding:.45rem .6rem; gap:.5rem;
+      padding-top:calc(.45rem + env(safe-area-inset-top))}
     #gpop{max-width:calc(100vw - 1.2rem)}
   }
   @media (max-width:600px){
@@ -246,7 +251,8 @@
 
   /* ---- reading panel ---- */
   #aapanel{
-    display:none; position:fixed; top:3.3rem; right:.7rem; z-index:80;
+    display:none; position:fixed; top:calc(3.3rem + env(safe-area-inset-top));
+    right:.7rem; z-index:80;
     background:var(--card); border:1px solid var(--line); border-radius:.9rem;
     padding:1rem 1.1rem; width:min(21rem,92vw); box-shadow:0 8px 34px rgba(0,0,0,.18);
     font-size:.9rem;
@@ -575,7 +581,8 @@
 
   /* ---- help panel ---- */
   #helppanel{
-    display:none; position:fixed; top:3.3rem; right:.7rem; z-index:80;
+    display:none; position:fixed; top:calc(3.3rem + env(safe-area-inset-top));
+    right:.7rem; z-index:80;
     background:var(--card); border:1px solid var(--line); border-radius:.9rem;
     padding:1rem 1.2rem; width:min(24rem,92vw); max-height:calc(100vh - 5rem);
     overflow:auto; box-shadow:0 8px 34px rgba(0,0,0,.18); font-size:.9rem;
