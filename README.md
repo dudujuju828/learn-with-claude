@@ -79,7 +79,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   line / letter / word spacing, keyboard-only **reading ruler** and
   **focus line** (typoscope) stepping visual lines, read aloud (per block, or
   🔊 listen through a whole conversation), **search across every tree**,
-  branch buttons under every answer, live cost, and `.know.json`
+  branch buttons under every answer (plus a **loose threads** list of the
+  words the learner flagged but never chased — tap one to branch straight
+  into it), live cost, and `.know.json`
   import/export compatible with the CLI (plus the CLI's standalone HTML
   reading page via *export html*). A **tutor style** picker switches the
   answers between balanced / highly technical / precise / simple / concise

@@ -687,6 +687,14 @@
   }
   .gref:hover{color:var(--term)}
 
+  /* loose threads — terms flagged but never chased, under the tree map */
+  #loose{display:flex; flex-wrap:wrap; gap:.35rem}
+  #loose .thread{
+    font-size:.82rem; padding:.25rem .65rem; border-radius:1rem;
+    color:var(--term); border-color:color-mix(in srgb, var(--term) 40%, var(--line));
+  }
+  #loose .thread:hover:not(:disabled){background:var(--termbg)}
+
   /* selection chip — select words in an answer to define them */
   #selchip{
     position:fixed; z-index:86; border:1px solid var(--term);
@@ -823,7 +831,9 @@
   <p><b>full</b> does that, then the tutor picks 3 more related concepts to
   investigate — a small tour of the topic.</p>
   <p><b>⤵ branch</b> under any tutor answer re-investigates that answer more
-  deeply, growing the tree. Every turn is two real model calls (~5–7¢).</p>
+  deeply, growing the tree. Every turn is two real model calls (~5–7¢).
+  <b>loose threads</b> (under the tree map) lists the words the learner
+  flagged but never chased — tap one to branch straight into it.</p>
   <p><b>tutor style</b> changes how the tutor answers — from highly technical
   to simple everyday words — and applies from the next turn, even mid-run.</p>
   <p><b>learner</b> sets how much the simulated learner already knows, from a
@@ -954,6 +964,12 @@
     <section data-side="tree">
       <h2>tree</h2>
       <div id="map"><span style="color:var(--muted)">—</span></div>
+      <div id="loosewrap" style="display:none">
+        <h2>loose threads <span id="loosemeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span></h2>
+        <div id="loose"></div>
+        <p class="hint">words the learner flagged but never chased —
+        tap one to branch into it.</p>
+      </div>
     </section>
 
     <section data-side="gloss">
@@ -2132,6 +2148,57 @@ function renderMap(){
         ` title="the whole tree as a picture">◉ overview</span></div>` : "");
 }
 
+/* loose threads: terms the learner flagged (new_term) but neither asked
+   about later in that conversation nor grew a branch from — the tree's
+   unexplored frontier, and the natural places to grow it next */
+function looseThreads(tree){
+  const out = [], seen = new Set();
+  const nodes = Object.values(tree.nodes).sort((a, b) => b.id - a.id);
+  for (const node of nodes){
+    const branched = new Set(node.children.map(c => getNode(tree, c)?.branch_from_turn));
+    for (let i = node.turns.length - 1; i >= 0; i--){
+      const t = node.turns[i];
+      const term = (t.new_term || "").trim();
+      const lc = term.toLowerCase();
+      if (!term || seen.has(lc)) continue;
+      const chased = node.turns.some(u =>
+        u.turn >= t.turn && (u.action || "").toLowerCase().includes(lc));
+      if (chased || branched.has(t.turn) || branched.has(t.turn - 1)) continue;
+      seen.add(lc);
+      // the answer the term appeared in is usually the previous turn's
+      out.push({term, nodeId: node.id, turn: Math.max(1, t.turn - 1)});
+    }
+  }
+  return out;
+}
+function renderLoose(){
+  const tree = cur();
+  const threads = tree ? looseThreads(tree) : [];
+  const wrap = $("loosewrap");
+  if (!threads.length){ wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  $("loosemeta").textContent = threads.length > 1 ? `· ${threads.length}` : "";
+  $("loose").innerHTML = threads.slice(0, 8).map(th =>
+    `<button class="thread" ${running ? "disabled" : ""}` +
+    ` data-term="${esc(th.term)}" onclick="chaseThread(${th.nodeId},${th.turn},this.dataset.term)"` +
+    ` title="jump to that answer and branch into “${esc(th.term)}”">${esc(oneLine(th.term, 26))}</button>`
+  ).join("") + (threads.length > 8
+    ? `<span class="hint" style="align-self:center">+${threads.length - 8} more</span>` : "");
+}
+function chaseThread(nodeId, turn, term){
+  if (running) return;
+  jumpToTerm(nodeId, turn);
+  // open the branch input under that answer, the term already filled in
+  setTimeout(() => {
+    const btn = document.querySelector(`#conv .turn[data-turn="${turn}"] .branchrow button`);
+    if (!btn) return;
+    startBranchUI(nodeId, turn, btn);
+    const inp = $("focusinput");
+    if (inp) inp.value = term;
+  }, 120);
+}
+window.chaseThread = chaseThread;
+
 function renderTreeList(){
   const list = $("treelist");
   const stamp = (t) => t.saved_at || t.created || "";
@@ -3188,7 +3255,8 @@ matchMedia("(max-width:900px)").addEventListener("change", () => {
 });
 
 function renderAll(keepScroll){
-  renderHeader(); renderMap(); renderTreeList(); renderTerms(); renderConversation(keepScroll);
+  renderHeader(); renderMap(); renderLoose(); renderTreeList(); renderTerms();
+  renderConversation(keepScroll);
   updateHash();
 }
 
