@@ -235,6 +235,8 @@
   @media (pointer:coarse){
     button{min-height:2.5rem}
     .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico{min-height:0}
+    /* the copy glyph stays small but its touch target grows outward */
+    .who .copy{padding:.5rem .55rem; margin:-.5rem -.55rem -.5rem auto}
     input[type=text],input[type=search],input[type=password],select{font-size:max(1rem,16px); min-height:2.7rem}
     #treelist .item{padding:.5rem .55rem}
     #map .noderow{padding:.2rem .3rem}
@@ -322,6 +324,7 @@
   .empty .seed{font-size:2.6rem; text-align:center}
   .empty h3{color:var(--fg); font-weight:600; font-size:1.25rem; margin:.5rem 0 .4rem;
     text-align:center}
+  .empty h3, #login h1, #quizbox .qq, .qsum p{text-wrap:balance}
   .empty > p{text-align:center}
   .empty .steps{display:flex; flex-direction:column; gap:.55rem; margin:1.3rem 0}
   .empty .step{
@@ -727,8 +730,8 @@
   <span class="cost" id="treecost" title="total spend on this tree"></span>
   <button id="syncbtn" class="ghost" title="trees sync to the server so every device sees them — click to sync now">☁</button>
   <button id="palbtn" class="ghost" title="jump anywhere — Ctrl+K" aria-label="jump anywhere">⌘K</button>
-  <button id="helpbtn" title="help" aria-label="help">?</button>
-  <button id="aabtn" title="reading settings" aria-label="reading settings">Aa</button>
+  <button id="helpbtn" title="help" aria-label="help" aria-haspopup="dialog" aria-expanded="false">?</button>
+  <button id="aabtn" title="reading settings" aria-label="reading settings" aria-haspopup="dialog" aria-expanded="false">Aa</button>
   <button id="logoutbtn" class="ghost">log out</button>
 </header>
 
@@ -833,7 +836,7 @@
 </div>
 
 <div id="app">
-  <aside id="sidebar">
+  <aside id="sidebar" aria-label="trees, glossary, and settings">
     <section data-side="grow">
       <h2>start</h2>
       <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic" enterkeyhint="go"></div>
@@ -1210,9 +1213,14 @@ function buildPanel(){
   });
 }
 let panelPrevFocus = null;
+function syncPanelAria(){
+  $("aabtn").setAttribute("aria-expanded", String($("aapanel").classList.contains("open")));
+  $("helpbtn").setAttribute("aria-expanded", String($("helppanel").classList.contains("open")));
+}
 function openPanel(panel, opener){
   panel.classList.add("open");
   panelPrevFocus = opener;
+  syncPanelAria();
   panel.focus();   // reading starts at the top of the panel
 }
 function closePanel(restoreFocus){
@@ -1220,6 +1228,7 @@ function closePanel(restoreFocus){
                   $("helppanel").classList.contains("open");
   $("aapanel").classList.remove("open");
   $("helppanel").classList.remove("open");
+  syncPanelAria();
   if (restoreFocus && wasOpen && panelPrevFocus && document.contains(panelPrevFocus))
     panelPrevFocus.focus();
 }
@@ -1987,7 +1996,7 @@ function renderMap(){
       ` aria-label="${esc(oneLine(title, 160))}"` +
       (n.id === currentNode ? ` aria-current="true"` : "") + `>` +
       dot + `<span class="mlabel">${esc(oneLine(n.label, 30))}</span>` +
-      (!live && canContinue(n) ? `<span class="mbadge" aria-label="unfinished">⏸</span>` : "") +
+      (!live && canContinue(n) ? `<span class="mbadge" role="img" aria-label="unfinished">⏸</span>` : "") +
       `<span class="meta">${n.turns.length}t</span></div>`;
   };
   const walk = (nid) => {
