@@ -2108,7 +2108,8 @@ function searchHits(q, cap){
       const node = getNode(tree, id);
       for (const t of node.turns){
         for (const field of ["action", "tutor", "thinking", "new_term"]){
-          const text = t[field] || "";
+          // fence markers are noise in a one-line snippet
+          const text = (t[field] || "").replace(/```[^\n]*/g, "").trim();
           const i = text.toLowerCase().indexOf(q);
           if (i >= 0){
             hits.push({tree, nodeId: node.id, turn: t.turn, where: `[${node.id}] turn ${t.turn}`,
