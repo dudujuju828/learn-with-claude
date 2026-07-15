@@ -205,8 +205,6 @@
     #tabbar button .ico{font-size:1.15rem; line-height:1.15}
     #tabbar button.active{color:var(--fg); background:var(--bg);
       box-shadow:inset 0 2px 0 var(--accent)}
-    #statusbar{bottom:calc(3.55rem + env(safe-area-inset-bottom))}
-    #jumpbtn{bottom:calc(7.6rem + env(safe-area-inset-bottom))}
     /* thumb-reachable previous/next turn, shown when there's enough to hop */
     body.has-turns:not(.sheet-open):not(.running) #hopper{display:flex}
     #hopper{
@@ -223,7 +221,6 @@
       background:var(--bg); padding:.5rem 0;
     }
     header{padding:.45rem .6rem; gap:.5rem}
-    #helppanel,#aapanel{right:.4rem; left:.4rem; width:auto}
     #gpop{max-width:calc(100vw - 1.2rem)}
   }
   @media (max-width:600px){
@@ -705,6 +702,16 @@
   #statusbar.err .dot{background:var(--danger); animation:none}
   #statusbar .msg{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #statusbar.err .msg{color:var(--danger); white-space:normal}
+
+  /* mobile offsets for the fixed chrome. These must come AFTER the base
+     rules above — same specificity, so source order decides, and an early
+     copy of these silently loses (the status bar ends up hidden behind the
+     tab bar, with the stop button unreachable). */
+  @media (max-width:900px){
+    #statusbar{bottom:calc(3.55rem + env(safe-area-inset-bottom))}
+    #jumpbtn{bottom:calc(7.6rem + env(safe-area-inset-bottom))}
+    #helppanel,#aapanel{left:.4rem; right:.4rem; width:auto}
+  }
 </style>
 </head>
 <body>
