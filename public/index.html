@@ -734,7 +734,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
-    #quizbox, #tutoreditor, #overview, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #tutoreditor, #overview, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1978,7 +1978,8 @@ function emptyHtml(){
       <div class="step"><span aria-hidden="true">⤵</span><div><b>branch</b>any answer that
         deserves a closer look becomes its own deeper conversation</div></div>
       <div class="step"><span aria-hidden="true">📖</span><div><b>keep it</b>every term lands
-        in a glossary with a real definition — and <b>quiz me</b> checks what stuck</div></div>
+        in a glossary with a real definition — <b>quiz me</b> and spaced
+        <b>review</b> check what stuck</div></div>
     </div>
     <div class="examples">${EXAMPLES.map(t =>
       `<button onclick="useExample('${esc(t)}')">${esc(t)}</button>`).join("")}</div>
@@ -3232,6 +3233,7 @@ function setRunning(on){
   document.body.classList.toggle("running", on);
   $("newbtn").disabled = $("fullbtn").disabled = $("topic").disabled = on;
   $("importbtn").disabled = on;
+  updateRevRow();   // the review button sits out runs too
 }
 
 /* ------------------------------------------------------------------ */
@@ -3668,8 +3670,13 @@ document.addEventListener("keydown", (e) => {
     }
     if (e.key === "Enter" || e.key === " "){
       const fb = document.getElementById("revflip");
-      if (fb){ e.preventDefault(); fb.click(); }
-      return;   // on the back / summary the focused button handles it natively
+      const ae = document.activeElement;
+      // flip from anywhere — except when another button (✕, a grade,
+      // done) is focused: that one acts natively
+      if (fb && !(ae && ae !== fb && ae.tagName === "BUTTON" && $("reviewbox").contains(ae))){
+        e.preventDefault(); fb.click();
+      }
+      return;
     }
   }
   if (rulerActive() && !typing){
