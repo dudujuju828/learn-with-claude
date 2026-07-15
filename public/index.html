@@ -861,7 +861,7 @@
   <aside id="sidebar" aria-label="trees, glossary, and settings">
     <section data-side="grow">
       <h2>start</h2>
-      <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic" enterkeyhint="go"></div>
+      <div class="newrow"><input id="topic" type="text" placeholder="what a hash table is" aria-label="topic" enterkeyhint="go" autocomplete="off"></div>
       <div class="btnrow">
         <button class="primary" id="newbtn" title="one investigation">new</button>
         <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
@@ -929,7 +929,7 @@
     <div id="conv"></div>
     <div id="askrow" style="display:none">
       <input id="askinput" type="text" placeholder="ask the tutor yourself…"
-             aria-label="ask the tutor yourself" enterkeyhint="send">
+             aria-label="ask the tutor yourself" enterkeyhint="send" autocomplete="off">
       <button id="askbtn" class="primary">ask</button>
     </div>
   </main>
@@ -2054,6 +2054,7 @@ function renderTreeList(){
 function renderHeader(){
   const tree = cur();
   $("treename").textContent = tree ? oneLine(tree.root_topic, 48) : "no tree";
+  $("treename").title = tree ? tree.root_topic : "";
   $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
   $("exportjson").disabled = $("exportmd").disabled = $("exporthtml").disabled = !tree;
   document.title = tree
@@ -2801,6 +2802,11 @@ function applyHash(){
 window.addEventListener("hashchange", () => {
   if (!running && applyHash()) renderAll(true);
 });
+/* crossing the mobile/desktop breakpoint changes copy ("on the left" vs
+   "under the grow tab") and how answer parts fold — redraw for the new world */
+matchMedia("(max-width:900px)").addEventListener("change", () => {
+  if (!running) renderConversation(true);
+});
 
 function renderAll(keepScroll){
   renderHeader(); renderMap(); renderTreeList(); renderTerms(); renderConversation(keepScroll);
@@ -3182,7 +3188,7 @@ function startBranchUI(nodeId, turn, btn){
   const row = btn.parentElement;
   row.innerHTML =
     `<input type="text" id="focusinput" placeholder="focus (optional — else the learner picks)"` +
-    ` aria-label="branch focus" enterkeyhint="go">` +
+    ` aria-label="branch focus" enterkeyhint="go" autocomplete="off">` +
     `<button class="primary" onclick="cmdBranch(${nodeId},${turn})">go</button>` +
     `<button onclick="renderConversation(true)">cancel</button>` +
     `<span class="why">the learner re-investigates this answer, going deeper</span>`;
