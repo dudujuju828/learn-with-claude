@@ -595,6 +595,41 @@
   #quizbox .qsum{text-align:center; padding:1rem 0 .4rem}
   #quizbox .qsum .big{font-size:2rem; margin-bottom:.4rem}
 
+  /* ---- review (spaced flashcards over the glossary) ---- */
+  #reviewbox{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #reviewbox.open{display:flex}
+  #reviewbox .box{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1.1rem 1.3rem 1.3rem; width:min(30rem,94vw); max-height:88dvh;
+    overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  #reviewbox .rhead{display:flex; align-items:center; gap:.7rem; margin-bottom:.6rem;
+    color:var(--muted); font-size:.85rem}
+  #reviewbox .rhead #revprog{flex:1}
+  .rcard{
+    text-align:center; padding:1.3rem .9rem 1.1rem; border:1px solid var(--line);
+    border-radius:.8rem; background:var(--bg);
+  }
+  .rcard .rtree{color:var(--muted); font-size:.8rem; margin-bottom:.7rem}
+  .rcard .rterm{font-size:1.3rem; color:var(--term); font-weight:600; line-height:1.35}
+  .rcard .rprompt{margin:.8rem 0 0; font-size:.84rem; color:var(--muted)}
+  .rcard .rdef{margin-top:.9rem; text-align:left; line-height:1.6; font-size:.95rem}
+  .rcard .rlinks{margin-top:.7rem; font-size:.82rem; color:var(--muted); text-align:left}
+  #reviewbox .rflip{margin-top:.9rem; display:flex; justify-content:center}
+  .rgrades{display:flex; gap:.5rem; margin-top:.9rem}
+  .rgrades .rg{
+    flex:1; padding:.55rem .4rem; border-radius:.7rem; line-height:1.3;
+    display:flex; flex-direction:column; align-items:center; gap:.05rem;
+  }
+  .rgrades .rg small{color:var(--muted); font-size:.72rem; font-weight:300}
+  .rgrades .rg.rg0{color:var(--danger)}
+  #reviewbox .qsum{text-align:center; padding:1rem 0 .4rem}
+  #reviewbox .qsum .big{font-size:1.7rem; margin-bottom:.4rem}
+
   /* ---- help panel ---- */
   #helppanel{
     display:none; position:fixed; top:calc(3.3rem + env(safe-area-inset-top));
@@ -899,6 +934,11 @@
     </section>
 
     <section data-side="gloss">
+      <div id="revwrap" style="display:none">
+        <h2>review</h2>
+        <div class="btnrow"><button id="revbtn" class="primary"></button></div>
+        <p class="hint" id="revhint"></p>
+      </div>
       <div id="termswrap" style="display:none">
         <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span>
           <span class="cl" tabindex="0" role="button" id="glossscope" style="float:right;font-weight:300;text-transform:none"
@@ -998,6 +1038,17 @@
       <button id="quizclose" class="ghost" aria-label="close quiz">✕</button>
     </div>
     <div id="quizbody"></div>
+  </div>
+</div>
+
+<div id="reviewbox" role="dialog" aria-modal="true" aria-label="glossary review">
+  <div class="box">
+    <div class="rhead">
+      <span id="revprog"></span>
+      <span class="qkbd"><kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade</span>
+      <button id="revclose" class="ghost" aria-label="close review">✕</button>
+    </div>
+    <div id="reviewbody"></div>
   </div>
 </div>
 
@@ -2270,6 +2321,7 @@ window.defineMissing = defineMissing;
 
 let glossAll = false;   // words tab scope: this tree, or every tree
 function renderTerms(){
+  updateRevRow();
   const tree = cur();
   const wrap = $("termswrap");
   let items;
@@ -2523,6 +2575,181 @@ window.answerQuiz = answerQuiz;
 function nextQuiz(){ if (quiz){ quiz.i++; renderQuiz(); } }
 window.nextQuiz = nextQuiz;
 
+/* ------------------------------------------------------------------ */
+/* review — spaced flashcards over the glossary. Every defined term    */
+/* in every tree is a card; grading it (again / good / easy) schedules */
+/* it further out, so each card comes back just before you'd forget    */
+/* it. The state rides on the glossary entry itself (entry.rev), which */
+/* syncs with the tree and survives the CLI round-trip.                */
+/* ------------------------------------------------------------------ */
+function localDay(offset = 0){
+  const d = new Date(); d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-` +
+         String(d.getDate()).padStart(2, "0");
+}
+/* grade -> next interval in days. "again" resets; the ladder is
+   1 -> 3 -> x2.5 (Anki-ish, without the ease bookkeeping). */
+const REV_STEPS = [
+  (ivl) => 0,
+  (ivl) => (ivl < 1 ? 1 : ivl < 3 ? 3 : Math.round(ivl * 2.5)),
+  (ivl) => (ivl < 1 ? 3 : Math.round(ivl * 3.5)),
+];
+function nextRev(rev, grade){
+  const ivl = Math.min(365, REV_STEPS[grade]((rev && rev.ivl) || 0));
+  return {ivl, n: grade === 0 ? 0 : ((rev && rev.n) || 0) + 1,
+          due: localDay(ivl), last: localDay(0)};
+}
+function fmtIvl(days){
+  return days < 1 ? "soon" : days < 30 ? days + "d" : Math.round(days / 30) + "mo";
+}
+function cardDue(e){
+  return !!(e && e.def) && (!e.rev || !e.rev.due || e.rev.due <= localDay(0));
+}
+function allCards(){
+  const cards = [];
+  for (const t of Object.values(store))
+    for (const [key, e] of Object.entries(glossaryOf(t)))
+      if (e && e.def && e.term) cards.push({treeId: t.id, key});
+  return cards;
+}
+function cardEntry(c){
+  const t = store[c.treeId];
+  return t ? glossaryOf(t)[c.key] || null : null;
+}
+function dueCards(){ return allCards().filter(c => cardDue(cardEntry(c))); }
+function nextDueDay(){
+  let min = null;
+  for (const c of allCards()){
+    const e = cardEntry(c);
+    if (cardDue(e)) return localDay(0);
+    const d = e.rev.due;
+    if (!min || d < min) min = d;
+  }
+  return min;
+}
+function dueWord(day){
+  if (!day) return "";
+  const diff = Math.round((new Date(day + "T12:00") - new Date(localDay(0) + "T12:00")) / 86400000);
+  return diff <= 0 ? "today" : diff === 1 ? "tomorrow" : `in ${diff} days`;
+}
+
+let review = null;        // {queue, i, done, again, revealed}
+let revPrevFocus = null;
+
+function openReview(){
+  if (running) return;
+  const due = dueCards();
+  if (!due.length) return;
+  review = {queue: shuffledIdx(due.length).map(i => due[i]),
+            i: 0, done: 0, again: 0, revealed: false};
+  revPrevFocus = document.activeElement;
+  $("reviewbox").classList.add("open");
+  renderReview();
+}
+window.openReview = openReview;
+function closeReview(){
+  $("reviewbox").classList.remove("open"); review = null;
+  renderAll(true);   // due counts changed
+  if (revPrevFocus && revPrevFocus.focus && document.contains(revPrevFocus))
+    revPrevFocus.focus();
+  revPrevFocus = null;
+}
+window.closeReview = closeReview;
+$("revclose").onclick = closeReview;
+$("reviewbox").addEventListener("click", (e) => { if (e.target === $("reviewbox")) closeReview(); });
+
+function renderReview(){
+  if (!review) return;
+  if (review.i >= review.queue.length){   // summary
+    $("revprog").textContent = "done";
+    $("reviewbody").innerHTML =
+      `<div class="qsum"><div class="big">${ico("🔁")}${review.done} card${review.done === 1 ? "" : "s"}</div>` +
+      `<p class="hint">${review.again
+          ? `${review.again} came back for another look — they'll be waiting ${dueWord(nextDueDay()) || "tomorrow"}.`
+          : `clean sweep. the next card is due ${dueWord(nextDueDay()) || "later"}.`}</p>` +
+      `<div class="qnext" style="justify-content:center">` +
+      `<button class="primary" onclick="closeReview()">done</button></div></div>`;
+    $("reviewbody").querySelector("button")?.focus();
+    return;
+  }
+  const c = review.queue[review.i];
+  const e = cardEntry(c);
+  if (!e || !e.def){ review.i++; renderReview(); return; }   // tree or def vanished mid-session
+  const t = store[c.treeId];
+  const left = review.queue.length - review.i;
+  $("revprog").textContent = `${left} card${left === 1 ? "" : "s"} left` +
+                             (review.again ? ` · ${review.again} to repeat` : "");
+  const card = (inner) =>
+    `<div class="rcard">` +
+    `<div class="rtree">${ico("🌳")}${esc(oneLine(t ? t.root_topic : "", 48))}</div>` +
+    `<div class="rterm">${esc(e.term)}</div>${inner}</div>`;
+  if (!review.revealed){
+    $("reviewbody").innerHTML =
+      card(`<p class="rprompt">say what it means — out loud counts.</p>`) +
+      `<div class="rflip"><button class="primary" id="revflip" onclick="revealReview()">show the answer</button></div>`;
+    $("revflip").focus();
+  } else {
+    const ivl = (g) => fmtIvl(REV_STEPS[g]((e.rev && e.rev.ivl) || 0));
+    const links = Number.isInteger(e.node)
+      ? `<div class="rlinks"><span class="cl" tabindex="0" role="button"` +
+        ` onclick="closeReview();openSearchHit('${esc(c.treeId)}',${e.node},${e.turn})">↪ where I met it</span></div>`
+      : "";
+    $("reviewbody").innerHTML =
+      card(`<div class="rdef">${esc(e.def)}</div>${links}`) +
+      `<div class="rgrades">` +
+      `<button class="rg rg0" onclick="gradeReview(0)">again<small>${ivl(0)}</small></button>` +
+      `<button class="rg rg1" onclick="gradeReview(1)">good<small>${ivl(1)}</small></button>` +
+      `<button class="rg rg2" onclick="gradeReview(2)">easy<small>${ivl(2)}</small></button></div>`;
+    $("reviewbody").querySelector(".rg1")?.focus();
+  }
+}
+function revealReview(){
+  if (!review || review.revealed) return;
+  review.revealed = true;
+  renderReview();
+}
+window.revealReview = revealReview;
+function gradeReview(g){
+  if (!review || !review.revealed) return;
+  const c = review.queue[review.i];
+  const e = cardEntry(c);
+  if (e){
+    e.rev = nextRev(e.rev, g);
+    const t = store[c.treeId];
+    if (t){ t.saved_at = new Date().toISOString(); markDirty(t.id); }
+    try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
+  }
+  review.done++;
+  if (g === 0){ review.again++; review.queue.push(c); }
+  review.i++;
+  review.revealed = false;
+  renderReview();
+}
+window.gradeReview = gradeReview;
+
+/* the sidebar row: how many cards are waiting, or when the next one is */
+function updateRevRow(){
+  const cards = allCards();
+  const wrap = $("revwrap");
+  if (!cards.length){ wrap.style.display = "none"; return; }
+  wrap.style.display = "";
+  const due = cards.filter(c => cardDue(cardEntry(c))).length;
+  const btn = $("revbtn");
+  if (due){
+    btn.style.display = "";
+    btn.disabled = running;
+    btn.innerHTML = `${ico("🔁")}review · ${due} due`;
+    $("revhint").textContent = "spaced practice on the glossary — each card comes " +
+      "back just before you'd forget it.";
+  } else {
+    btn.style.display = "none";
+    $("revhint").textContent =
+      `all ${cards.length} card${cards.length === 1 ? "" : "s"} reviewed — ` +
+      `the next is due ${dueWord(nextDueDay())}.`;
+  }
+}
+$("revbtn").onclick = () => openReview();
+
 /* in-text references: occurrences of defined terms inside tutor answers
    become tappable — a popover shows the definition right there */
 function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
@@ -2679,6 +2906,11 @@ function paletteActions(){
     {icon: "🌱", label: "new investigation…", sub: "type a topic",
      run(){ if (mobile()) setTab("grow"); $("topic").focus(); }},
   ];
+  if (!running){
+    const due = dueCards().length;
+    if (due) acts.push({icon: "🔁", label: "review the glossary",
+      sub: `${due} card${due === 1 ? "" : "s"} due`, run(){ openReview(); }});
+  }
   if (tree && !running){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
@@ -3392,6 +3624,7 @@ document.addEventListener("keydown", (e) => {
     if ($("palette").classList.contains("open")){ closePalette(); return; }
     if ($("overview").classList.contains("open")){ closeOverview(); return; }
     if ($("quizbox").classList.contains("open")){ closeQuiz(); return; }
+    if ($("reviewbox").classList.contains("open")){ closeReview(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
     stopSpeech(); closePanel(true); closeMenu();
@@ -3410,6 +3643,19 @@ document.addEventListener("keydown", (e) => {
       const nb = document.querySelector("#quiznext button");
       if (nb){ e.preventDefault(); nb.click(); }
       return;
+    }
+  }
+  /* review: Space/Enter flips the card, 1-3 grade it */
+  if ($("reviewbox").classList.contains("open") && !typing){
+    if (/^[1-3]$/.test(e.key)){
+      const b = document.querySelectorAll("#reviewbody .rg")[+e.key - 1];
+      if (b){ e.preventDefault(); b.click(); }
+      return;
+    }
+    if (e.key === "Enter" || e.key === " "){
+      const fb = document.getElementById("revflip");
+      if (fb){ e.preventDefault(); fb.click(); }
+      return;   // on the back / summary the focused button handles it natively
     }
   }
   if (rulerActive() && !typing){
@@ -3435,7 +3681,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "reviewbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(
