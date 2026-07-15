@@ -372,6 +372,10 @@
     background:var(--card); border:1px solid var(--line); border-radius:.95rem;
     padding:.85rem 1.1rem; margin:.7rem 0; border-left-width:5px;
   }
+  /* generated text can contain long URLs or identifiers — wrap them rather
+     than letting one word stretch a card off-screen on phones */
+  .block, .nodeinfo, .gdef, #gpop .gbody, #quizbox .qc, #quizbox .qwhy,
+  #searchresults .hit, #statusbar .msg{overflow-wrap:break-word}
   /* only the newest turn animates in — re-renders during a run must not
      make the whole conversation flicker */
   #conv .turn:last-child .block{animation:appear .3s ease-out}
