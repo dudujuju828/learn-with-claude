@@ -2053,7 +2053,7 @@ function renderTreeList(){
   list.innerHTML = items.map(t => {
     const n = Object.keys(t.nodes).length;
     return `<div class="item${t.id === currentId ? " active" : ""}" onclick="openTree('${t.id}')"` +
-      ` tabindex="0" role="button">` +
+      ` tabindex="0" role="button"${t.id === currentId ? ` aria-current="true"` : ""}>` +
       `<div class="top"><span class="lbl">${esc(oneLine(t.root_topic, 44))}</span>` +
       `<button class="del" title="remove from this browser" aria-label="delete tree"` +
       ` onclick="event.stopPropagation();deleteTree('${t.id}')">✕</button></div>` +
@@ -3341,8 +3341,11 @@ document.addEventListener("keydown", (e) => {
 function setTab(tab){
   document.body.dataset.tab = tab || "";
   document.body.classList.toggle("sheet-open", !!tab);
-  document.querySelectorAll("#tabbar button").forEach(b =>
-    b.classList.toggle("active", (b.dataset.tab || "") === (tab || "")));
+  document.querySelectorAll("#tabbar button").forEach(b => {
+    const on = (b.dataset.tab || "") === (tab || "");
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
 }
 function closeMenu(){ setTab(""); }
 document.querySelectorAll("#tabbar button").forEach(b => {
