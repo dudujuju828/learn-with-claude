@@ -687,6 +687,15 @@
   }
   .gref:hover{color:var(--term)}
 
+  /* selection chip — select words in an answer to define them */
+  #selchip{
+    position:fixed; z-index:86; border:1px solid var(--term);
+    background:var(--card); color:var(--term); border-radius:2rem;
+    padding:.32rem .75rem; font-size:.82rem; line-height:1.2;
+    box-shadow:0 6px 24px rgba(0,0,0,.18); cursor:pointer;
+  }
+  #selchip:hover{background:var(--termbg)}
+
   /* glossary popover */
   #gpop{
     position:fixed; z-index:85; background:var(--card); border:1px solid var(--term);
@@ -1068,6 +1077,8 @@
   <div class="gbody"></div>
   <div class="gfoot"></div>
 </div>
+
+<button id="selchip" hidden></button>
 
 <div id="hopper">
   <button id="hopup" aria-label="previous turn">▲</button>
@@ -2059,6 +2070,7 @@ function renderConversation(keepScroll){
   conv.innerHTML = h;
   document.body.classList.toggle("has-turns", node.turns.length >= 3);
   hideGloss();
+  hideSelchip();
   annotateTerms();
   $("askrow").style.display = (!running && node.turns.some(t => t.tutor)) ? "" : "none";
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
@@ -2844,6 +2856,84 @@ function jumpToTerm(nodeId, turn){
   }
   closeMenu();
 }
+
+/* select words in a conversation -> a floating chip defines them into
+   the glossary. The learner chases its unknowns; this is for yours.
+   Same cheap model call as the automatic definitions, same everything
+   after: dotted underlines, flashcards, anki export. */
+const selchip = $("selchip");
+let selTimer = null, selRect = null;
+function hideSelchip(){ selchip.hidden = true; }
+function selInfo(){
+  const sel = document.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount !== 1) return null;
+  const text = sel.toString().replace(/\s+/g, " ").trim();
+  if (text.length < 2 || text.length > 60 || text.split(" ").length > 5) return null;
+  const range = sel.getRangeAt(0);
+  let el = range.commonAncestorContainer;
+  if (el.nodeType !== 1) el = el.parentElement;
+  const block = el && el.closest ? el.closest("#conv .block") : null;
+  if (!block || block.closest(".pending")) return null;
+  const turnEl = block.closest(".turn");
+  const rect = range.getBoundingClientRect();
+  if (!rect.width && !rect.height) return null;
+  return {text, rect, turn: turnEl ? +turnEl.dataset.turn : null};
+}
+document.addEventListener("selectionchange", () => {
+  clearTimeout(selTimer);
+  selTimer = setTimeout(() => {
+    const info = cur() ? selInfo() : null;
+    if (!info){ hideSelchip(); return; }
+    const known = glossaryOf(cur())[info.text.toLowerCase()];
+    selchip.innerHTML = known && known.def ? `${ico("📖")}definition` : `${ico("✎")}define`;
+    selchip.setAttribute("aria-label",
+      (known && known.def ? "show the definition of " : "define ") + `“${info.text}”`);
+    selchip.dataset.term = info.text;
+    selchip.dataset.turn = info.turn ?? "";
+    selRect = info.rect;
+    selchip.hidden = false;
+    const w = selchip.offsetWidth, h = selchip.offsetHeight;
+    const left = Math.max(12, Math.min(info.rect.left + info.rect.width / 2 - w / 2,
+                                       window.innerWidth - w - 12));
+    // a coarse pointer's native selection menu sits above — go below there
+    const below = matchMedia("(pointer:coarse)").matches || info.rect.top - h - 8 < 12;
+    selchip.style.left = left + "px";
+    selchip.style.top = (below ? Math.min(info.rect.bottom + 10, window.innerHeight - h - 12)
+                               : info.rect.top - h - 8) + "px";
+  }, 180);
+});
+window.addEventListener("scroll", hideSelchip, {passive: true});
+selchip.onclick = async (ev) => {
+  ev.stopPropagation();   // the document click handler would hide the popover
+  const tree = cur();
+  const term = selchip.dataset.term || "";
+  const turn = selchip.dataset.turn ? +selchip.dataset.turn : null;
+  const rect = selRect;
+  const anchor = {getBoundingClientRect: () => rect};
+  hideSelchip();
+  if (!tree || !term || !rect) return;
+  const key = term.toLowerCase();
+  const g = glossaryOf(tree);
+  if (g[key] && g[key].def){ showGloss(g[key].term, anchor); return; }
+  const nodeId = currentNode;
+  const had = g[key];   // an undefined auto-entry keeps its identity, just gains the def
+  g[key] = had || {term, def: "", node: nodeId, turn: turn ?? 1, src: "you"};
+  try {
+    setStatus(`defining “${oneLine(term, 30)}”…`);
+    const r = await api("define", {term, topic: tree.root_topic,
+                                   context: termContext(tree, nodeId, turn ?? 1)});
+    g[key].def = r.definition || "";
+    const node = getNode(tree, nodeId);
+    if (node) node.cost += r.cost || 0;
+    saveStore();
+    clearStatus();
+    renderAll(true);   // underline it everywhere; it's a flashcard now
+    if (g[key].def) showGloss(term, anchor);
+  } catch (e){
+    if (!had) delete g[key];   // don't leave a junk shell behind
+    if (e.message !== "logged out") setError(e.message);
+  }
+};
 window.jumpToTerm = jumpToTerm;
 
 /* ------------------------------------------------------------------ */
@@ -3643,6 +3733,7 @@ document.addEventListener("keydown", (e) => {
     if ($("reviewbox").classList.contains("open")){ closeReview(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
+    if (!$("selchip").hidden){ hideSelchip(); return; }
     stopSpeech(); closePanel(true); closeMenu();
     if (rulerActive()){ prefs.ruler = false; prefs.focus = false; applyPrefs(); }
     return;
