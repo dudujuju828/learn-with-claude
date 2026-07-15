@@ -2021,7 +2021,7 @@ function renderHeader(){
   const tree = cur();
   $("treename").textContent = tree ? oneLine(tree.root_topic, 48) : "no tree";
   $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
-  $("exportjson").disabled = $("exportmd").disabled = !tree;
+  $("exportjson").disabled = $("exportmd").disabled = $("exporthtml").disabled = !tree;
   document.title = tree
     ? oneLine(tree.root_topic, 40) + " — learn with claude"
     : "learn with claude";
