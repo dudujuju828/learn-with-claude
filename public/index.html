@@ -2784,6 +2784,11 @@ function closePalette(){
 }
 window.openPalette = openPalette;
 $("palbtn").onclick = openPalette;
+/* the chip advertises the real shortcut: ⌘K only where ⌘ exists */
+if (!/Mac|iPhone|iPad/.test(navigator.platform || "")){
+  $("palbtn").textContent = "Ctrl K";
+  $("palbtn").title = "jump anywhere — Ctrl+K";
+}
 $("palette").addEventListener("click", (e) => {
   if (e.target === $("palette")) closePalette();
 });
