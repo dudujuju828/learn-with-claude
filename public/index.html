@@ -256,6 +256,13 @@
   h2{font-size:.8rem; font-weight:600; text-transform:lowercase; color:var(--muted);
     letter-spacing:.07em; margin:1.25rem 0 .45rem}
   h2:first-child{margin-top:0}
+  /* on desktop every sidebar section is visible at once — hairlines keep the
+     stack from reading as one long wall (on mobile each is its own sheet) */
+  @media (min-width:901px){
+    aside section + section{border-top:1px solid var(--line);
+      margin-top:1.2rem; padding-top:1.05rem}
+    aside section + section h2:first-child{margin-top:0}
+  }
 
   /* ---- reading panel ---- */
   #aapanel{
