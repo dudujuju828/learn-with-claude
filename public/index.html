@@ -155,6 +155,9 @@
     font-variant-numeric:tabular-nums}
   #syncbtn{color:var(--muted); font-size:.85rem; padding:.34rem .3rem; white-space:nowrap}
   #syncbtn.err{color:var(--danger)}
+  /* logging out is rare — it shouldn't out-shout the everyday buttons */
+  #logoutbtn{color:var(--muted); white-space:nowrap}
+  #logoutbtn:hover{color:var(--fg)}
   .brand .bmini{display:none}
   #app{display:flex; align-items:flex-start}
   aside{
@@ -726,7 +729,7 @@
   <button id="palbtn" class="ghost" title="jump anywhere — Ctrl+K" aria-label="jump anywhere">⌘K</button>
   <button id="helpbtn" title="help" aria-label="help">?</button>
   <button id="aabtn" title="reading settings" aria-label="reading settings">Aa</button>
-  <button id="logoutbtn">log out</button>
+  <button id="logoutbtn" class="ghost">log out</button>
 </header>
 
 <div id="helppanel" role="dialog" aria-label="help" tabindex="-1">
