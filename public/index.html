@@ -1013,7 +1013,8 @@
         <button id="exportjson" title="download this tree as a portable .know.json">save .know.json</button>
         <button id="exportmd" title="download this tree as readable markdown">export md</button>
         <button id="exporthtml" title="download the standalone dyslexia-friendly reading page (the CLI's HTML export)">export html</button>
-        <button id="importbtn" title="open a .know.json from the CLI or another device">import</button>
+        <button id="importbtn" title="open a .know.json from the CLI or another device — or a save-all backup">import</button>
+        <button id="saveall" title="every tree in one backup file — import brings them all back">save all</button>
         <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
       </div>
       <p class="hint">trees live in this browser. save the file to move one to your PC or the CLI.</p>
@@ -2230,6 +2231,7 @@ function renderHeader(){
   $("treename").title = tree ? tree.root_topic : "";
   $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
   $("exportjson").disabled = $("exportmd").disabled = $("exporthtml").disabled = !tree;
+  $("saveall").disabled = !Object.keys(store).length;
   document.title = tree
     ? oneLine(tree.root_topic, 40) + " — learn with claude"
     : "learn with claude";
@@ -2774,12 +2776,22 @@ function dueWord(day){
 let review = null;        // {queue, i, done, again, revealed}
 let revPrevFocus = null;
 
+const REV_SESSION_CAP = 25;   // a friendly session; the rest stay due
 function openReview(){
   if (running) return;
   const due = dueCards();
   if (!due.length) return;
-  review = {queue: shuffledIdx(due.length).map(i => due[i]),
-            i: 0, done: 0, again: 0, revealed: false};
+  // most-overdue first — a lapsed card is actively being forgotten, a
+  // never-reviewed one only counts as due today. Shuffled inside the session.
+  const today = localDay(0);
+  due.sort((a, b) => {
+    const d = (c) => { const e = cardEntry(c); return (e.rev && e.rev.due) || today; };
+    return d(a).localeCompare(d(b));
+  });
+  const take = due.slice(0, REV_SESSION_CAP);
+  review = {queue: shuffledIdx(take.length).map(i => take[i]),
+            i: 0, done: 0, again: 0, revealed: false,
+            rest: due.length - take.length};
   revPrevFocus = document.activeElement;
   $("reviewbox").classList.add("open");
   renderReview();
@@ -2800,13 +2812,18 @@ function renderReview(){
   if (!review) return;
   if (review.i >= review.queue.length){   // summary
     $("revprog").textContent = "done";
+    const more = dueCards().length;
     $("reviewbody").innerHTML =
       `<div class="qsum"><div class="big">${ico("🔁")}${review.done} card${review.done === 1 ? "" : "s"}</div>` +
       `<p class="hint">${review.again
           ? `${review.again} came back for another look — they'll be waiting ${dueWord(nextDueDay()) || "tomorrow"}.`
-          : `clean sweep. the next card is due ${dueWord(nextDueDay()) || "later"}.`}</p>` +
+          : `clean sweep. the next card is due ${dueWord(nextDueDay()) || "later"}.`}` +
+      `${more ? ` ${more} more ${more === 1 ? "is" : "are"} still due — another round when you're ready.` : ""}</p>` +
       `<div class="qnext" style="justify-content:center">` +
-      `<button class="primary" onclick="closeReview()">done</button></div></div>`;
+      (more ? `<button class="primary" onclick="openReview()">keep going · ${more}</button>` +
+              `<button onclick="closeReview()">done</button>`
+            : `<button class="primary" onclick="closeReview()">done</button>`) +
+      `</div></div>`;
     $("reviewbody").querySelector("button")?.focus();
     return;
   }
@@ -3759,9 +3776,25 @@ $("exporthtml").onclick = async () => {
     clearStatus();
   } catch (e){ setError(e.message); }
 };
+const FOREST_FORMAT = "learn-with-claude/knowledge-forest";   // the save-all bundle
 async function importTreeFile(f){
   try {
     const d = JSON.parse(await f.text());
+    if (d.format === FOREST_FORMAT && Array.isArray(d.trees)){
+      let last = null;
+      for (const t of d.trees){
+        if (!t || t.format !== FORMAT) continue;
+        if (!t.id) t.id = randHex(12);
+        store[t.id] = t; markDirty(t.id); last = t;
+      }
+      if (!last) throw new Error("no trees in this backup");
+      currentId = last.id; currentNode = last.root_id;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
+      catch (e) { setError("could not save to browser storage: " + e.message); }
+      renderAll(true);
+      clearStatus();
+      return;
+    }
     if (d.format !== FORMAT) throw new Error("not a knowledge-tree file");
     if (!d.id) d.id = randHex(12);
     store[d.id] = d; currentId = d.id; currentNode = d.root_id;
@@ -3769,6 +3802,14 @@ async function importTreeFile(f){
     clearStatus();
   } catch (err){ setError("import failed: " + err.message); }
 }
+$("saveall").onclick = () => {
+  const trees = Object.values(store);
+  if (!trees.length) return;
+  download(`learn-with-claude-backup-${localDay(0)}.json`,
+           JSON.stringify({format: FOREST_FORMAT, version: 1,
+                           saved_at: nowIso(), trees}, null, 1),
+           "application/json");
+};
 $("importbtn").onclick = () => $("importfile").click();
 $("importfile").onchange = (e) => {
   const f = e.target.files[0];
