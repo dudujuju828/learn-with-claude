@@ -4075,8 +4075,9 @@ window.addEventListener("storage", (e) => {
 });
 /* coming back to the app (phone → PC and back): quietly re-sync */
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && !running &&
-      Date.now() - lastSync > 60_000 &&
+  if (document.visibilityState !== "visible") return;
+  updateRevRow();   // the local day may have flipped — cards come due at midnight
+  if (!running && Date.now() - lastSync > 60_000 &&
       $("login").style.display === "none"){
     syncFromServer();
   }
