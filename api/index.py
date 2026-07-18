@@ -1,10 +1,9 @@
 """Vercel serverless backend for the learn-with-claude web app.
 
-One function serves every /api/* route (see vercel.json rewrites). It reuses
-the exact prompts and loop semantics from the CLI — `personas.py`,
-`knowledge.py`, `render.py`, and the learner-turn parser from `simulator.py`
-are imported untouched — but talks to the Anthropic Messages API directly
-instead of shelling out to the `claude` CLI (which can't run on Vercel).
+One function serves every /api/* route (see vercel.json rewrites). The route
+handlers — shared with the local Copilot server — live in
+`learn_with_claude/webapi.py`; this file supplies the Vercel transport
+(HTTP handler, cookie auth) and the Anthropic Messages API `call_model`.
 
 State lives in the browser: the client holds the knowledge tree (the same
 portable .know.json shape the CLI writes) and drives the learner↔tutor loop
@@ -25,7 +24,6 @@ import hashlib
 import hmac
 import json
 import os
-import re
 import sys
 import time
 from http.server import BaseHTTPRequestHandler
@@ -33,27 +31,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from learn_with_claude.knowledge import KnowledgeTree, conversation_digest  # noqa: E402
-from learn_with_claude.personas import (  # noqa: E402
-    GLOSSARY_SYSTEM,
-    LEARNER_LEVELS,
-    NEXT_CONCEPT_SYSTEM,
-    QUIZ_SYSTEM,
-    TUTOR_MODES,
-    branch_learner_message,
-    branch_tutor_context,
-    define_message,
-    feedback_message,
-    first_learner_message,
-    followup_learner_message,
-    followup_tutor_context,
-    learner_system,
-    next_concept_message,
-    quiz_message,
-    tutor_system,
+from learn_with_claude.personas import LEARNER_LEVELS, TUTOR_MODES  # noqa: E402
+from learn_with_claude.webapi import (  # noqa: E402
+    ApiError,
+    model_routes,
+    split_tutor_parts,  # noqa: F401  (re-export; tests import it from here)
 )
-from learn_with_claude.render import space_sentences  # noqa: E402
-from learn_with_claude.simulator import clean_term, extract_turn, first_json_object  # noqa: E402
 
 import anthropic  # noqa: E402
 
@@ -63,6 +46,8 @@ TUTOR_MODEL = os.environ.get("LEARN_TUTOR_MODEL", "claude-sonnet-5")
 GLOSSARY_MODEL = os.environ.get("LEARN_GLOSSARY_MODEL", "claude-haiku-4-5-20251001")
 EFFORT = os.environ.get("LEARN_EFFORT", "xhigh")
 MAX_TURNS = int(os.environ.get("LEARN_MAX_TURNS", "20"))
+
+ROLE_MODELS = {"learner": LEARNER_MODEL, "tutor": TUTOR_MODEL, "glossary": GLOSSARY_MODEL}
 
 COOKIE_NAME = "lwc_auth"
 TOKEN_DAYS = 30
@@ -77,12 +62,6 @@ PRICES = [
 ]
 
 _client = anthropic.Anthropic(timeout=280.0, max_retries=1)
-
-
-class ApiError(Exception):
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +100,7 @@ def cookie_token(cookie_header: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# model calls
+# model transport — the Anthropic Messages API
 # --------------------------------------------------------------------------- #
 def usage_cost(model: str, usage) -> float:
     pin, pout = 3.0, 15.0
@@ -140,9 +119,10 @@ def usage_cost(model: str, usage) -> float:
 
 
 def call_model(
-    system: str, messages: list, model: str,
+    system: str, messages: list, role: str,
     effort: "str | None" = None, max_tokens: int = 16000,
 ) -> tuple[str, float]:
+    model = ROLE_MODELS.get(role, TUTOR_MODEL)
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise ApiError(
             "ANTHROPIC_API_KEY is not set on the server — add it in the Vercel "
@@ -176,232 +156,6 @@ def call_model(
     return text, usage_cost(model, resp.usage)
 
 
-# --------------------------------------------------------------------------- #
-# prompt reconstruction — mirrors run_conversation() in simulator.py
-# --------------------------------------------------------------------------- #
-def learner_opening(body: dict) -> str:
-    kind = body.get("kind", "root")
-    if kind == "branch":
-        return branch_learner_message(
-            body["topic"], body.get("breadcrumb", ""), body.get("digest", ""),
-            body.get("branch_q", ""), body.get("branch_a", ""), body.get("focus", ""),
-        )
-    if kind == "followup":
-        return followup_learner_message(
-            body["topic"], body.get("recap", ""),
-            body.get("concept", ""), body.get("opening_question", ""),
-        )
-    return first_learner_message(body["topic"])
-
-
-def tutor_extra_context(body: dict) -> str:
-    kind = body.get("kind", "root")
-    if kind == "branch":
-        return branch_tutor_context(body.get("digest", ""), body.get("branch_a", ""))
-    if kind == "followup":
-        return followup_tutor_context(body.get("recap", ""), body.get("concept", ""))
-    return ""
-
-
-def turn_json(turn: dict) -> str:
-    """The learner's turn re-serialised as the JSON object it originally
-    emitted — used as the assistant side when rebuilding its conversation."""
-    return json.dumps(
-        {
-            "thinking": turn.get("thinking") or "",
-            "new_term": turn.get("new_term") or None,
-            "action": turn.get("action") or "",
-            "confidence": turn.get("confidence"),
-            "done": bool(turn.get("done")),
-        },
-        ensure_ascii=False,
-    )
-
-
-def handle_learner(body: dict) -> dict:
-    level = body.get("level")
-    if level not in LEARNER_LEVELS:
-        level = "student"
-    messages = [{"role": "user", "content": learner_opening(body)}]
-    for t in body.get("turns", []):
-        messages.append({"role": "assistant", "content": turn_json(t)})
-        messages.append({"role": "user", "content": feedback_message(t.get("tutor", ""))})
-    text, cost = call_model(learner_system(level), messages, LEARNER_MODEL)
-    data = extract_turn(text)
-    return {
-        "thinking": (data.get("thinking") or "").strip(),
-        "new_term": clean_term(data.get("new_term")),
-        "action": (data.get("action") or "").strip(),
-        "confidence": data.get("confidence"),
-        "done": bool(data.get("done")),
-        "cost": cost,
-    }
-
-
-# A part tag: a short bracketed label alone at the start of a line, e.g.
-# "[why]" or "[so where does the copy live?]". Purely numeric labels (citation
-# style, "[1]") don't count, and code fences are skipped while scanning.
-_PART_TAG = re.compile(r"^\s*\[([^\[\]\n]{2,60})\]\s*(.*)$")
-
-
-def split_tutor_parts(text: str) -> list:
-    """Split a tutor reply on its [label] markup lines into
-    [{"label": str, "text": str}, ...]. The opening (untagged) answer comes
-    back as a part with label "". Returns [] when there is no markup at all."""
-    parts = [{"label": "", "lines": []}]
-    in_code = False
-    for line in (text or "").split("\n"):
-        if line.lstrip().startswith("```"):
-            in_code = not in_code
-            parts[-1]["lines"].append(line)
-            continue
-        m = None if in_code else _PART_TAG.match(line)
-        label = (m.group(1).strip() if m else "")
-        if m and label and not label.isdigit():
-            parts.append({"label": label, "lines": [m.group(2)] if m.group(2).strip() else []})
-        else:
-            parts[-1]["lines"].append(line)
-    out = []
-    for p in parts:
-        body = "\n".join(p["lines"]).strip()
-        if body or p["label"]:
-            out.append({"label": p["label"], "text": body})
-    if len(out) < 2:
-        return []
-    return out
-
-
-def handle_tutor(body: dict) -> dict:
-    action = (body.get("action") or "").strip()
-    if not action:
-        raise ApiError("missing 'action'")
-    mode = body.get("mode")
-    if mode not in TUTOR_MODES:
-        mode = "balanced"
-    custom = body.get("custom_style")
-    if not isinstance(custom, str):
-        custom = None
-    elif len(custom) > 4000:
-        custom = custom[:4000]
-    system = tutor_system(diagrams=False, mode=mode, custom_style=custom, segments=True)
-    extra = tutor_extra_context(body)
-    if extra:
-        system += f"\n\n{extra}"
-    messages = []
-    for t in body.get("turns", []):
-        if t.get("action") and t.get("tutor"):
-            messages.append({"role": "user", "content": t["action"]})
-            messages.append({"role": "assistant", "content": t["tutor"]})
-    messages.append({"role": "user", "content": action})
-    text, cost = call_model(system, messages, TUTOR_MODEL)
-    parts = split_tutor_parts(text)
-    if not parts:
-        return {"tutor": space_sentences(text), "cost": cost}
-    # the stored/plain answer is the parts joined without their tags, so the
-    # learner sim, digests, search, and exports all keep seeing clean text
-    for p in parts:
-        p["text"] = space_sentences(p["text"])
-    clean = "\n\n".join(p["text"] for p in parts if p["text"])
-    return {"tutor": clean, "parts": parts, "cost": cost}
-
-
-def handle_next_concept(body: dict) -> dict:
-    message = next_concept_message(
-        body.get("root_topic", ""), body.get("covered", []), body.get("recap", "")
-    )
-    text, cost = call_model(
-        NEXT_CONCEPT_SYSTEM, [{"role": "user", "content": message}], TUTOR_MODEL
-    )
-    pick = first_json_object(text)
-    if not isinstance(pick, dict) or not str(pick.get("concept") or "").strip():
-        pick = None
-    return {"pick": pick, "cost": cost}
-
-
-def handle_define(body: dict) -> dict:
-    """One glossary definition, on the cheap model. Context is the exchange
-    where the learner hit the term, so the definition matches its use there."""
-    term = (body.get("term") or "").strip()
-    if not term:
-        raise ApiError("missing 'term'")
-    message = define_message(
-        term[:120],
-        (body.get("topic") or "").strip()[:200],
-        (body.get("context") or "").strip()[:4000],
-    )
-    text, cost = call_model(
-        GLOSSARY_SYSTEM, [{"role": "user", "content": message}],
-        GLOSSARY_MODEL, effort="none", max_tokens=300,
-    )
-    data = first_json_object(text)
-    definition = ""
-    if isinstance(data, dict):
-        definition = str(data.get("definition") or "").strip()
-    if not definition:
-        # a small model may answer in prose despite the contract — take it
-        definition = text.strip().strip('"')
-    return {"definition": definition[:600], "cost": cost}
-
-
-def handle_quiz(body: dict) -> dict:
-    """3-8 multiple-choice questions built from the tree's conversations —
-    retrieval practice on what the learner actually covered."""
-    recap = (body.get("recap") or "").strip()
-    if not recap:
-        raise ApiError("missing 'recap'")
-    try:
-        count = max(3, min(8, int(body.get("count") or 5)))
-    except (TypeError, ValueError):
-        count = 5
-    message = quiz_message((body.get("root_topic") or "").strip()[:200], recap[:24000], count)
-    text, cost = call_model(QUIZ_SYSTEM, [{"role": "user", "content": message}], TUTOR_MODEL)
-    data = first_json_object(text)
-    questions = []
-    for q in (data.get("questions") if isinstance(data, dict) else None) or []:
-        if not isinstance(q, dict):
-            continue
-        choices = [str(c).strip() for c in (q.get("choices") or []) if str(c).strip()]
-        answer = q.get("answer")
-        if (
-            str(q.get("q") or "").strip()
-            and len(choices) == 4
-            and isinstance(answer, int)
-            and 0 <= answer < 4
-        ):
-            questions.append({
-                "q": str(q["q"]).strip(),
-                "choices": choices,
-                "answer": answer,
-                "why": str(q.get("why") or "").strip(),
-            })
-    if not questions:
-        raise ApiError("the model returned no usable questions — try again", 502)
-    return {"questions": questions, "cost": cost}
-
-
-def handle_export_md(body: dict) -> dict:
-    tree = body.get("tree")
-    if not isinstance(tree, dict):
-        raise ApiError("missing 'tree'")
-    kb = KnowledgeTree.from_dict(tree)
-    return {"markdown": kb.to_markdown(), "filename": kb.default_filename().replace(".know.json", ".md")}
-
-
-def handle_export_html(body: dict) -> dict:
-    tree = body.get("tree")
-    if not isinstance(tree, dict):
-        raise ApiError("missing 'tree'")
-    from learn_with_claude.export_html import tree_to_html
-
-    kb = KnowledgeTree.from_dict(tree)
-    return {"html": tree_to_html(kb), "filename": kb.default_filename().replace(".know.json", ".html")}
-
-
-def handle_digest(body: dict) -> dict:
-    """Server-side conversation_digest so the recap text matches the CLI."""
-    return {"digest": conversation_digest(body.get("turns", []), body.get("upto"))}
-
-
 def handle_login(body: dict) -> tuple[dict, str]:
     configured = os.environ.get("APP_PASSWORD", "")
     if not configured:
@@ -423,16 +177,7 @@ def handle_config() -> dict:
     }
 
 
-ROUTES = {
-    "learner": handle_learner,
-    "tutor": handle_tutor,
-    "next_concept": handle_next_concept,
-    "define": handle_define,
-    "quiz": handle_quiz,
-    "export_md": handle_export_md,
-    "export_html": handle_export_html,
-    "digest": handle_digest,
-}
+ROUTES = model_routes(call_model)
 
 
 class handler(BaseHTTPRequestHandler):
