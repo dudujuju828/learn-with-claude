@@ -1158,7 +1158,11 @@ function conversationDigest(turns, upto=null){
   return lines.join("\n") || "  (nothing yet)";
 }
 function fmtConf(v){ return Number.isInteger(v) ? v + "%" : "—"; }
+/* local (Copilot) mode counts whole premium requests, not dollars; trees
+   grown against the API carry fractional USD costs and keep their $ */
+const provName = () => (CONFIG.provider === "copilot" ? "copilot" : "claude");
 function fmtCost(v){
+  if (CONFIG.provider === "copilot" && Number.isInteger(v || 0)) return (v || 0) + " req";
   if ((v || 0) >= 1) return "$" + v.toFixed(2);
   // sub-dollar spend keeps its precision but sheds noise zeros: $0.49, $0.0567
   return "$" + (v || 0).toFixed(4).replace(/0{1,2}$/, "");
@@ -1792,6 +1796,8 @@ function setSync(state){
                              : "synced — click to sync now");
   b.title = state === "err"
     ? "couldn't reach the server — trees are safe in this browser; click to retry"
+    : CONFIG.local
+    ? "trees save into your knowledge folder on this machine — click to sync now"
     : "trees sync to the server so every device sees them — click to sync now";
 }
 let lastSync = 0;
@@ -1977,14 +1983,14 @@ function turnHtml(node, t, prevConf, allowBranch){
   }
   if (t.action){
     h += `<div class="block action${t.user ? " user-q" : ""}">` +
-         `<div class="who">${t.user ? ico("🧑") + "you ask claude" : ico("🙋") + "I ask claude"}` +
+         `<div class="who">${t.user ? ico("🧑") + "you ask " + provName() : ico("🙋") + "I ask " + provName()}` +
          (t.new_term ? `<span class="term" role="button" tabindex="0" ` +
            `onclick="event.stopPropagation();showGloss(this.dataset.term, this)" ` +
            `data-term="${esc(t.new_term)}" title="show in glossary">${ico("🔍")}${esc(t.new_term)}</span>` : "") +
          `${copyBtn}</div>${esc(t.action)}</div>`;
   }
   if (t.tutor){
-    h += `<div class="block tutor-b"><div class="who">${ico("📘")}claude answers${copyBtn}</div>` +
+    h += `<div class="block tutor-b"><div class="who">${ico("📘")}${provName()} answers${copyBtn}</div>` +
          `${tutorBodyHtml(t, `${node.id}:${t.turn}`)}</div>`;
     if (t.done){
       h += `<div class="donechip">${ico("✓")}the learner can now explain it in their own words</div>`;
@@ -2003,7 +2009,7 @@ function activityHtml(){
   if (!activity) return "";
   const learner = activity.kind === "learner";
   return `<div class="turn pending"><div class="block ${learner ? "thinking" : "tutor-b"}">` +
-         `<div class="who">${learner ? ico("💭") + "learner is thinking" : ico("📘") + "claude is answering"}` +
+         `<div class="who">${learner ? ico("💭") + "learner is thinking" : ico("📘") + provName() + " is answering"}` +
          `<span class="dots"></span><span class="elapsed"></span></div></div></div>`;
 }
 
@@ -3467,7 +3473,7 @@ async function runInvestigation(tree, node, ctx){
   const last = node.turns[node.turns.length - 1];
   if (last && last.action && !last.tutor){
     activity = {nodeId: node.id, kind: "tutor"};
-    setStatus(`turn ${last.turn}: claude is answering…`); renderAll();
+    setStatus(`turn ${last.turn}: ${provName()} is answering…`); renderAll();
     const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action, ...tutorParams()});
     node.cost += T.cost;
     last.tutor = T.tutor;
@@ -3494,7 +3500,7 @@ async function runInvestigation(tree, node, ctx){
     if (!rec.action) break;
 
     activity = {nodeId: node.id, kind: "tutor"};
-    setStatus(`turn ${turn}: claude is answering…`); renderAll();
+    setStatus(`turn ${turn}: ${provName()} is answering…`); renderAll();
     const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action, ...tutorParams()});
     node.cost += T.cost;
     rec.tutor = T.tutor;
@@ -3640,7 +3646,7 @@ function askThunk(treeId, nodeId, question){
     }
     if (!rec.tutor){
       activity = {nodeId, kind: "tutor"};
-      setStatus("claude is answering you…"); renderAll();
+      setStatus(provName() + " is answering you…"); renderAll();
       const before = node.turns.slice(0, node.turns.indexOf(rec));
       const T = await api("tutor", {...rebuildCtx(tree, node), turns: before,
                                     action: question, ...tutorParams()});
@@ -4044,6 +4050,11 @@ async function boot(){
   if (res && !res.ok){ showLogin(); return; }
   if (res){
     try { CONFIG = await res.json(); } catch {}
+  }
+  if (CONFIG.local){
+    // localhost server: nothing to log out of, costs are copilot requests
+    $("logoutbtn").style.display = "none";
+    $("treecost").title = "model calls on this tree (copilot premium requests)";
   }
   hideLogin();
   // deep link first, else reopen the most recent local tree; the server sync
