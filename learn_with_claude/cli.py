@@ -59,12 +59,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--timeout", type=int, default=300, help="Per-call timeout in seconds.")
     p.add_argument("--once", action="store_true", help="With a topic: create the tree and exit (no shell).")
     p.add_argument("--no-color", action="store_true", help="Disable ANSI colour output.")
+    p.add_argument("--web", action="store_true",
+                   help="Serve the web app on localhost, backed by your GitHub "
+                        "Copilot login (no API key). Honours --dir; see also --port.")
+    p.add_argument("--port", type=int, default=8577,
+                   help="Port for --web (default: 8577).")
+    p.add_argument("--no-open", action="store_true",
+                   help="With --web: don't open the browser.")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     prepare_console()
+
+    if args.web:
+        from .localweb import serve
+
+        return serve(port=args.port, knowledge_dir=args.dir,
+                     open_browser=not args.no_open)
 
     vault = None if args.no_diagrams else resolve_vault(args.vault)
     if args.vault and not args.no_diagrams and vault is None:
