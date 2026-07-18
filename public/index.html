@@ -1158,11 +1158,11 @@ function conversationDigest(turns, upto=null){
   return lines.join("\n") || "  (nothing yet)";
 }
 function fmtConf(v){ return Number.isInteger(v) ? v + "%" : "—"; }
-/* local (Copilot) mode counts whole premium requests, not dollars; trees
-   grown against the API carry fractional USD costs and keep their $ */
+/* local (Copilot) mode counts premium requests (often fractional — the
+   model multipliers — or 0 on free models), not dollars */
 const provName = () => (CONFIG.provider === "copilot" ? "copilot" : "claude");
 function fmtCost(v){
-  if (CONFIG.provider === "copilot" && Number.isInteger(v || 0)) return (v || 0) + " req";
+  if (CONFIG.provider === "copilot") return +(v || 0).toFixed(2) + " req";
   if ((v || 0) >= 1) return "$" + v.toFixed(2);
   // sub-dollar spend keeps its precision but sheds noise zeros: $0.49, $0.0567
   return "$" + (v || 0).toFixed(4).replace(/0{1,2}$/, "");

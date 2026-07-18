@@ -128,6 +128,44 @@ production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob
 store add <name>` (linked to the project) for history. Not in the web app:
 tutor diagrams (they need a local Obsidian vault), `many`, `seeplusplus`.
 
+## Local web app (no keys — GitHub Copilot)
+
+The same web app served from your own machine, with model calls going through
+the **GitHub Copilot CLI** instead of the Anthropic API. No API key, no
+password, no cloud storage — nothing leaves the machine except Copilot's own
+traffic, and turns bill against your Copilot subscription's premium requests
+(the default `auto` model routing often lands on free-multiplier models, so
+many turns cost 0).
+
+```bash
+npm install -g @github/copilot   # the Copilot CLI
+copilot                          # once, to log in with GitHub, then /exit
+learn --web                      # serves http://localhost:8577 and opens it
+```
+
+How it differs from the Vercel deployment:
+
+- **No login** — the server binds 127.0.0.1 only and `/api/me` always answers.
+- **Trees are files** — they persist straight into the CLI's knowledge dir
+  (`$LEARN_DIR` or `~/.learn-with-claude/knowledge`), so the `learn` shell and
+  the web app grow one collection and your existing trees appear immediately.
+  Custom tutors live beside them in `tutors.json`.
+- **Costs are premium requests, not dollars** — the header counts `req`
+  as reported by the CLI per call; trees grown against the API keep their `$`.
+- **The tutor can ground itself locally.** Its Copilot session gets
+  **read-only** tools (`view`, `grep`, `glob` — never shell, write, or web)
+  with file access from your home directory down, so when a question touches
+  material you have on disk, it can go look. The learner, glossary, and quiz
+  roles run with no tools at all.
+
+Options: `--port` (default 8577), `--dir` for the knowledge folder,
+`--no-open` to skip the browser. Env knobs: `LEARN_COPILOT_MODEL` (or
+per-role `LEARN_COPILOT_LEARNER_MODEL` / `_TUTOR_MODEL` / `_GLOSSARY_MODEL`)
+to pin a model instead of `auto`, `LEARN_EFFORT` for reasoning effort on
+models that support it, `LEARN_TIMEOUT` per call, `LEARN_COPILOT_EXE` if the
+CLI lives somewhere unusual. `python -m learn_with_claude.localweb` works
+without installing the `learn` command.
+
 ## Quick start
 
 ```bash
@@ -290,6 +328,9 @@ learn_with_claude/
   repl.py                     # the interactive knowledge shell
   render.py                   # dyslexia-friendly terminal formatting / colour / Windows UTF-8
   cli.py                      # argument parsing & dispatch
+  webapi.py                   # the /api route handlers, shared by both web backends
+  copilot_backend.py          # GitHub Copilot CLI as a model transport (local web app)
+  localweb.py                 # `learn --web` — the web app on localhost, trees on disk
 knowledge/                    # your saved trees (*.know.json) + exported markdown
 ```
 

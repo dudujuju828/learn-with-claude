@@ -2,8 +2,9 @@
 
 Implements the same ``call_model(system, messages, role, ...)`` seam as the
 Anthropic transport in api/index.py, but each call is one ``copilot -p``
-subprocess — authenticated by the user's local Copilot login, billed as one
-premium request, with no API key anywhere.
+subprocess — authenticated by the user's local Copilot login, with no API
+key anywhere. Cost is the premium-request count the CLI itself reports
+(0 on free-multiplier models).
 
 The CLI has no system-prompt flag and no multi-turn input, so the system
 prompt and the full conversation are composed into a single prompt. Prompts
@@ -28,6 +29,7 @@ Env:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -56,7 +58,10 @@ READ_TOOLS = ["view", "grep", "glob"]
 ARGV_PROMPT_LIMIT = 25000
 
 _FLAGS_COMMON = [
-    "-s",                        # agent response only, no stats
+    # JSONL events, not plain text: when the tutor uses tools, `-s` would glue
+    # its "let me look at..." narration onto the answer; the event stream keeps
+    # the final message separate, and carries the real premium-request count.
+    "--output-format", "json",
     "--no-color",
     "--log-level", "none",
     "--no-auto-update",
@@ -192,8 +197,29 @@ def call_model(
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout or "").strip()[:500]
         raise ApiError(f"copilot exited {proc.returncode}: {detail}", 502)
-    text = (proc.stdout or "").strip()
+    return _parse_stream(proc.stdout or "")
+
+
+def _parse_stream(stdout: str) -> tuple[str, float]:
+    """The final assistant message + the premium requests actually billed,
+    out of the JSONL event stream."""
+    text, cost = "", 0.0
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        data = event.get("data") or {}
+        if event.get("type") == "assistant.message" and isinstance(data, dict):
+            text = str(data.get("content") or "")
+        elif event.get("type") == "result":
+            usage = event.get("usage") or {}
+            if isinstance(usage, dict):
+                cost = float(usage.get("premiumRequests") or 0.0)
+    text = text.strip()
     if not text:
         raise ApiError("copilot returned an empty reply", 502)
-    # cost is counted in Copilot premium requests: one per invocation
-    return text, 1.0
+    return text, cost
