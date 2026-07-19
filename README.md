@@ -136,7 +136,10 @@ directly (a local `claude` login can't run on a server), so it needs an
   or fix a card's definition inline the moment you spot it's wrong),
   scheduled out on a spaced-repetition ladder (1d → 3d → ×2.5) so each card
   comes back just before you'd forget it; the schedule lives on the glossary
-  entry, so it syncs across devices and travels in `.know.json`. A **📊
+  entry, so it syncs across devices and travels in `.know.json`. The due
+  count follows you out of the app: the browser-tab title reads *(n) topic*
+  while cards are waiting, and an installed PWA carries the count on its
+  app icon. A **📊
   progress** panel turns that review-and-quiz data into an at-a-glance view —
   recall strength (card maturity), a 14-day review forecast, your current
   streak, and quiz history — scoped to the active profile. Trees file
