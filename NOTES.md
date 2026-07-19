@@ -5,6 +5,42 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 9 — Highlights travel: kept in the file, shown in exports
+
+### What it is
+Two halves of one promise — "each tree is a single portable file":
+
+1. **The Python `KnowledgeTree` no longer strips web-side fields.** It now
+   carries `highlights` as a first-class field, and preserves *any* top-level
+   key it doesn't recognise (quiz, profile, survey, saved_at, whatever a
+   future version adds) verbatim through `from_dict` → `to_dict`. Before
+   this, opening a web-made `.know.json` in the CLI and saving silently
+   deleted your highlights, quiz, and profile — data loss with no warning.
+2. **Both exports show your highlights.** The Markdown export adds a
+   `> ★ I highlighted: …` quote under the turn each passage came from, and
+   the standalone HTML reading page adds a matching "★ I highlighted" block
+   with the passage in a theme-aware highlighter band. No highlights, no
+   section — exports of untouched trees are unchanged.
+
+### Why this one
+- It repairs an actual (if quiet) data-loss bug in the product's core
+  portability story, and it closes the export gap NOTES has carried since
+  Feature 5 ("highlights in the export… could be added later"). Your marks
+  now survive every path a tree can take: sync, file, CLI, export.
+- Wholly server/CLI-side Python with a real test harness
+  (`tests/test_web_helpers.py` already covers the note round-trip — the
+  highlight round-trip slots right beside it). No UI risk at all.
+
+### Candidates rejected (this cycle)
+- **Cross-tree highlights hub** — still parked; search (Feature 8) covers
+  retrieval, exports now cover archival.
+- **Node-level unknown-field preservation** — `Node` still filters unknown
+  keys (turn dicts already travel verbatim, and the web adds nothing at the
+  node level today); revisit only if the web ever does.
+- **Archive/pin trees** — still below the line.
+
+---
+
 ## Feature 8 — Search finds your own words
 
 ### What it is
