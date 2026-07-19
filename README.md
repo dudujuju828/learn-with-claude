@@ -129,7 +129,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   that stays put across reloads and devices (tap a mark to lift it), travels
   in `.know.json`, and shows up in both exports — the Markdown quotes each
   marked passage under its turn, the HTML reading page bands it in
-  highlighter colour. **anki
+  highlighter colour. A **★ highlights** hub in the words tab collects
+  every marked passage across the profile's trees; tap one to jump back to
+  it in context. **anki
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term into
   an in-app flashcard (recall → flip → grade yourself again / good / easy,
