@@ -5,6 +5,34 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 15 — High-contrast theme
+
+### What it is
+A sixth colour theme, **contrast**: true black page, white text, and bright
+accent hues, with every text pairing computed at **WCAG AAA (≥7:1)** and
+every border at ≥3:1 (checked programmatically, not eyeballed: fg/bg lands
+at 21:1, the weakest pair — term on its chip background — at 8.5:1). It
+behaves exactly like the other themes: a swatch in the reading settings,
+`color-scheme: dark` so native widgets follow, restored before first paint
+by the boot script, and carried into the confidence-spark colours (the
+"which themes count as dark" test is now a helper both call sites share).
+
+### Why this one
+- The app's whole identity is reading accessibility, and its five themes
+  are soft-contrast by design — lovely for dyslexic glare-sensitivity,
+  wrong for low-vision readers, who need the opposite: maximum contrast.
+  A dedicated high-contrast theme is the standard answer (and pairs well
+  with the existing large-text and spacing controls).
+- Minimal machinery: one THEMES entry (the table drives the swatches and
+  the boot restore automatically) plus two "is dark" checks unified.
+
+### Candidates rejected (this cycle)
+- **Rename a profile** — organisational; would rewrite every tree in the
+  profile; wait for demand.
+- **CLI note/highlight commands** — still the minority surface.
+
+---
+
 ## Feature 14 — ★ Highlights hub
 
 ### What it is
