@@ -878,6 +878,16 @@
     color:var(--term); border-color:color-mix(in srgb, var(--term) 40%, var(--line));
   }
   #loose .thread:hover:not(:disabled){background:var(--termbg)}
+  #loose .thpair{display:inline-flex}
+  #loose .thpair .thread{border-radius:1rem 0 0 1rem}
+  #loose .thx{
+    font-size:.82rem; padding:.25rem .5rem; border-radius:0 1rem 1rem 0;
+    margin-left:-1px; color:var(--muted);
+    border-color:color-mix(in srgb, var(--term) 40%, var(--line));
+  }
+  #loose .thx:hover:not(:disabled){background:var(--termbg); color:var(--term)}
+  #loose .threstore{align-self:center; cursor:pointer}
+  #loose .threstore:hover{color:var(--term)}
 
   /* selection chip — select words in an answer to define or dig into them */
   #selchip{
@@ -1024,7 +1034,8 @@
   <p><b>⤵ branch</b> under any tutor answer re-investigates that answer more
   deeply, growing the tree. Every turn is two real model calls (~5–7¢).
   <b>loose threads</b> (under the tree map) lists the words the learner
-  flagged but never chased — tap one to branch straight into it.</p>
+  flagged but never chased — tap one to branch straight into it, or its ✕
+  to dismiss one you don't care about (↩ brings them all back).</p>
   <p><b>tutor style</b> changes how the tutor answers — from highly technical
   to simple everyday words — and applies from the next turn, even mid-run.</p>
   <p><b>learner</b> sets how much the simulated learner already knows, from a
@@ -2258,6 +2269,11 @@ function mergeTrees(local, server){
     // presence (even "") is intent; absence means the field never existed
     // or a CLI round-trip dropped it — then the server's filing stands
     if (typeof local.profile === "string") out.profile = local.profile;
+    // dismissed loose threads mirror exactly: deletion is a restore-all,
+    // and it has to stick on the other devices too
+    if (Array.isArray(local.dismissed) && local.dismissed.length)
+      out.dismissed = structuredClone(local.dismissed);
+    else delete out.dismissed;
   }
   out.rev = server.rev || 0;   // the merge builds on the server's revision
   out.saved_at = new Date().toISOString();
@@ -2725,8 +2741,12 @@ function renderMap(){
 /* loose threads: terms the learner flagged (new_term) but neither asked
    about later in that conversation nor grew a branch from — the tree's
    unexplored frontier, and the natural places to grow it next */
+function dismissedOf(tree){
+  return Array.isArray(tree.dismissed) ? tree.dismissed : [];
+}
 function looseThreads(tree){
-  const out = [], seen = new Set();
+  // dismissed terms count as "seen": they neither list nor resurface elsewhere
+  const out = [], seen = new Set(dismissedOf(tree).map(t => String(t).toLowerCase()));
   const nodes = Object.values(tree.nodes).sort((a, b) => b.id - a.id);
   for (const node of nodes){
     const branched = new Set(node.children.map(c => getNode(tree, c)?.branch_from_turn));
@@ -2748,17 +2768,42 @@ function looseThreads(tree){
 function renderLoose(){
   const tree = cur();
   const threads = tree ? looseThreads(tree) : [];
+  const dismissed = tree ? dismissedOf(tree).length : 0;
   const wrap = $("loosewrap");
-  if (!threads.length){ wrap.style.display = "none"; return; }
+  if (!threads.length && !dismissed){ wrap.style.display = "none"; return; }
   wrap.style.display = "";
   $("loosemeta").textContent = threads.length > 1 ? `· ${threads.length}` : "";
   $("loose").innerHTML = threads.slice(0, 8).map(th =>
-    `<button class="thread" ${running ? "disabled" : ""}` +
+    `<span class="thpair"><button class="thread" ${running ? "disabled" : ""}` +
     ` data-term="${esc(th.term)}" onclick="chaseThread(${th.nodeId},${th.turn},this.dataset.term)"` +
-    ` title="jump to that answer and branch into “${esc(th.term)}”">${esc(oneLine(th.term, 26))}</button>`
+    ` title="jump to that answer and branch into “${esc(th.term)}”">${esc(oneLine(th.term, 26))}</button>` +
+    `<button class="thx" ${running ? "disabled" : ""} data-term="${esc(th.term)}"` +
+    ` onclick="dismissThread(this.dataset.term)" title="dismiss — not interested"` +
+    ` aria-label="dismiss ${esc(th.term)}">✕</button></span>`
   ).join("") + (threads.length > 8
-    ? `<span class="hint" style="align-self:center">+${threads.length - 8} more</span>` : "");
+    ? `<span class="hint" style="align-self:center">+${threads.length - 8} more</span>` : "")
+    + (dismissed
+    ? `<span class="cl hint threstore" tabindex="0" role="button" onclick="restoreThreads()"` +
+      ` title="bring the dismissed threads back">↩ ${dismissed} dismissed</span>` : "");
 }
+function dismissThread(term){
+  const tree = cur(); if (!tree) return;
+  const lc = String(term || "").toLowerCase().trim();
+  if (!lc) return;
+  const ds = dismissedOf(tree).slice();
+  if (!ds.includes(lc)) ds.push(lc);
+  tree.dismissed = ds;
+  persistTree(tree);
+  renderLoose();
+}
+window.dismissThread = dismissThread;
+function restoreThreads(){
+  const tree = cur(); if (!tree) return;
+  delete tree.dismissed;
+  persistTree(tree);
+  renderLoose();
+}
+window.restoreThreads = restoreThreads;
 function chaseThread(nodeId, turn, term){
   if (running) return;
   jumpToTerm(nodeId, turn);
