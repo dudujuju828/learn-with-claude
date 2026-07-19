@@ -151,7 +151,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   is answered with the node's context and stored as your own turn
   (`user: true`), which the simulated learner never sees. Conversations
   interrupted mid-run offer **▶ continue**; URLs deep-link to the exact tree
-  and node. On a phone the whole thing drives from a **bottom tab bar**
+  and node, and reopening the app puts you back at the exact spot you last
+  scrolled to in a conversation — the bookmark survives reloads and mobile
+  tab evictions. On a phone the whole thing drives from a **bottom tab bar**
   (read / grow / tree / words / find) whose sections open as thumb-reachable
   bottom sheets, with the ask box sticky above it and everything sized for
   fingers.

@@ -4980,11 +4980,31 @@ function cmdBranch(nodeId, branchTurn){
 /* tree list / import / export                                         */
 /* ------------------------------------------------------------------ */
 /* remember how far you'd read in each conversation, per session */
-const nodeScroll = new Map();
-function rememberScroll(){
-  if (currentId != null && currentNode != null)
-    nodeScroll.set(currentId + ":" + currentNode, window.scrollY);
+/* per-node reading positions — kept across reloads (and mobile tab
+   evictions) so a long conversation reopens at your bookmark, not the top */
+const SCROLL_KEY = "lwc.scroll.v1";
+const nodeScroll = new Map(Object.entries((() => {
+  try { return JSON.parse(localStorage.getItem(SCROLL_KEY)) || {}; } catch { return {}; }
+})()).filter(([, v]) => typeof v === "number"));
+function persistScroll(){
+  for (const k of [...nodeScroll.keys()])   // drop positions of deleted trees
+    if (!store[k.slice(0, k.lastIndexOf(":"))]) nodeScroll.delete(k);
+  try { localStorage.setItem(SCROLL_KEY, JSON.stringify(Object.fromEntries(nodeScroll))); }
+  catch {}
 }
+function rememberScroll(){
+  if (currentId == null || currentNode == null) return;
+  nodeScroll.set(currentId + ":" + currentNode, window.scrollY);
+  persistScroll();
+}
+let scrollSaveTimer = null;
+window.addEventListener("scroll", () => {
+  if (running) return;   // a run autoscrolls; that's not the reader's bookmark
+  clearTimeout(scrollSaveTimer);
+  scrollSaveTimer = setTimeout(rememberScroll, 400);
+}, {passive: true});
+window.addEventListener("pagehide", rememberScroll);
+try { history.scrollRestoration = "manual"; } catch {}   // we restore it ourselves
 function openTree(id){
   if (running) return;
   const changed = currentId !== id;
@@ -5359,6 +5379,9 @@ async function boot(){
     if (latest){ currentId = latest.id; currentNode = latest.root_id; }
   }
   renderAll(true);
+  // reopen at the bookmark — where this node was last read
+  if (currentId != null && currentNode != null)
+    window.scrollTo({top: nodeScroll.get(currentId + ":" + currentNode) || 0});
   // an empty desktop app invites typing a first topic straight away
   if (!currentId && !matchMedia("(max-width:900px)").matches) $("topic").focus();
   if (res) syncFromServer(); else setSync("err");
