@@ -2869,9 +2869,23 @@ function renderHeader(){
   $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
   $("exportjson").disabled = $("exportmd").disabled = $("exporthtml").disabled = !tree;
   $("saveall").disabled = !Object.keys(store).length;
-  document.title = tree
-    ? oneLine(tree.root_topic, 40) + " — learn with claude"
-    : "learn with claude";
+  applyTitle();
+}
+/* the tab title carries the due-card count, mail-client style; where the
+   Badging API exists (installed PWA) the app icon carries it too */
+let dueCount = 0;
+function applyTitle(){
+  const tree = cur();
+  document.title = (dueCount ? `(${dueCount}) ` : "") +
+    (tree ? oneLine(tree.root_topic, 40) + " — learn with claude"
+          : "learn with claude");
+}
+function applyBadge(){
+  try {
+    if (!navigator.setAppBadge) return;
+    (dueCount ? navigator.setAppBadge(dueCount) : navigator.clearAppBadge())
+      .catch(() => {});
+  } catch {}
 }
 
 async function copyBlock(btn){
@@ -3833,6 +3847,8 @@ function updateRevRow(){
   updateProgRow();
   const cards = allCards();
   const due = cards.filter(c => cardDue(cardEntry(c))).length;
+  dueCount = due;
+  applyTitle(); applyBadge();
   const badge = $("tabdue");
   badge.hidden = !due;
   badge.textContent = due ? String(due) : "";
