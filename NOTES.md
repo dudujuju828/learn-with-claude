@@ -5,6 +5,37 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 10 — Dismiss a loose thread
+
+### What it is
+Every chip in the **loose threads** list ("words the learner flagged but
+never chased") gains a **✕** — *not interested*. The term drops off the list,
+the dismissal is stored on `tree.dismissed` (lowercased terms), persists,
+and syncs with the tree (mirrored last-write-wins when the local copy is
+newer, like note/quiz/profile — so a restore actually sticks across devices).
+An **↩ n dismissed** link under the chips brings them all back; if every
+thread is dismissed the section stays visible just to offer the restore.
+
+### Why this one
+- Loose threads is an advertised feature ("the tree shows where it wants to
+  grow"), but it had no way to disagree with it. The learner flags plenty of
+  words you genuinely don't care to chase, and they squat in the list
+  forever — eight slots, so noise crowds out threads you *would* chase.
+  Being able to prune the frontier is what makes the frontier useful.
+- Small and pattern-shaped: one array on the tree, one merge rule following
+  the existing saved_at-gated block, two small functions, and the chip UI it
+  extends already exists.
+
+### Candidates rejected (this cycle)
+- **Drag-and-drop `.know.json` import** — nice desktop convenience for
+  CLI↔web movers; noted for a future cycle.
+- **Persist per-node reading positions across reloads** — `nodeScroll` is
+  in-memory only; small comfort, smaller value.
+- **PWA app-icon badge with the due-card count** — only visible for
+  installed PWAs; niche.
+
+---
+
 ## Feature 9 — Highlights travel: kept in the file, shown in exports
 
 ### What it is
