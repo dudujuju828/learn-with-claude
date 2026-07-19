@@ -110,11 +110,15 @@ directly (a local `claude` login can't run on a server), so it needs an
   lands in the conversation as your own turn (🧑), where you can read it,
   define terms inside it, or branch from it. **anki
   cards** downloads the defined terms as a file Anki imports directly — or
-  skip the export: **🔁 review** turns every defined term in every tree into
+  skip the export: **🔁 review** turns every defined term into
   an in-app flashcard (recall → flip → grade yourself again / good / easy),
   scheduled out on a spaced-repetition ladder (1d → 3d → ×2.5) so each card
   comes back just before you'd forget it; the schedule lives on the glossary
-  entry, so it syncs across devices and travels in `.know.json`. **🎓
+  entry, so it syncs across devices and travels in `.know.json`. Trees file
+  under **profiles** — named interest areas like *computer-science* — and the
+  active profile scopes the tree list and the review deck, so each interest
+  keeps its own flashcards; the profile name lives on the tree document and
+  syncs, merges, and exports with it. **🎓
   quiz me** writes a handful of multiple-choice questions from what the tree
   actually covered (one model call, kept with the tree — retakes just
   reshuffle), explains every answer, and records your scores. You

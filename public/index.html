@@ -299,6 +299,18 @@
   .newrow input{flex:1}
   .btnrow{display:flex; gap:.45rem; flex-wrap:wrap}
   .hint{color:var(--muted); font-size:.8rem; margin:.35rem 0 0}
+  /* profile chips — interest areas the trees file under */
+  #profilerow{display:flex; flex-wrap:wrap; gap:.35rem; margin:0 0 .45rem}
+  #profilerow:empty{display:none}
+  #profilerow .pchip{
+    font-size:.78rem; padding:.18rem .6rem; border-radius:1rem;
+    color:var(--muted); border:1px solid var(--line); background:none;
+  }
+  #profilerow .pchip.on{
+    color:var(--accent); border-color:var(--accent); background:var(--card);
+  }
+  #profilefile{display:flex; align-items:center; gap:.4rem; margin-top:.5rem}
+  #profilefile select{flex:1; font-size:.84rem; padding:.22rem .4rem; min-width:0}
   #treelist .item{
     padding:.34rem .5rem; border-radius:.55rem; cursor:pointer; margin:.15rem 0;
     border:1px solid transparent;
@@ -870,11 +882,17 @@
   <p><b>🎓 quiz me</b> — a few multiple-choice questions written from what
   this tree actually covered (your examples, your terms, your near-misses).
   Questions are written once and kept with the tree; retakes just reshuffle.</p>
-  <p><b>🔁 review</b> — every defined term, in every tree, is a flashcard.
-  Recall it, flip, grade yourself (again / good / easy), and the card is
-  scheduled further out each time — spaced repetition without leaving the
-  app. The schedule syncs with the trees, so any device continues where
-  you stopped.</p>
+  <p><b>profiles</b> — file trees under named interests (say,
+  <i>computer-science</i>) with the <b>this tree:</b> picker under the tree
+  list. The chips above the list switch the active profile, which scopes
+  both the list and the review deck — each interest keeps its own
+  flashcards instead of shuffling into one pile. <b>all</b> shows
+  everything; a tree's profile travels and syncs with it.</p>
+  <p><b>🔁 review</b> — every defined term in the active profile's trees is
+  a flashcard. Recall it, flip, grade yourself (again / good / easy), and
+  the card is scheduled further out each time — spaced repetition without
+  leaving the app. The schedule syncs with the trees, so any device
+  continues where you stopped.</p>
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
@@ -1015,7 +1033,11 @@
 
     <section data-side="tree">
       <h2>trees <span id="alltreescost"></span></h2>
+      <div id="profilerow" role="group" aria-label="profiles"></div>
       <div id="treelist"></div>
+      <label class="hint" id="profilefile">this tree:
+        <select id="profilesel" aria-label="file this tree under a profile"
+                onchange="fileTreeUnder(this.value)"></select></label>
 
       <h2>file</h2>
       <div class="btnrow">
@@ -1229,7 +1251,7 @@ const THEMES = {
 };
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
-                       tmode: "balanced", think: true, llevel: "auto"};
+                       tmode: "balanced", think: true, llevel: "auto", profile: ""};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -1703,9 +1725,71 @@ window.addEventListener("resize", () => { if (rulerActive()) refreshRuler(); });
 const FORMAT = "learn-with-claude/knowledge-tree";
 
 function newTree(topic){
-  return { format: FORMAT, version: 1, id: randHex(12), root_topic: topic,
-           created: nowIso(), root_id: null, next: 1, nodes: {} };
+  const tree = { format: FORMAT, version: 1, id: randHex(12), root_topic: topic,
+                 created: nowIso(), root_id: null, next: 1, nodes: {} };
+  if (activeProfile()) tree.profile = activeProfile();   // born into the context
+  return tree;
 }
+
+/* profiles — named interest areas ("computer-science", "history"…) that a
+   tree files under. The name lives on the tree doc, so it syncs, merges,
+   and travels in .know.json; a profile exists simply by having trees. The
+   ACTIVE profile is a device preference (like theme): it filters the tree
+   list and — the point — the review deck, so each interest keeps its own
+   flashcards instead of shuffling into one pile. Empty = everything. */
+/* names appear inside inline handlers, so quote-ish characters are out;
+   one gate keeps stored, synced, and imported names consistent */
+function cleanProfileName(s){
+  return String(s || "").replace(/['"\\<>&]/g, "").trim().slice(0, 40);
+}
+function treeProfile(t){
+  return cleanProfileName(t && typeof t.profile === "string" ? t.profile : "");
+}
+function allProfiles(){
+  const names = new Set();
+  for (const t of Object.values(store)){
+    const p = treeProfile(t);
+    if (p) names.add(p);
+  }
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+function activeProfile(){
+  const p = (prefs.profile || "").trim();
+  return p && allProfiles().includes(p) ? p : "";
+}
+function inProfile(t){
+  const p = activeProfile();
+  return !p || treeProfile(t) === p;
+}
+function setProfile(name){
+  prefs.profile = name;
+  savePrefs();
+  // switching context shows that context: land on its freshest tree
+  if (!running && name && cur() && treeProfile(cur()) !== name){
+    const latest = Object.values(store).filter(t => treeProfile(t) === name)
+      .sort((a, b) => (b.saved_at || b.created || "").localeCompare(a.saved_at || a.created || ""))[0];
+    if (latest){ openTree(latest.id); return; }
+  }
+  renderAll(true);
+}
+function fileTreeUnder(value){
+  const tree = cur();
+  if (!tree) return;
+  let name = cleanProfileName(value);
+  if (value === "__new"){
+    name = cleanProfileName(prompt("name the new profile (e.g. computer-science):"));
+    if (!name){ renderTreeList(); return; }   // reset the select
+  }
+  const wasActive = activeProfile();   // read before the refile changes it
+  tree.profile = name;   // "" is an explicit "no profile" (it survives merges)
+  persistTree(tree);
+  // filing the open tree elsewhere while a profile is active would make it
+  // vanish from the list mid-gesture — follow it instead
+  if (wasActive && name !== wasActive) prefs.profile = name;
+  savePrefs();
+  renderAll(true);
+}
+window.setProfile = setProfile; window.fileTreeUnder = fileTreeUnder;
 function allocId(tree){ const i = tree.next; tree.next = i + 1; return i; }
 function makeNode(tree, label, parentId=null, branchTurn=null, focus=""){
   const node = {
@@ -1820,6 +1904,9 @@ function mergeTrees(local, server){
   if ((local.saved_at || "") > (server.saved_at || "")){
     if (local.quiz) out.quiz = structuredClone(local.quiz);
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
+    // presence (even "") is intent; absence means the field never existed
+    // or a CLI round-trip dropped it — then the server's filing stands
+    if (typeof local.profile === "string") out.profile = local.profile;
   }
   out.rev = server.rev || 0;   // the merge builds on the server's revision
   out.saved_at = new Date().toISOString();
@@ -2318,9 +2405,17 @@ function chaseThread(nodeId, turn, term){
 window.chaseThread = chaseThread;
 
 function renderTreeList(){
+  const profiles = allProfiles();
+  const active = activeProfile();
+  $("profilerow").innerHTML = !profiles.length ? "" :
+    [["", "all"], ...profiles.map(p => [p, p])].map(([val, lbl]) =>
+      `<button class="pchip${active === val ? " on" : ""}"` +
+      `${active === val ? ` aria-pressed="true"` : ` aria-pressed="false"`}` +
+      ` onclick="setProfile('${esc(val)}')">${esc(oneLine(lbl, 24))}</button>`).join("");
   const list = $("treelist");
   const stamp = (t) => t.saved_at || t.created || "";
-  const items = Object.values(store).sort((a, b) => stamp(b).localeCompare(stamp(a)));
+  const items = Object.values(store).filter(inProfile)
+    .sort((a, b) => stamp(b).localeCompare(stamp(a)));
   list.innerHTML = items.map(t => {
     const n = Object.keys(t.nodes).length;
     return `<div class="item${t.id === currentId ? " active" : ""}" onclick="openTree('${t.id}')"` +
@@ -2330,9 +2425,21 @@ function renderTreeList(){
       ` onclick="event.stopPropagation();deleteTree('${t.id}')">✕</button></div>` +
       `<div class="meta">${n} node${n === 1 ? "" : "s"} · ${fmtCost(totalCost(t))}` +
       (stamp(t) ? ` · ${fmtDate(stamp(t))}` : "") + `</div></div>`;
-  }).join("") || `<span style="color:var(--muted);font-size:.86rem">none yet</span>`;
+  }).join("") || `<span style="color:var(--muted);font-size:.86rem">` +
+                 (active ? "no trees in this profile yet" : "none yet") + `</span>`;
   const all = items.reduce((s, t) => s + totalCost(t), 0);
   $("alltreescost").textContent = items.length > 1 ? `· ${fmtCost(all)} total` : "";
+  // filing control for the open tree: its profile, or somewhere new
+  const tree = cur();
+  $("profilefile").style.display = tree ? "" : "none";
+  if (tree){
+    const mine = treeProfile(tree);
+    const names = profiles.includes(mine) || !mine ? profiles : [...profiles, mine];
+    $("profilesel").innerHTML =
+      `<option value=""${mine ? "" : " selected"}>no profile</option>` +
+      names.map(p => `<option value="${esc(p)}"${p === mine ? " selected" : ""}>${esc(p)}</option>`).join("") +
+      `<option value="__new">new profile…</option>`;
+  }
 }
 
 function renderHeader(){
@@ -2856,10 +2963,12 @@ function cardDue(e){
   return !!(e && e.def) && (!e.rev || !e.rev.due || e.rev.due <= localDay(0));
 }
 function allCards(){
+  // scoped to the active profile: each interest keeps its own deck
   const cards = [];
   for (const t of Object.values(store))
-    for (const [key, e] of Object.entries(glossaryOf(t)))
-      if (e && e.def && e.term) cards.push({treeId: t.id, key});
+    if (inProfile(t))
+      for (const [key, e] of Object.entries(glossaryOf(t)))
+        if (e && e.def && e.term) cards.push({treeId: t.id, key});
   return cards;
 }
 function cardEntry(c){
