@@ -1062,8 +1062,10 @@
   it into the foundations it's built on (each with a one-line why, two levels
   deep). <b>investigate</b> any piece to run a normal conversation on it —
   the first roots the tree, later ones build on what's covered — and
-  <b>⤵ deeper</b> breaks a piece down further. The map lives with the tree
-  and tracks what you've investigated, so you can come back any time.</p>
+  <b>⤵ deeper</b> breaks a piece down further, and <b>know it</b> marks a
+  piece you already understand as covered without a conversation (tap
+  <b>✓ known</b> to unmark). The map lives with the tree and tracks
+  coverage, so you can come back any time.</p>
   <p><b>profiles</b> — file trees under named interests (say,
   <i>computer-science</i>) with the <b>this tree:</b> picker under the tree
   list. The chips above the list switch the active profile, which scopes
@@ -3457,11 +3459,23 @@ function surveyNames(items, out = []){
 function surveyCovered(tree, items){
   let n = 0;
   for (const it of items || []){
-    if (Number.isInteger(it.node) && getNode(tree, it.node)) n++;
+    if ((Number.isInteger(it.node) && getNode(tree, it.node)) || it.known) n++;
     n += surveyCovered(tree, it.items);
   }
   return n;
 }
+/* "know it": count a piece as covered without a conversation — for the
+   foundations you bring with you. Toggles; lives on the survey item. */
+function surveyKnown(pathStr, on){
+  const tree = cur();
+  if (!tree || !tree.survey || running || surveyBusy) return;
+  const item = surveyItemAt(tree, JSON.parse(pathStr));
+  if (!item) return;
+  if (on) item.known = true; else delete item.known;
+  persistTree(tree);
+  renderSurvey();
+}
+window.surveyKnown = surveyKnown;
 
 function surveyThunk(topic){
   let treeId = null;
@@ -3567,14 +3581,22 @@ function renderSurvey(){
   const tree = cur();
   if (!tree || !tree.survey) return;
   const row = (item, path) => {
-    const covered = Number.isInteger(item.node) && getNode(tree, item.node);
+    const investigated = Number.isInteger(item.node) && getNode(tree, item.node);
+    const known = !investigated && !!item.known;
+    const covered = investigated || known;
     const acts = [];
-    if (covered){
+    if (investigated){
       acts.push(`<button class="kid" onclick="closeSurvey();selectNode(${item.node})"` +
                 ` title="open that conversation">${ico("✓")}open</button>`);
+    } else if (known){
+      if (!running && !surveyBusy)
+        acts.push(`<button class="kid" onclick="surveyKnown('${JSON.stringify(path)}',false)"` +
+                  ` title="marked as already known — tap to unmark">${ico("✓")}known</button>`);
     } else if (!running && !surveyBusy){
       acts.push(`<button class="primary" onclick="surveyInvestigate('${JSON.stringify(path)}')"` +
                 ` title="a full investigation of this piece">investigate</button>`);
+      acts.push(`<button onclick="surveyKnown('${JSON.stringify(path)}',true)"` +
+                ` title="already know this? count it covered without a conversation">know it</button>`);
     }
     if (!(item.items && item.items.length) && path.length < 3 && !running && !surveyBusy)
       acts.push(`<button onclick="surveyDeeper('${JSON.stringify(path)}')"` +
@@ -3590,7 +3612,7 @@ function renderSurvey(){
   };
   const total = surveyNames(tree.survey.items).length;
   const done = surveyCovered(tree, tree.survey.items);
-  $("surveyprog").textContent = `${done}/${total} investigated`;
+  $("surveyprog").textContent = `${done}/${total} covered`;
   $("surveybody").innerHTML =
     tree.survey.items.map((it, i) => row(it, [i])).join("") +
     (surveyBusy ? `<p class="hint">breaking it down…</p>` : "");
