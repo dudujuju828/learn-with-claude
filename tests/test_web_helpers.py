@@ -76,26 +76,44 @@ def test_knowledge_round_trip():
         }},
         "glossary": {"widget": {"term": "widget", "def": "A thing.", "node": 1, "turn": 1}},
         "note": "My takeaway.\nStill line one.\n\nA second paragraph.",
+        "highlights": [{"node": 1, "turn": 1, "text": "a"},
+                       {"node": 99, "turn": 1, "text": "orphaned passage"},
+                       "not a dict"],
         "quiz": {"made": "2026-07-13", "questions": []},   # unknown top-level key
+        "profile": "computer-science",                     # another web-side extra
     }
     kb = KnowledgeTree.from_dict(d)
     assert kb.nodes[1].learner_level == "expert"
     assert kb.glossary["widget"]["def"] == "A thing."
     assert kb.note.startswith("My takeaway.")
+    assert [h["text"] for h in kb.highlights] == ["a", "orphaned passage"]
     out = kb.to_dict()
     assert out["glossary"]["widget"]["term"] == "widget"
     assert out["note"] == d["note"]                        # personal note round-trips
     assert out["nodes"]["1"]["turns"][0]["parts"][0]["text"] == "a"  # turn extras survive
+    # web-side fields survive a CLI round-trip instead of being stripped
+    assert out["highlights"] == kb.highlights
+    assert out["quiz"] == d["quiz"] and out["profile"] == "computer-science"
+    assert out["format"] == d["format"]                    # extras never shadow known keys
     md = kb.to_markdown()
     assert "## Glossary" in md and "**widget** — A thing." in md
     assert "## My notes" in md and "A second paragraph." in md
+    assert "> ★ I highlighted: a" in md                    # under its turn
+    assert "orphaned passage" not in md                    # no such node — dropped
     html = tree_to_html(kb)
     assert "Glossary" in html and "A thing." in html
     assert "My notes" in html and "A second paragraph." in html
+    assert "★ I highlighted" in html and "<mark>a</mark>" in html
     # an empty note adds no section
     d2 = dict(d); d2.pop("note")
     assert "My notes" not in KnowledgeTree.from_dict(d2).to_markdown()
-    print("ok  knowledge round-trip (glossary, levels, note, unknown keys)")
+    # no highlights -> no key in the file, no section in either export
+    d3 = dict(d); d3.pop("highlights")
+    kb3 = KnowledgeTree.from_dict(d3)
+    assert "highlights" not in kb3.to_dict()
+    assert "I highlighted" not in kb3.to_markdown()
+    assert "I highlighted" not in tree_to_html(kb3)
+    print("ok  knowledge round-trip (glossary, levels, note, highlights, extras)")
 
 
 def test_message_builders():

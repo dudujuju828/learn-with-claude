@@ -84,6 +84,10 @@ class Node:
 
 _NODE_FIELDS = {f.name for f in fields(Node)}
 
+# top-level keys from_dict/to_dict handle themselves; anything else is an extra
+_TREE_KEYS = {"format", "version", "id", "root_topic", "created", "root_id",
+              "next", "nodes", "glossary", "note", "highlights"}
+
 
 # --------------------------------------------------------------------------- #
 # Tree
@@ -103,6 +107,11 @@ class KnowledgeTree:
         self.glossary: dict = {}
         # the learner's own free-text synthesis of the tree (optional)
         self.note: str = ""
+        # passages the reader marked in the web app: {"node", "turn", "text"}
+        self.highlights: list = []
+        # top-level keys this version doesn't know (quiz, profile, survey, …)
+        # — kept verbatim so a CLI save never strips what the web app stored
+        self.extras: dict = {}
 
     # --- mutation --------------------------------------------------------
     def _alloc(self) -> int:
@@ -157,6 +166,19 @@ class KnowledgeTree:
     def total_cost(self) -> float:
         return sum(n.cost for n in self.nodes.values())
 
+    def highlight_map(self) -> dict:
+        """(node_id, turn) -> [passage, …] for every well-formed highlight."""
+        m: dict = {}
+        for h in self.highlights:
+            try:
+                key = (int(h.get("node")), int(h.get("turn")))
+            except (TypeError, ValueError):
+                continue
+            text = one_line(str(h.get("text") or ""), 300)
+            if text:
+                m.setdefault(key, []).append(text)
+        return m
+
     # --- persistence -----------------------------------------------------
     def to_dict(self) -> dict:
         d = {
@@ -173,6 +195,10 @@ class KnowledgeTree:
             d["glossary"] = self.glossary
         if self.note:
             d["note"] = self.note
+        if self.highlights:
+            d["highlights"] = self.highlights
+        for k, v in self.extras.items():   # setdefault: an extra never shadows
+            d.setdefault(k, v)             # a key this version owns
         return d
 
     @classmethod
@@ -188,6 +214,9 @@ class KnowledgeTree:
         tree._next = d.get("next") or (max(tree.nodes, default=0) + 1)
         tree.glossary = d.get("glossary") if isinstance(d.get("glossary"), dict) else {}
         tree.note = d.get("note") if isinstance(d.get("note"), str) else ""
+        hl = d.get("highlights")
+        tree.highlights = [h for h in hl if isinstance(h, dict)] if isinstance(hl, list) else []
+        tree.extras = {k: v for k, v in d.items() if k not in _TREE_KEYS}
         return tree
 
     def save(self, path=None) -> Path:
@@ -265,6 +294,8 @@ class KnowledgeTree:
             "",
         ]
 
+        hl_map = self.highlight_map()
+
         def walk(nid: int, depth: int) -> None:
             node = self.nodes[nid]
             hashes = "#" * min(6, depth + 2)
@@ -293,6 +324,9 @@ class KnowledgeTree:
                 out.append("")
                 if t.get("tutor"):
                     out.append(f"📘 **Claude answers:** {space_sentences(t['tutor'])}")
+                    out.append("")
+                for passage in hl_map.get((node.id, t.get("turn")), []):
+                    out.append(f"> ★ I highlighted: {passage}")
                     out.append("")
             out.append("---")
             out.append("")

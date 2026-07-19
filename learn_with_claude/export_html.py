@@ -125,6 +125,8 @@ a{{color:var(--ans);}}
 .block.ans .label{{color:var(--ans);}} .block.ans{{border-color:var(--ans);}}
 .term{{display:inline-block; background:var(--term-bg); color:var(--term);
   border:1px solid var(--term-line); border-radius:.45rem; padding:.12rem .55rem; font-weight:bold; margin:.2rem 0 1rem;}}
+.block.hlt{{border-color:var(--term);}} .block.hlt .label{{color:var(--term);}}
+.block.hlt mark{{background:var(--term-bg); color:inherit; border-radius:.25rem; padding:.05rem .2rem;}}
 details.part{{border:1px solid var(--line); border-radius:.6rem; background:var(--bg);
   margin:.7rem 0; padding:0 .8rem;}}
 details.part summary{{cursor:pointer; padding:.45rem 0; color:var(--muted); font-size:.9em;}}
@@ -534,7 +536,7 @@ def toolbar_html() -> str:
     )
 
 
-def _turn_html(t: dict) -> str:
+def _turn_html(t: dict, highlights=None) -> str:
     parts = ['<div class="turn">']
     conf = (f' <span class="conf">· confidence {t["confidence"]}%</span>'
             if t.get("confidence") is not None else "")
@@ -578,6 +580,11 @@ def _turn_html(t: dict) -> str:
             '<div class="block ans"><div class="label">📘 Claude answers</div>'
             f"{answer_html}</div>"
         )
+    if highlights:
+        marks = "".join(f"<p><mark>{_esc(h)}</mark></p>" for h in highlights)
+        parts.append(
+            f'<div class="block hlt"><div class="label">★ I highlighted</div>{marks}</div>'
+        )
     parts.append("</div>")
     return "".join(parts)
 
@@ -600,6 +607,7 @@ def tree_to_html(tree) -> str:
 
     # node sections (depth-first)
     sections = []
+    hl_map = tree.highlight_map() if hasattr(tree, "highlight_map") else {}
 
     def emit(nid: int) -> None:
         node = tree.nodes[nid]
@@ -612,7 +620,7 @@ def tree_to_html(tree) -> str:
                 f'<div class="crumb">{crumb}</div>']
         if node.focus:
             body.append(f'<div class="muted">Re-investigating: {_esc(node.focus)}</div>')
-        body.extend(_turn_html(t) for t in node.turns)
+        body.extend(_turn_html(t, hl_map.get((node.id, t.get("turn")))) for t in node.turns)
         body.append("</section>")
         sections.append("".join(body))
         for c in node.children:
