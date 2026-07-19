@@ -5,6 +5,50 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 5 — Passage highlights
+
+### What it is
+Select a stretch of a tutor answer and a **★ highlight** action appears on the
+selection chip (alongside the existing ✎ define / ⛏ dig, which now hide
+themselves for longer, sentence-length selections where they don't apply). The
+passage is marked with a highlighter band that **persists** — it's stored on
+`tree.highlights` as `{node, turn, text}` and re-applied on every render. **Tap a
+highlight to lift it.** Highlights **sync** with the tree (unioned on a merge so
+a mark made on one device survives another's edits).
+
+The re-application runs *before* the glossary-term annotation pass (and the
+annotation pass now skips inside a highlight), so the two DOM rewrites never
+fight over the same text — a highlighted sentence and a glossary underline
+coexist in the same paragraph.
+
+### Why this one
+- Highlighting is *the* canonical study action, and this is a deliberately
+  reading-first, dyslexia-friendly tool — the whole UI is built around reading
+  the tutor's words carefully. Marking the sentences that matter, and having
+  them stay marked across sessions and devices, is exactly the kind of thing a
+  real reader reaches for.
+- It builds directly on three existing patterns — the selection chip
+  (define/dig), the `annotateTerms` text-node rewriter, and the sync-merge
+  conventions — rather than introducing new architecture. The one genuinely
+  tricky part (two passes rewriting the same text) is handled by ordering plus a
+  skip rule, and the whole flow is covered by a headless test: chip behaviour on
+  long vs short selections, mark rendering, coexistence with glossary
+  annotation, tap-to-remove, persistence, and merge union.
+
+### Deliberately left out (for now)
+- **Highlights in the export.** They're an in-app reading aid; the Markdown/HTML
+  exports carry the *content* (turns, glossary, and — from Feature 4 — your
+  notes), not transient reading marks. Could be added later.
+- **A cross-tree "highlights" list.** One tree at a time is enough for v1.
+
+### Candidates rejected (this cycle)
+- **Star whole answers** — a lower-risk cousin (no text ranges), but coarser;
+  sentence-level highlighting is what a reader actually wants.
+- **Rename a tree's topic** — a real small gap (only nodes can be renamed
+  today), but low value next to highlighting; noted for a future cycle.
+
+---
+
 ## Feature 4 — Per-tree "my notes"
 
 ### What it is

@@ -432,6 +432,13 @@
   #askrow{display:flex; gap:.5rem; margin:1.6rem 0 0}
   #askrow input{flex:1}
   .tutor-b{border-left-color:var(--ans)}
+  /* saved passage highlights — a highlighter over the tutor's own words */
+  #conv mark.hl{
+    background:color-mix(in srgb, var(--think) 32%, transparent);
+    color:inherit; border-radius:.2rem; padding:.02em .05em; cursor:pointer;
+    box-decoration-break:clone; -webkit-box-decoration-break:clone;
+  }
+  #conv mark.hl:hover{background:color-mix(in srgb, var(--think) 48%, transparent)}
   .tutor-b p{margin:.85em 0}
   .tutor-b p:first-child{margin-top:0}
   .tutor-b p:last-child{margin-bottom:0}
@@ -1348,6 +1355,7 @@
 <div id="selchip" role="group" aria-label="selection actions" hidden>
   <button id="seldef"></button>
   <button id="seldig"></button>
+  <button id="selhi"></button>
 </div>
 
 <div id="hopper">
@@ -2161,6 +2169,16 @@ function mergeTrees(local, server){
     if (le.rev && (!se.rev || (le.rev.last || "") > (se.rev.last || "")))
       se.rev = structuredClone(le.rev);
   }
+  // highlights: a reading aid, append-mostly — union by node|turn|text so a
+  // mark made on one device survives a merge with another's edits
+  const localHl = Array.isArray(local.highlights) ? local.highlights : [];
+  const outHl = Array.isArray(out.highlights) ? out.highlights.slice() : [];
+  const hlSeen = new Set(outHl.map(h => `${h.node}|${h.turn}|${h.text}`));
+  for (const h of localHl){
+    const k = `${h.node}|${h.turn}|${h.text}`;
+    if (!hlSeen.has(k)){ hlSeen.add(k); outHl.push(h); }
+  }
+  if (outHl.length) out.highlights = outHl; else delete out.highlights;
   if ((local.saved_at || "") > (server.saved_at || "")){
     if (local.quiz) out.quiz = structuredClone(local.quiz);
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
@@ -2582,6 +2600,7 @@ function renderConversation(keepScroll){
   document.body.classList.toggle("has-turns", node.turns.length >= 3);
   hideGloss();
   hideSelchip();
+  applyHighlights();
   annotateTerms();
   $("askrow").style.display = (!running && node.turns.some(t => t.tutor)) ? "" : "none";
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
@@ -3866,6 +3885,87 @@ function renderStats(){
 /* in-text references: occurrences of defined terms inside tutor answers
    become tappable — a popover shows the definition right there */
 function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+/* ------------------------------------------------------------------ */
+/* passage highlights — a highlighter over the tutor's own words.      */
+/* Stored on tree.highlights as {node, turn, text}; re-applied on every */
+/* render by wrapping the passage in <mark class="hl">. Applied BEFORE  */
+/* annotateTerms (which then skips .hl), so the two never fight over    */
+/* the same text. Tap a mark to remove it. Syncs with the tree.        */
+/* ------------------------------------------------------------------ */
+function highlightsOf(tree){
+  return Array.isArray(tree.highlights) ? tree.highlights : [];
+}
+function addHighlight(turn, text){
+  const tree = cur();
+  if (!tree || currentNode == null || turn == null || Number.isNaN(turn)) return;
+  const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  if (t.length < 2) return;
+  const hs = highlightsOf(tree).slice();
+  if (hs.some(h => h.node === currentNode && h.turn === turn && h.text === t)) return;
+  if (hs.length >= 500) return;   // a sane ceiling per tree
+  hs.push({node: currentNode, turn, text: t});
+  tree.highlights = hs;
+  persistTree(tree);
+  renderConversation(true);
+}
+window.addHighlight = addHighlight;
+function removeHighlight(turn, text){
+  const tree = cur(); if (!tree) return;
+  const hs = highlightsOf(tree).slice();
+  const i = hs.findIndex(h => h.node === currentNode && h.turn === turn && h.text === text);
+  if (i < 0) return;
+  hs.splice(i, 1);
+  if (hs.length) tree.highlights = hs; else delete tree.highlights;
+  persistTree(tree);
+  renderConversation(true);
+}
+window.removeHighlight = removeHighlight;
+/* tap a highlight to lift it (but not when the tap is really a text
+   selection that happens to end on a mark) */
+$("conv").addEventListener("click", (e) => {
+  const mark = e.target.closest("mark.hl");
+  if (!mark) return;
+  const sel = document.getSelection();
+  if (sel && !sel.isCollapsed) return;
+  e.stopPropagation();          // keep read-aloud from also firing
+  removeHighlight(+mark.dataset.turn, mark.dataset.hi);
+});
+function applyHighlights(){
+  const tree = cur();
+  if (!tree || currentNode == null) return;
+  const hs = highlightsOf(tree).filter(h => h.node === currentNode);
+  if (!hs.length) return;
+  for (const h of hs){
+    const turnEl = document.querySelector(`#conv .turn[data-turn="${h.turn}"]`);
+    if (!turnEl) continue;
+    const words = String(h.text || "").trim().split(/\s+/).map(escRe);
+    if (!words.length || !words[0]) continue;
+    let re;
+    try { re = new RegExp(words.join("\\s+")); } catch { continue; }
+    const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.parentElement.closest("code,pre,.who,.hl,button,.nodeinfo")
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const tn of nodes){
+      const m = re.exec(tn.textContent);
+      if (!m) continue;
+      const start = m.index, end = start + m[0].length;
+      const frag = document.createDocumentFragment();
+      frag.appendChild(document.createTextNode(tn.textContent.slice(0, start)));
+      const mark = document.createElement("mark");
+      mark.className = "hl";
+      mark.textContent = tn.textContent.slice(start, end);
+      mark.title = "tap to remove this highlight";
+      mark.dataset.turn = h.turn;
+      mark.dataset.hi = h.text;
+      frag.appendChild(mark);
+      frag.appendChild(document.createTextNode(tn.textContent.slice(end)));
+      tn.replaceWith(frag);
+      break;   // first occurrence only
+    }
+  }
+}
 function annotateTerms(){
   const tree = cur();
   if (!tree || !tree.glossary) return;
@@ -3875,7 +3975,7 @@ function annotateTerms(){
   const re = new RegExp("(^|[^\\w])(" + terms.map(escRe).join("|") + ")(?![\\w])", "gi");
   document.querySelectorAll("#conv .tutor-b p").forEach(p => {
     const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => n.parentElement.closest("code,.gref")
+      acceptNode: (n) => n.parentElement.closest("code,.gref,.hl")
         ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -3956,7 +4056,10 @@ function selInfo(){
   const sel = document.getSelection();
   if (!sel || sel.isCollapsed || sel.rangeCount !== 1) return null;
   const text = sel.toString().replace(/\s+/g, " ").trim();
-  if (text.length < 2 || text.length > 60 || text.split(" ").length > 5) return null;
+  // short = a term-like selection (define/dig apply); longer selections up to a
+  // sentence-or-two can still be highlighted
+  if (text.length < 2 || text.length > 300) return null;
+  const long = text.length > 60 || text.split(" ").length > 5;
   const range = sel.getRangeAt(0);
   let el = range.commonAncestorContainer;
   if (el.nodeType !== 1) el = el.parentElement;
@@ -3965,20 +4068,28 @@ function selInfo(){
   const turnEl = block.closest(".turn");
   const rect = range.getBoundingClientRect();
   if (!rect.width && !rect.height) return null;
-  return {text, rect, turn: turnEl ? +turnEl.dataset.turn : null};
+  return {text, rect, turn: turnEl ? +turnEl.dataset.turn : null, long};
 }
 document.addEventListener("selectionchange", () => {
   clearTimeout(selTimer);
   selTimer = setTimeout(() => {
     const info = cur() ? selInfo() : null;
     if (!info){ hideSelchip(); return; }
-    const known = glossaryOf(cur())[info.text.toLowerCase()];
-    $("seldef").innerHTML = known && known.def ? `${ico("📖")}definition` : `${ico("✎")}define`;
-    $("seldef").setAttribute("aria-label",
-      (known && known.def ? "show the definition of " : "define ") + `“${info.text}”`);
-    $("seldig").innerHTML = `${ico("⛏")}dig`;
-    $("seldig").setAttribute("aria-label",
-      `dig into “${info.text}” — ask the tutor what it is in this context`);
+    // define/dig are for term-like selections; a longer passage only highlights
+    const short = !info.long;
+    $("seldef").style.display = short ? "" : "none";
+    $("seldig").style.display = short ? "" : "none";
+    if (short){
+      const known = glossaryOf(cur())[info.text.toLowerCase()];
+      $("seldef").innerHTML = known && known.def ? `${ico("📖")}definition` : `${ico("✎")}define`;
+      $("seldef").setAttribute("aria-label",
+        (known && known.def ? "show the definition of " : "define ") + `“${info.text}”`);
+      $("seldig").innerHTML = `${ico("⛏")}dig`;
+      $("seldig").setAttribute("aria-label",
+        `dig into “${info.text}” — ask the tutor what it is in this context`);
+    }
+    $("selhi").innerHTML = `${ico("★")}highlight`;
+    $("selhi").setAttribute("aria-label", `highlight “${oneLine(info.text, 40)}”`);
     selchip.dataset.term = info.text;
     selchip.dataset.turn = info.turn ?? "";
     selRect = info.rect;
@@ -4047,6 +4158,14 @@ $("seldig").onclick = (ev) => {
   // take the reader to it (a queued dig lands later; no jump then)
   const t = getNode(tree, nodeId)?.turns.at(-1);
   if (t && t.user && t.action === q) jumpToTerm(nodeId, t.turn);
+};
+$("selhi").onclick = (ev) => {
+  ev.stopPropagation();
+  const text = selchip.dataset.term || "";
+  const turn = selchip.dataset.turn ? +selchip.dataset.turn : NaN;
+  hideSelchip();
+  document.getSelection()?.removeAllRanges();   // let the new mark show
+  addHighlight(turn, text);
 };
 window.jumpToTerm = jumpToTerm;
 
