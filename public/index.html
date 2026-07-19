@@ -2887,6 +2887,31 @@ function searchHits(q, cap){
       }
     }
   }
+  // …and the words you wrote yourself: passage highlights, then "my notes"
+  if (hits.length < cap){
+    hlHits:
+    for (const tree of Object.values(store)){
+      for (const h of highlightsOf(tree)){
+        const text = h.text || "";
+        const i = text.toLowerCase().indexOf(q);
+        if (i < 0) continue;
+        hits.push({tree, nodeId: Number.isInteger(h.node) ? h.node : tree.root_id,
+                   turn: h.turn || 1, where: "highlight",
+                   html: snippetHtml(text, i, q.length)});
+        if (hits.length >= cap) break hlHits;
+      }
+    }
+  }
+  if (hits.length < cap){
+    for (const tree of Object.values(store)){
+      const text = (tree.note || "").replace(/\s+/g, " ").trim();
+      const i = text.toLowerCase().indexOf(q);
+      if (i < 0) continue;
+      hits.push({tree, kind: "note", where: "my notes",
+                 html: snippetHtml(text, i, q.length)});
+      if (hits.length >= cap) break;
+    }
+  }
   return hits;
 }
 function runSearch(){
@@ -2902,7 +2927,9 @@ function runSearch(){
     : `<div class="none">no matches</div>`;
   box.querySelectorAll(".hit").forEach((el) => {
     const h = hits[+el.dataset.hit];
-    el.onclick = () => openSearchHit(h.tree.id, h.nodeId, h.turn);
+    el.onclick = () => h.kind === "note"
+      ? openNoteHit(h.tree.id)
+      : openSearchHit(h.tree.id, h.nodeId, h.turn);
     // Enter/Space come from the global role=button delegate
   });
 }
@@ -2910,6 +2937,15 @@ function openSearchHit(treeId, nodeId, turn){
   if (running && treeId !== currentId) return;
   currentId = treeId;
   jumpToTerm(nodeId, turn);
+}
+/* a "my notes" hit opens the tree's notes editor rather than a turn */
+function openNoteHit(treeId){
+  if (treeId !== currentId){
+    if (running) return;
+    openTree(treeId);
+  }
+  closeMenu();
+  openNotes();
 }
 let searchTimer = null;
 $("searchbox").addEventListener("input", () => {
