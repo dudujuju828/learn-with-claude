@@ -5,6 +5,47 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 7 — Read-aloud voice & speed
+
+### What it is
+The reading-settings panel gains two controls under the read-aloud toggle: a
+**voice** picker (every voice the browser offers, your language's voices
+grouped first, "browser default" when you don't care) and a **speed** stepper
+(0.5×–2.0×, same −/+ widget as text size), plus a **▶ sample** button that
+speaks a test sentence with the current settings so you can shop for a voice
+without leaving the panel. Both apply to click-to-hear blocks *and* the 🔊
+listen-through-a-conversation flow, persist like every other reading pref, and
+reset with the panel's reset button. If the saved voice doesn't exist on this
+device (voices are per-OS/browser), speech falls back to the default without
+losing your choice; if the browser has no speech synthesis at all, the rows
+hide themselves.
+
+### Why this one
+- Text-to-speech is a first-class aid for the app's dyslexia-focused audience,
+  and until now it always used the browser's default voice at fixed speed —
+  the two settings every dedicated TTS tool treats as table stakes. Readers
+  who lean on TTS almost always want it faster; the default voice is often
+  the worst one installed.
+- Smallest risk of any candidate: pure client-side prefs (no sync, no tree
+  format, no backend), and it slots into existing machinery — the `PREF_STEPS`
+  stepper table, the panel row markup, and the single `speak()` choke point.
+
+### Deliberately left out (for now)
+- **The CLI's standalone HTML export** keeps its simpler read-aloud (toggle
+  only). It's a share artifact with its own inline script; parity can come
+  later.
+- **Pitch control** — speed and voice cover the real need; pitch is a novelty.
+
+### Candidates rejected (this cycle)
+- **Cross-tree highlights list** (deferred from Feature 5) — real value, but
+  reading-aid polish beats a second aggregation view this cycle.
+- **Search over notes/highlights** — search today covers turns + glossary;
+  worthwhile, small, noted for a future cycle.
+- **Archive/pin trees** — organisational nicety; profiles already scope the
+  list.
+
+---
+
 ## Feature 6 — Rename a tree's topic
 
 ### What it is
