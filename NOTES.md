@@ -5,6 +5,35 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 13 — The due count follows you: tab title + app badge
+
+### What it is
+When flashcards are waiting, the browser tab reads **(n) topic — learn with
+claude** — the pattern every mail client trained us on — and, where the
+Badging API exists (installed PWA on Chromium/Edge/Android, plus macOS/iOS
+Safari PWAs), the app icon carries the same count. Both clear the moment
+the deck is empty, both are scoped to the active profile exactly like the
+review deck, and both refresh where the due count already refreshed: every
+render, on waking the tab (midnight rollovers), and after review sessions.
+
+### Why this one
+- Spaced repetition only works if you come back, and the app's review nudges
+  were all *inside* the app (words-tab badge, review button). The tab title
+  is visible from every other tab with zero new permissions — the cheapest
+  possible retention surface — and the icon badge covers the installed-PWA
+  case. All the data already flowed through one function (`updateRevRow`);
+  the title just had two writers to reconcile (`renderHeader`).
+- Tiny and additive: a shared `applyTitle()` and a guarded
+  `setAppBadge`/`clearAppBadge` pair.
+
+### Candidates rejected (this cycle)
+- **Cross-tree highlights hub** — still parked; retrieval and archival are
+  both served now.
+- **Quiz over a whole profile** — model-call heavy, value unclear next to
+  per-tree quizzes plus cross-tree review.
+
+---
+
 ## Feature 12 — Survey: "know it"
 
 ### What it is
