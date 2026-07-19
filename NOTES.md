@@ -5,28 +5,32 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
-## Feature 11 — Drop a file to import it
+## Feature 11 — (correction) drag-and-drop import already existed; polish it, then: resume where you stopped reading
 
-### What it is
-Drag a `.know.json` (or a save-all backup) anywhere onto the page and a
-full-screen "⤵ drop to import" veil appears; release, and the file lands in
-the same `importTreeFile` path as the import button — including multi-file
-drops (each imported in turn). Non-file drags (text selections) are ignored;
-non-JSON files get a clear error; drops are refused while a run is in flight
-(matching the disabled import button) or before login.
+### The miss, on the record
+This cycle initially chose "drop a file to import it" — and mid-implementation
+discovered the app **already had it** (a `body.dragging::after` veil and a
+document-level drop handler), unmentioned in the README or help. The
+duplicate implementation was reverted. What shipped instead:
 
-### Why this one
-- Import/export is the product's portability story (one tree = one file, CLI
-  ↔ web), and Feature 9 just made the file format loss-free — but getting a
-  file *in* still meant hunting for the import button in the sidebar's tree
-  tab. Dropping a file onto the page is the pattern every desktop user tries
-  first.
-- Very low risk: three window-level listeners and an overlay div; the actual
-  import logic is untouched and already validates format and reports errors.
+1. **Polish of the existing drop handler** (a fix, not a feature): it now
+   reacts only to drags that actually carry files — previously *any* drag
+   (a text selection, say) summoned the "drop a .know.json" veil and
+   preventDefault'ed native text-drag behaviour — and a multi-file drop
+   imports every file instead of silently taking the first. `dragend` also
+   clears the veil if the drag is cancelled.
+2. **Documentation**: the README, the in-app hint, and the help panel now
+   mention dropping a file — the feature was invisible.
+
+### The actual Feature 11 — resume where you stopped reading
+The app already reopens your last tree on boot, but your **scroll position**
+lived only in memory: every reload (and every mobile tab eviction — the
+common case for a PWA) dumped you back at the top of a long conversation.
+Now the per-node reading positions persist (`lwc.scroll.v1`), the boot path
+restores the position of the reopened node, and positions for deleted trees
+are pruned. A reading tool should open where you left the bookmark.
 
 ### Candidates rejected (this cycle)
-- **Persist per-node scroll positions across reloads** — small comfort;
-  next in line if nothing better surfaces.
 - **PWA icon badge with due-card count** — only for installed PWAs.
 - **Cross-tree highlights hub** — still parked.
 
