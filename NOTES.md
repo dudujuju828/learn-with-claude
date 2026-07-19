@@ -5,6 +5,35 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 16 — Rename a profile
+
+### What it is
+When a profile is active, a **✎** chip appears at the end of the profile
+row: rename the interest area, and every tree filed under it is re-filed
+under the new name (each stamped and synced, so other devices follow), the
+active-profile preference moves with it, and renaming onto an existing
+profile simply merges the two. Same prompt-based pattern as renaming a
+tree's topic (Feature 6) or a node.
+
+### Why this one
+- The same stuck-state class Feature 6 fixed for tree titles: the profile
+  name you first typed (typos included) was permanent — the only way out
+  was re-filing every tree by hand through the per-tree picker. Profiles
+  scope the tree list *and* the review deck, so people invest in them;
+  investment deserves an undo for the name.
+- Tiny: one function over the existing `treeProfile`/`persistTree`/LWW
+  machinery, one chip in a row that already re-renders.
+
+### Candidates rejected (this cycle)
+- **navigator.share for exports on mobile** — nice flow polish; downloads
+  do work on mobile; next in line.
+- **Word-by-word karaoke highlighting for read-aloud** — the standout
+  remaining accessibility delighter, but boundary-event→DOM mapping across
+  the glossary/highlight rewrites is genuinely risky; needs its own
+  focused cycle with careful design.
+
+---
+
 ## Feature 15 — High-contrast theme
 
 ### What it is
