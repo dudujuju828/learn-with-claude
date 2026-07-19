@@ -5,6 +5,41 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 3 — Fix a flashcard while you review it
+
+### What it is
+On the answer side of a review flashcard there's now an **✎ edit** action
+(beside "↪ where I met it"). It swaps the definition for an inline textarea —
+correct the wording, **save**, and you're back on the same card with the graded
+intervals intact; the fix is written straight to the glossary entry (stamped,
+like Feature 2, so it survives sync) and updates the conversation underlines and
+exports when the session closes. Esc cancels the edit without leaving review;
+grading is disabled while the editor is open so you can't mis-grade.
+
+### Why this one
+- The review screen is exactly where you *notice* a definition is wrong — you're
+  staring at it, testing yourself against it. Anki's in-review "Edit" is one of
+  its most-used buttons for this reason. Feature 2 made definitions editable in
+  the glossary list; this closes the loop by putting the same fix where the
+  friction actually surfaces.
+- Very low risk and high reuse: it rides on Feature 2's save-and-stamp path and
+  the existing review state machine, adding one boolean (`review.editing`) and a
+  render branch. No backend change, no new dependency, no new scheduling
+  semantics — a saved edit doesn't reschedule the card.
+
+### Candidates rejected (this cycle)
+- **Undo toast for deletions** — re-examined and dropped: `deleteTree` and
+  `removeBranch` already gate on a native `confirm()`, so there's no silent
+  data-loss gap to close, and undoing a tree deletion tangles with the sync
+  tombstone protocol.
+- **Review across all profiles at once** — profile-scoped decks are a
+  deliberate design ("each interest keeps its own flashcards"); a power-user
+  option, not a broad win.
+- **Combined Anki export for a whole profile** — nice-to-have, but the in-app
+  review already serves the retention loop; lower marginal value.
+
+---
+
 ## Feature 2 — Editable glossary definitions
 
 ### What it is

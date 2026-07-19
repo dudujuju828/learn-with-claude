@@ -671,7 +671,17 @@
   .rcard .rterm{font-size:1.3rem; color:var(--term); font-weight:600; line-height:1.35}
   .rcard .rprompt{margin:.8rem 0 0; font-size:.84rem; color:var(--muted)}
   .rcard .rdef{margin-top:.9rem; text-align:left; line-height:1.6; font-size:.95rem}
-  .rcard .rlinks{margin-top:.7rem; font-size:.82rem; color:var(--muted); text-align:left}
+  .rcard .rlinks{margin-top:.7rem; font-size:.82rem; color:var(--muted); text-align:left;
+    display:flex; gap:.8rem; flex-wrap:wrap}
+  .rcard .redit{margin-top:.9rem; text-align:left}
+  .rcard .redit textarea{
+    width:100%; min-height:4.2rem; resize:vertical; font-family:inherit;
+    font-size:.95rem; line-height:1.6; padding:.5rem .65rem; color:var(--fg);
+    background:var(--card); border:1px solid var(--term); border-radius:.55rem;
+    letter-spacing:inherit;
+  }
+  .rcard .redit .rerow{display:flex; gap:.5rem; margin-top:.5rem; align-items:center}
+  .rcard .redit .rehint{color:var(--muted); font-size:.76rem; margin-left:auto}
   #reviewbox .rflip{margin-top:.9rem; display:flex; justify-content:center}
   .rgrades{display:flex; gap:.5rem; margin-top:.9rem}
   .rgrades .rg{
@@ -3444,14 +3454,24 @@ function renderReview(){
       card(`<p class="rprompt">say what it means — out loud counts.</p>`) +
       `<div class="rflip"><button class="primary" id="revflip" onclick="revealReview()">show the answer</button></div>`;
     $("revflip").focus();
+  } else if (review.editing){
+    // fix the definition right here — the moment you notice it's wrong
+    $("reviewbody").innerHTML =
+      card(`<div class="redit"><textarea aria-label="edit the definition of ${esc(e.term)}"` +
+        ` oninput="reviewEditInput(this.value)" placeholder="write the definition…">` +
+        `${esc(review.editDraft)}</textarea>` +
+        `<div class="rerow"><button class="primary" onclick="saveReviewEdit()">save</button>` +
+        `<button onclick="cancelReviewEdit()">cancel</button>` +
+        `<span class="rehint">also updates the glossary</span></div></div>`);
+    $("reviewbody").querySelector(".redit textarea")?.focus();
   } else {
     const ivl = (g) => fmtIvl(REV_STEPS[g]((e.rev && e.rev.ivl) || 0));
-    const links = Number.isInteger(e.node)
-      ? `<div class="rlinks"><span class="cl" tabindex="0" role="button"` +
-        ` onclick="closeReview();openSearchHit('${esc(c.treeId)}',${e.node},${e.turn})">↪ where I met it</span></div>`
-      : "";
+    const links = [`<span class="cl" tabindex="0" role="button" onclick="startReviewEdit()">✎ edit</span>`];
+    if (Number.isInteger(e.node))
+      links.push(`<span class="cl" tabindex="0" role="button"` +
+        ` onclick="closeReview();openSearchHit('${esc(c.treeId)}',${e.node},${e.turn})">↪ where I met it</span>`);
     $("reviewbody").innerHTML =
-      card(`<div class="rdef">${esc(e.def)}</div>${links}`) +
+      card(`<div class="rdef">${esc(e.def)}</div><div class="rlinks">${links.join("")}</div>`) +
       `<div class="rgrades">` +
       `<button class="rg rg0" onclick="gradeReview(0)">again<small>${ivl(0)}</small></button>` +
       `<button class="rg rg1" onclick="gradeReview(1)">good<small>${ivl(1)}</small></button>` +
@@ -3459,6 +3479,38 @@ function renderReview(){
     $("reviewbody").querySelector(".rg1")?.focus();
   }
 }
+function startReviewEdit(){
+  if (!review || !review.revealed || review.editing) return;
+  const e = cardEntry(review.queue[review.i]);
+  if (!e) return;
+  review.editing = true;
+  review.editDraft = e.def || "";
+  renderReview();
+}
+window.startReviewEdit = startReviewEdit;
+window.reviewEditInput = (v) => { if (review) review.editDraft = v; };
+function saveReviewEdit(){
+  if (!review || !review.editing) return;
+  const def = (review.editDraft || "").trim().slice(0, 600);
+  if (!def) return;   // a card can't lose its answer mid-review — cancel instead
+  const c = review.queue[review.i];
+  const e = cardEntry(c);
+  if (e){
+    e.def = def;
+    e.edited = new Date().toISOString();
+    const t = store[c.treeId];
+    if (t) persistTree(t);
+  }
+  review.editing = false;
+  renderReview();
+}
+window.saveReviewEdit = saveReviewEdit;
+function cancelReviewEdit(){
+  if (!review) return;
+  review.editing = false;
+  renderReview();
+}
+window.cancelReviewEdit = cancelReviewEdit;
 function revealReview(){
   if (!review || review.revealed) return;
   review.revealed = true;
@@ -3466,7 +3518,7 @@ function revealReview(){
 }
 window.revealReview = revealReview;
 function gradeReview(g){
-  if (!review || !review.revealed) return;
+  if (!review || !review.revealed || review.editing) return;
   const c = review.queue[review.i];
   const e = cardEntry(c);
   if (e){
@@ -4728,7 +4780,10 @@ document.addEventListener("keydown", (e) => {
     if ($("overview").classList.contains("open")){ closeOverview(); return; }
     if ($("quizbox").classList.contains("open")){ closeQuiz(); return; }
     if ($("surveybox").classList.contains("open")){ closeSurvey(); return; }
-    if ($("reviewbox").classList.contains("open")){ closeReview(); return; }
+    if ($("reviewbox").classList.contains("open")){
+      if (review && review.editing){ cancelReviewEdit(); return; }
+      closeReview(); return;
+    }
     if ($("statsbox").classList.contains("open")){ closeStats(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
