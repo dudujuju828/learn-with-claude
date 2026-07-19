@@ -80,7 +80,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   **focus line** (typoscope) stepping visual lines, read aloud (per block, or
   🔊 listen through a whole conversation — with your pick of the browser's
   voices and a 0.5–2× speed control, and a ▶ sample button to audition them),
-  **search across every tree**,
+  **search across every tree** (turns, glossary, and your own notes and
+  highlights — a note hit opens the notes editor, a highlight hit jumps to
+  the marked passage),
   branch buttons under every answer (plus a **loose threads** list of the
   words the learner flagged but never chased — tap one to branch straight
   into it), live cost, and `.know.json`
