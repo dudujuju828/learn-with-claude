@@ -645,6 +645,18 @@ def tree_to_html(tree) -> str:
     meta = (f'<p class="muted">Created {_esc(tree.created)} · {len(tree.nodes)} '
             f'investigations · total cost ${tree.total_cost():.4f}</p>')
 
+    note = (getattr(tree, "note", "") or "").strip()
+    note_html = ""
+    if note:
+        paras = "".join(
+            "<p>" + "<br>".join(_esc(line) for line in para.split("\n")) + "</p>"
+            for para in re.split(r"\n{2,}", note) if para.strip()
+        )
+        note_html = (
+            '<section class="node" id="mynotes"><h2>📝 My notes</h2>'
+            f'<div class="turn"><div class="block">{paras}</div></div></section>'
+        )
+
     return (
         "<!doctype html><html lang=\"en\"><head>"
         + _HEAD.format(title=_esc(title))
@@ -652,6 +664,7 @@ def tree_to_html(tree) -> str:
         + toolbar
         + f"<h1>🌳 {_esc(tree.root_topic)}</h1>"
         + meta
+        + note_html
         + '<div class="map"><div class="label">Map of what I explored</div>'
         + nav_html
         + "</div>"

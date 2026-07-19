@@ -775,6 +775,33 @@
     #statsbox .st-axis span:nth-child(even){visibility:hidden}
   }
 
+  /* ---- my notes (per-tree free-text synthesis) ---- */
+  #notesbox{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #notesbox.open{display:flex}
+  #notesbox .box{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1.1rem 1.3rem 1.1rem; width:min(38rem,94vw); max-height:88dvh;
+    display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  #notesbox .nthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.7rem}
+  #notesbox #nttitle{font-weight:600}
+  #notesbox #ntscope{flex:1; color:var(--muted); font-size:.82rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #notesbox #ntarea{
+    flex:1; min-height:9rem; resize:vertical; width:100%; font-family:inherit;
+    font-size:1rem; line-height:1.7; padding:.7rem .8rem; color:var(--fg);
+    background:var(--bg); border:1px solid var(--line); border-radius:.7rem;
+    letter-spacing:inherit; word-spacing:inherit;
+  }
+  #notesbox .ntfoot{display:flex; align-items:center; gap:.7rem; margin-top:.7rem}
+  #notesbox #ntmeta{flex:1}
+  .nodeinfo .nacts button.notes.has{border-color:color-mix(in srgb, var(--accent) 60%, var(--line))}
+  .nodeinfo .nacts button.notes .ndot{color:var(--accent); font-size:.7em; vertical-align:.15em}
+
   /* ---- help panel ---- */
   #helppanel{
     display:none; position:fixed; top:calc(3.3rem + env(safe-area-inset-top));
@@ -907,7 +934,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
-    #quizbox, #reviewbox, #tutoreditor, #overview, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #statsbox, #notesbox, #tutoreditor, #overview, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1293,6 +1320,22 @@
       <button id="statclose" class="ghost" aria-label="close progress">✕</button>
     </div>
     <div id="statsbody"></div>
+  </div>
+</div>
+
+<div id="notesbox" role="dialog" aria-modal="true" aria-label="my notes">
+  <div class="box">
+    <div class="nthead">
+      <span id="nttitle">📝 my notes</span>
+      <span id="ntscope"></span>
+      <button id="ntclose" class="ghost" aria-label="close notes">✕</button>
+    </div>
+    <textarea id="ntarea" aria-label="my notes for this tree"
+      placeholder="Your own words on what you learned — the summary, the key insight, what to revisit. Writing it yourself is what makes it stick."></textarea>
+    <div class="ntfoot">
+      <span id="ntmeta" class="hint"></span>
+      <button id="ntdone" class="primary">done</button>
+    </div>
   </div>
 </div>
 
@@ -1788,6 +1831,53 @@ async function copyLink(el){
 window.copyLink = copyLink;
 
 /* ------------------------------------------------------------------ */
+/* my notes — a per-tree free-text synthesis. Stored on tree.note, it   */
+/* syncs like the rest of the tree (last write wins by saved_at) and    */
+/* heads the markdown and HTML exports. Closing the editor autosaves.   */
+/* ------------------------------------------------------------------ */
+const NOTE_MAX = 20000;
+let notesPrevFocus = null;
+function updateNotesMeta(){
+  const v = $("ntarea").value.trim();
+  const words = v ? v.split(/\s+/).length : 0;
+  $("ntmeta").textContent = words
+    ? `${words} word${words === 1 ? "" : "s"} · saved with the tree`
+    : "travels with the tree · syncs · heads every export";
+}
+function openNotes(){
+  const tree = cur(); if (!tree) return;
+  notesPrevFocus = document.activeElement;
+  $("ntscope").textContent = "· " + oneLine(tree.root_topic, 60);
+  const ta = $("ntarea");
+  ta.value = tree.note || "";
+  $("notesbox").classList.add("open");
+  updateNotesMeta();
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+window.openNotes = openNotes;
+function persistNotes(){
+  const tree = cur(); if (!tree) return;
+  const v = $("ntarea").value.replace(/[ \t]+$/gm, "").replace(/\s+$/, "").slice(0, NOTE_MAX);
+  if ((tree.note || "") === v) return;   // unchanged — don't churn the sync queue
+  tree.note = v;
+  persistTree(tree);
+  renderConversation(true);   // refresh the notes-button indicator
+}
+function closeNotes(){
+  persistNotes();
+  $("notesbox").classList.remove("open");
+  if (notesPrevFocus && notesPrevFocus.focus && document.contains(notesPrevFocus))
+    notesPrevFocus.focus();
+  notesPrevFocus = null;
+}
+window.closeNotes = closeNotes;
+$("ntdone").onclick = closeNotes;
+$("ntclose").onclick = closeNotes;
+$("ntarea").addEventListener("input", updateNotesMeta);
+$("notesbox").addEventListener("click", (e) => { if (e.target === $("notesbox")) closeNotes(); });
+
+/* ------------------------------------------------------------------ */
 /* reading ruler + focus line — keyboard only, like the HTML export:   */
 /* arrow keys step one sentence-block at a time, the page scrolls so   */
 /* the current line stays centred (teleprompter), the mouse never      */
@@ -2075,6 +2165,7 @@ function mergeTrees(local, server){
     if (local.quiz) out.quiz = structuredClone(local.quiz);
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
     if (local.survey) out.survey = structuredClone(local.survey);
+    if (typeof local.note === "string") out.note = local.note;
     // presence (even "") is intent; absence means the field never existed
     // or a CLI round-trip dropped it — then the server's filing stands
     if (typeof local.profile === "string") out.profile = local.profile;
@@ -2453,6 +2544,12 @@ function renderConversation(keepScroll){
   if (!running && node.turns.length){
     acts.push(`<button onclick="listenNode()" title="read the whole conversation aloud — Esc stops">${ico("🔊")}listen</button>`);
     acts.push(`<button onclick="copyLink(this)" title="copy a link straight to this conversation">${ico("🔗")}link</button>`);
+  }
+  if (!running){
+    const hasNote = !!(tree.note && tree.note.trim());
+    acts.push(`<button class="notes${hasNote ? " has" : ""}" onclick="openNotes()"` +
+              ` title="your own synthesis of this tree — it travels with the tree, syncs, and heads every export">` +
+              `${ico("📝")}notes${hasNote ? ' <span class="ndot" aria-hidden="true">●</span>' : ""}</button>`);
   }
   const totalTurns = Object.values(tree.nodes).reduce((s, n) => s + n.turns.length, 0);
   if (!running && totalTurns >= 2){
@@ -4040,6 +4137,7 @@ function paletteActions(){
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
     if (tree.survey && tree.survey.items && tree.survey.items.length)
       acts.push({icon: "🗺", label: "survey", sub: "the topic's foundations map", run(){ openSurvey(); }});
+    acts.push({icon: "📝", label: "my notes", sub: tree.note && tree.note.trim() ? "your synthesis of this tree" : "jot your own synthesis", run(){ openNotes(); }});
     acts.push({icon: "🔊", label: "listen", sub: "read this conversation aloud", run(){ listenNode(); }});
     acts.push({icon: "💾", label: "save .know.json", sub: "", run(){ $("exportjson").click(); }});
     acts.push({icon: "📄", label: "export markdown", sub: "", run(){ $("exportmd").click(); }});
@@ -4785,6 +4883,7 @@ document.addEventListener("keydown", (e) => {
       closeReview(); return;
     }
     if ($("statsbox").classList.contains("open")){ closeStats(); return; }
+    if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
@@ -4848,7 +4947,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "notesbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(

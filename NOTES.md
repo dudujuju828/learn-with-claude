@@ -5,6 +5,45 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 4 — Per-tree "my notes"
+
+### What it is
+Every tree gets a **📝 notes** button (in the conversation header and the ⌘K
+palette) that opens a roomy editor for your own free-text synthesis of what you
+learned — the summary, the key insight, what to revisit. It:
+
+- stores on `tree.note`, **autosaves** on close (Esc / ✕ / backdrop / "done"),
+  and shows a live word count;
+- **syncs** across devices with the tree (last write wins by `saved_at`, and the
+  glossary/quiz merge path was extended to carry the note);
+- **heads every export** — a "My notes" section is emitted at the top of both the
+  Markdown and the standalone HTML export (`KnowledgeTree` now carries `note`
+  through `from_dict` / `to_dict`, and both exporters render it);
+- shows a **● indicator** on the button once a note exists.
+
+### Why this one
+- It's the one place the learner puts things in *their own words*. The
+  "generation effect" — that you remember what you produce far better than what
+  you merely read — is one of the most robust findings in learning science, and
+  the app had no surface for it: every other artifact (turns, glossary, quiz) is
+  machine-generated. This closes that gap and is exactly the kind of thing a
+  real user keeps coming back to.
+- Contained and consistent: it reuses the modal / Esc / focus-trap plumbing and
+  the sync-merge conventions, and the export change is a small, tested addition
+  to the two exporters. The Python round-trip test now asserts the note
+  survives `to_dict` and appears in both exports (and that an absent note adds
+  no section).
+
+### Candidates rejected (this cycle)
+- **Passage highlights** — high value for a reading-first tool, but persisting
+  and re-applying highlight ranges over re-rendered answers (and reconciling
+  them with the existing glossary underlining pass) is genuinely fiddly; a
+  future cycle.
+- **Pin/favourite trees** — a nice list-ordering convenience, but lower value
+  than a first-class place for your own synthesis.
+
+---
+
 ## Feature 3 — Fix a flashcard while you review it
 
 ### What it is

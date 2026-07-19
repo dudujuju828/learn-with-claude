@@ -75,19 +75,27 @@ def test_knowledge_round_trip():
             "unknown_future_field": {"nested": True},   # must not crash
         }},
         "glossary": {"widget": {"term": "widget", "def": "A thing.", "node": 1, "turn": 1}},
+        "note": "My takeaway.\nStill line one.\n\nA second paragraph.",
         "quiz": {"made": "2026-07-13", "questions": []},   # unknown top-level key
     }
     kb = KnowledgeTree.from_dict(d)
     assert kb.nodes[1].learner_level == "expert"
     assert kb.glossary["widget"]["def"] == "A thing."
+    assert kb.note.startswith("My takeaway.")
     out = kb.to_dict()
     assert out["glossary"]["widget"]["term"] == "widget"
+    assert out["note"] == d["note"]                        # personal note round-trips
     assert out["nodes"]["1"]["turns"][0]["parts"][0]["text"] == "a"  # turn extras survive
     md = kb.to_markdown()
     assert "## Glossary" in md and "**widget** — A thing." in md
+    assert "## My notes" in md and "A second paragraph." in md
     html = tree_to_html(kb)
     assert "Glossary" in html and "A thing." in html
-    print("ok  knowledge round-trip (glossary, levels, unknown keys)")
+    assert "My notes" in html and "A second paragraph." in html
+    # an empty note adds no section
+    d2 = dict(d); d2.pop("note")
+    assert "My notes" not in KnowledgeTree.from_dict(d2).to_markdown()
+    print("ok  knowledge round-trip (glossary, levels, note, unknown keys)")
 
 
 def test_message_builders():

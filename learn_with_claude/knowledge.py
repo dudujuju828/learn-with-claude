@@ -101,6 +101,8 @@ class KnowledgeTree:
         # term (lowercased key) -> {"term", "def", "node", "turn"}: every word
         # the learner hit, with the definition the web app generated for it
         self.glossary: dict = {}
+        # the learner's own free-text synthesis of the tree (optional)
+        self.note: str = ""
 
     # --- mutation --------------------------------------------------------
     def _alloc(self) -> int:
@@ -169,6 +171,8 @@ class KnowledgeTree:
         }
         if self.glossary:
             d["glossary"] = self.glossary
+        if self.note:
+            d["note"] = self.note
         return d
 
     @classmethod
@@ -183,6 +187,7 @@ class KnowledgeTree:
         }
         tree._next = d.get("next") or (max(tree.nodes, default=0) + 1)
         tree.glossary = d.get("glossary") if isinstance(d.get("glossary"), dict) else {}
+        tree.note = d.get("note") if isinstance(d.get("note"), str) else ""
         return tree
 
     def save(self, path=None) -> Path:
@@ -245,6 +250,11 @@ class KnowledgeTree:
             f"- created: {self.created}",
             f"- nodes: {len(self.nodes)}  ·  total cost: ${self.total_cost():.4f}",
             "",
+        ]
+        note = (self.note or "").strip()
+        if note:
+            out += ["## My notes", "", note, "", "---", ""]
+        out += [
             "## Map",
             "",
             "```",
