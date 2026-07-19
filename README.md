@@ -103,7 +103,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   (each with a one-line why, two levels deep, any piece expandable further);
   *investigate* runs a normal conversation on a piece — the first roots the
   tree, later ones carry the usual follow-up recap — and the map stays with
-  the tree, tracking coverage, so you pick off the rest whenever. Tutor
+  the tree, tracking coverage, so you pick off the rest whenever — and
+  **know it** marks a foundation you already understand as covered without
+  spending a conversation on it. Tutor
   answers arrive **marked up into
   parts**: the direct answer first, then each distinct aspect (the why, an
   example, a caveat…) as its own labelled fold-out card, so a long answer
