@@ -103,8 +103,12 @@ directly (a local `claude` login can't run on a server), so it needs an
   popover), the sidebar glossary unfolds each term with a jump back to where
   it came up, old trees backfill with one *define missing* click, and your
   own unknowns count too: **select a word or two in any answer** and a
-  floating *✎ define* chip adds it to the glossary with the same machinery
-  (underlines, flashcards, export; *✕ forget* removes it again). **anki
+  floating chip offers *✎ define* — the term joins the glossary with the
+  same machinery (underlines, flashcards, export; *✕ forget* removes it
+  again) — or *⛏ dig*, for when a definition isn't enough: the tutor is
+  asked what that thing actually **is** in this context, and the answer
+  lands in the conversation as your own turn (🧑), where you can read it,
+  define terms inside it, or branch from it. **anki
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term in every tree into
   an in-app flashcard (recall → flip → grade yourself again / good / easy),

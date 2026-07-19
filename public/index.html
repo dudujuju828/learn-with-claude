@@ -702,14 +702,21 @@
   }
   #loose .thread:hover:not(:disabled){background:var(--termbg)}
 
-  /* selection chip — select words in an answer to define them */
+  /* selection chip — select words in an answer to define or dig into them */
   #selchip{
-    position:fixed; z-index:86; border:1px solid var(--term);
-    background:var(--card); color:var(--term); border-radius:2rem;
-    padding:.32rem .75rem; font-size:.82rem; line-height:1.2;
-    box-shadow:0 6px 24px rgba(0,0,0,.18); cursor:pointer;
+    position:fixed; z-index:86; display:flex; align-items:stretch;
+    border:1px solid var(--term); background:var(--card); border-radius:2rem;
+    box-shadow:0 6px 24px rgba(0,0,0,.18); overflow:hidden;
   }
-  #selchip:hover{background:var(--termbg)}
+  #selchip[hidden]{display:none}
+  #selchip button{
+    border:0; border-radius:0; background:none; color:var(--term);
+    padding:.32rem .75rem; font-size:.82rem; line-height:1.2; cursor:pointer;
+  }
+  #selchip button + button{
+    border-left:1px solid color-mix(in srgb, var(--term) 40%, var(--line));
+  }
+  #selchip button:hover{background:var(--termbg)}
 
   /* glossary popover */
   #gpop{
@@ -854,10 +861,12 @@
   (written the moment it appears) and lives in the tree, so it syncs and
   exports with it. Dotted-underlined words in answers are glossary terms —
   tap one to see its definition right there. And it's yours too: select a
-  word or two in any answer and a <b>✎ define</b> chip adds it to the
-  glossary (and to review) — <b>✕ forget</b> in the sidebar takes it back
-  out. <b>anki cards</b> downloads the
-  defined terms as a file Anki imports directly.</p>
+  word or two in any answer and a chip offers <b>✎ define</b> — the term
+  joins the glossary (and review) — or <b>⛏ dig</b>, for when a definition
+  isn't enough: the tutor is asked what that thing actually is in this
+  context, and the answer lands in the conversation as your turn.
+  <b>✕ forget</b> in the sidebar takes a term back out. <b>anki cards</b>
+  downloads the defined terms as a file Anki imports directly.</p>
   <p><b>🎓 quiz me</b> — a few multiple-choice questions written from what
   this tree actually covered (your examples, your terms, your near-misses).
   Questions are written once and kept with the tree; retakes just reshuffle.</p>
@@ -1105,7 +1114,10 @@
   <div class="gfoot"></div>
 </div>
 
-<button id="selchip" hidden></button>
+<div id="selchip" role="group" aria-label="selection actions" hidden>
+  <button id="seldef"></button>
+  <button id="seldig"></button>
+</div>
 
 <div id="hopper">
   <button id="hopup" aria-label="previous turn">▲</button>
@@ -1997,7 +2009,7 @@ function turnHtml(node, t, prevConf, allowBranch){
     }
     if (allowBranch){
       h += `<div class="branchrow">` +
-           `<button onclick="startBranchUI(${node.id},${t.turn},this)">${ico("⤵")}branch — dig into this answer</button>` +
+           `<button onclick="startBranchUI(${node.id},${t.turn},this)">${ico("⤵")}branch — go deeper on this answer</button>` +
            `</div>`;
     }
   }
@@ -2993,10 +3005,12 @@ function jumpToTerm(nodeId, turn){
   closeMenu();
 }
 
-/* select words in a conversation -> a floating chip defines them into
-   the glossary. The learner chases its unknowns; this is for yours.
-   Same cheap model call as the automatic definitions, same everything
-   after: dotted underlines, flashcards, anki export. */
+/* select words in a conversation -> a floating chip offers two moves.
+   "define" puts the term in the glossary — the same cheap model call as
+   the automatic definitions, same everything after: dotted underlines,
+   flashcards, anki export. "dig" is for when a definition isn't enough:
+   it asks the tutor, right in this conversation, what the thing IS here
+   — the answer lands as a turn you can re-read, branch, and quiz on. */
 const selchip = $("selchip");
 let selTimer = null, selRect = null;
 function hideSelchip(){ selchip.hidden = true; }
@@ -3021,9 +3035,12 @@ document.addEventListener("selectionchange", () => {
     const info = cur() ? selInfo() : null;
     if (!info){ hideSelchip(); return; }
     const known = glossaryOf(cur())[info.text.toLowerCase()];
-    selchip.innerHTML = known && known.def ? `${ico("📖")}definition` : `${ico("✎")}define`;
-    selchip.setAttribute("aria-label",
+    $("seldef").innerHTML = known && known.def ? `${ico("📖")}definition` : `${ico("✎")}define`;
+    $("seldef").setAttribute("aria-label",
       (known && known.def ? "show the definition of " : "define ") + `“${info.text}”`);
+    $("seldig").innerHTML = `${ico("⛏")}dig`;
+    $("seldig").setAttribute("aria-label",
+      `dig into “${info.text}” — ask the tutor what it is in this context`);
     selchip.dataset.term = info.text;
     selchip.dataset.turn = info.turn ?? "";
     selRect = info.rect;
@@ -3039,7 +3056,7 @@ document.addEventListener("selectionchange", () => {
   }, 180);
 });
 window.addEventListener("scroll", hideSelchip, {passive: true});
-selchip.onclick = async (ev) => {
+$("seldef").onclick = async (ev) => {
   ev.stopPropagation();   // the document click handler would hide the popover
   const tree = cur();
   const term = selchip.dataset.term || "";
@@ -3069,6 +3086,29 @@ selchip.onclick = async (ev) => {
     if (!had) delete g[key];   // don't leave a junk shell behind
     if (e.message !== "logged out") setError(e.message);
   }
+};
+
+/* dig — a definition tells you what the words mean; this asks what the
+   thing IS, here. Rides the same ask-the-tutor path: your turn (🧑), the
+   whole conversation as context, the answer saved into the tree. */
+function digQuestion(term){
+  return `Let’s dig into “${term}”. A quick definition isn’t enough — in the ` +
+         `context of what we’re covering here, what exactly is it, what role ` +
+         `does it play, and what do I need to understand about it to follow the rest?`;
+}
+$("seldig").onclick = (ev) => {
+  ev.stopPropagation();
+  const tree = cur();
+  const term = selchip.dataset.term || "";
+  hideSelchip();
+  if (!tree || !term || currentNode == null) return;
+  const nodeId = currentNode;
+  const q = digQuestion(term);
+  enqueue(askThunk(tree.id, nodeId, q));
+  // if the ask started right away the question is already the last turn —
+  // take the reader to it (a queued dig lands later; no jump then)
+  const t = getNode(tree, nodeId)?.turns.at(-1);
+  if (t && t.user && t.action === q) jumpToTerm(nodeId, t.turn);
 };
 window.jumpToTerm = jumpToTerm;
 
@@ -3577,7 +3617,7 @@ function branchThunk(treeId, nodeId, branchTurn, focus){
         digest: conversationDigest(parent.turns, branchTurn),
         branch_q: bt.action, branch_a: bt.tutor, focus,
       };
-      node = makeNode(tree, focus || "digging…", nodeId, branchTurn, focus);
+      node = makeNode(tree, focus || "going deeper…", nodeId, branchTurn, focus);
       currentNode = node.id;
       saveStore(); renderAll();
     }
@@ -3696,7 +3736,7 @@ function cmdBranch(nodeId, branchTurn){
   const focus = ($("focusinput")?.value || "").trim();
   const parent = getNode(tree, nodeId);
   const bt = parent && parent.turns[branchTurn - 1];
-  if (!bt || !bt.tutor){ setError("that turn has no tutor answer to dig into"); return; }
+  if (!bt || !bt.tutor){ setError("that turn has no tutor answer to branch into"); return; }
   enqueue(branchThunk(tree.id, nodeId, branchTurn, focus));
 }
 
