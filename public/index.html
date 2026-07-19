@@ -683,6 +683,88 @@
   #reviewbox .qsum{text-align:center; padding:1rem 0 .4rem}
   #reviewbox .qsum .big{font-size:1.7rem; margin-bottom:.4rem}
 
+  /* ---- progress dashboard (read-only stats over review + quizzes) ---- */
+  #statsbox{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #statsbox.open{display:flex}
+  #statsbox .box{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1.1rem 1.3rem 1.3rem; width:min(34rem,94vw); max-height:88dvh;
+    overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  #statsbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
+  #statsbox #stattitle{font-weight:600}
+  #statsbox #statscope{flex:1; color:var(--muted); font-size:.82rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #statsbox .st-tiles{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin-bottom:1.1rem;
+  }
+  #statsbox .st-tile{
+    border:1px solid var(--line); border-radius:.7rem; background:var(--bg);
+    padding:.6rem .5rem; text-align:center;
+  }
+  #statsbox .st-tile .n{font-size:1.5rem; line-height:1.1; font-weight:600}
+  #statsbox .st-tile .n.due{color:var(--term)}
+  #statsbox .st-tile .l{color:var(--muted); font-size:.72rem; margin-top:.2rem;
+    text-transform:lowercase; letter-spacing:.02em}
+  #statsbox .st-sec{margin:1.1rem 0 0}
+  #statsbox .st-sec h4{
+    font-size:.76rem; font-weight:600; color:var(--muted); margin:0 0 .5rem;
+    text-transform:lowercase; letter-spacing:.06em;
+  }
+  #statsbox .st-sec h4 .sub{font-weight:300; letter-spacing:0; margin-left:.35rem}
+  /* recall-strength stacked bar */
+  #statsbox .st-strength{
+    display:flex; height:.85rem; border-radius:.45rem; overflow:hidden;
+    background:var(--line);
+  }
+  #statsbox .st-strength i{display:block; height:100%}
+  #statsbox .sg-new{background:color-mix(in srgb, var(--muted) 55%, var(--card))}
+  #statsbox .sg-young{background:color-mix(in srgb, var(--ask) 55%, var(--card))}
+  #statsbox .sg-mature{background:var(--ask)}
+  #statsbox .st-legend{
+    display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin-top:.55rem;
+    font-size:.8rem; color:var(--muted);
+  }
+  #statsbox .st-legend span{display:inline-flex; align-items:center; gap:.35rem}
+  #statsbox .st-legend b{color:var(--fg); font-weight:600}
+  #statsbox .dot{width:.6rem; height:.6rem; border-radius:.2rem; flex:none}
+  /* 14-day forecast */
+  #statsbox .st-forecast{
+    display:flex; align-items:flex-end; gap:2px; height:4.5rem;
+    padding-top:.2rem; border-bottom:1px solid var(--line);
+  }
+  #statsbox .fbar{flex:1; display:flex; flex-direction:column; justify-content:flex-end;
+    align-items:center; height:100%; min-width:0}
+  #statsbox .fbar i{display:block; width:100%; border-radius:.25rem .25rem 0 0;
+    background:color-mix(in srgb, var(--accent) 45%, var(--card)); min-height:2px}
+  #statsbox .fbar.today i{background:var(--accent)}
+  #statsbox .fbar .fn{font-size:.62rem; color:var(--muted); line-height:1; margin-bottom:2px}
+  #statsbox .st-axis{display:flex; gap:2px; margin-top:.25rem}
+  #statsbox .st-axis span{flex:1; text-align:center; font-size:.64rem; color:var(--muted)}
+  #statsbox .st-note{color:var(--muted); font-size:.8rem; margin:.5rem 0 0}
+  /* habit / streak */
+  #statsbox .st-streak{display:flex; align-items:baseline; gap:.5rem}
+  #statsbox .st-streak .big{font-size:1.7rem; font-weight:600; line-height:1}
+  #statsbox .st-streak .u{color:var(--muted); font-size:.85rem}
+  /* quiz chips */
+  #statsbox .st-quiz{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.5rem}
+  #statsbox .qpill{
+    border:1px solid var(--line); border-radius:1rem; padding:.15rem .6rem;
+    font-size:.8rem; background:var(--bg);
+  }
+  #statsbox .qpill.good{border-color:color-mix(in srgb, var(--ask) 55%, var(--line))}
+  #statsbox .qpill.poor{border-color:color-mix(in srgb, var(--danger) 45%, var(--line))}
+  #statsbox .st-empty{text-align:center; color:var(--muted); padding:1.4rem .5rem}
+  #statsbox .st-empty .big{font-size:1.8rem; margin-bottom:.4rem}
+  @media (max-width:480px){
+    #statsbox .st-tiles{grid-template-columns:repeat(2,1fr)}
+    #statsbox .st-axis span:nth-child(even){visibility:hidden}
+  }
+
   /* ---- help panel ---- */
   #helppanel{
     display:none; position:fixed; top:calc(3.3rem + env(safe-area-inset-top));
@@ -1049,6 +1131,9 @@
         <div class="btnrow"><button id="revbtn" class="primary"></button></div>
         <p class="hint" id="revhint"></p>
       </div>
+      <div id="progwrap" style="display:none">
+        <div class="btnrow"><button id="progbtn" title="your recall strength, upcoming reviews, streak and quiz scores">📊 progress</button></div>
+      </div>
       <div id="termswrap" style="display:none">
         <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span>
           <span class="cl" tabindex="0" role="button" id="glossscope" style="float:right;font-weight:300;text-transform:none"
@@ -1177,6 +1262,17 @@
       <button id="revclose" class="ghost" aria-label="close review">✕</button>
     </div>
     <div id="reviewbody"></div>
+  </div>
+</div>
+
+<div id="statsbox" role="dialog" aria-modal="true" aria-label="progress">
+  <div class="box">
+    <div class="sthead">
+      <span id="stattitle">progress</span>
+      <span id="statscope"></span>
+      <button id="statclose" class="ghost" aria-label="close progress">✕</button>
+    </div>
+    <div id="statsbody"></div>
   </div>
 </div>
 
@@ -3328,6 +3424,7 @@ window.gradeReview = gradeReview;
 
 /* the sidebar row: how many cards are waiting, or when the next one is */
 function updateRevRow(){
+  updateProgRow();
   const cards = allCards();
   const due = cards.filter(c => cardDue(cardEntry(c))).length;
   const badge = $("tabdue");
@@ -3351,6 +3448,211 @@ function updateRevRow(){
   }
 }
 $("revbtn").onclick = () => openReview();
+
+/* ------------------------------------------------------------------ */
+/* progress — a read-only dashboard over the data review and quizzes   */
+/* already produce. Scoped to the active profile like the review deck: */
+/* recall strength (card maturity), a 14-day due-forecast, the review  */
+/* streak, and quiz history. Everything is derived on open — no new    */
+/* state is stored, so it can never regress a synced tree.             */
+/* ------------------------------------------------------------------ */
+function profileTrees(){ return Object.values(store).filter(inProfile); }
+function dayDiff(day){          // whole days from today to a YYYY-MM-DD
+  return Math.round((new Date(day + "T12:00") - new Date(localDay(0) + "T12:00")) / 86400000);
+}
+/* every defined card in the profile, paired with its glossary entry */
+function progCards(){
+  return allCards().map(c => cardEntry(c)).filter(e => e && e.def);
+}
+function cardMaturity(e){
+  if (!e.rev || !e.rev.n) return "new";       // never (or not since a lapse) recalled
+  return (e.rev.ivl || 0) >= 21 ? "mature" : "young";
+}
+function quizAttempts(){
+  const out = [];
+  for (const t of profileTrees())
+    for (const q of (Array.isArray(t.quizzes) ? t.quizzes : []))
+      if (q && Number.isFinite(q.score) && q.total > 0)
+        out.push({ts: q.ts || "", score: q.score, total: q.total, topic: t.root_topic});
+  out.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return out;
+}
+/* the set of distinct days on which a card was last graded — the basis
+   for the current streak. rev.last keeps only each card's most recent
+   review day, so this is exact for recent days (which is what a streak
+   cares about) and may undercount older gaps; we only claim the current
+   streak, never a historical "longest". */
+function reviewDays(){
+  const days = new Set();
+  for (const e of progCards()) if (e.rev && e.rev.last) days.add(e.rev.last);
+  return days;
+}
+function currentStreak(){
+  const days = reviewDays();
+  if (!days.size) return {len: 0, today: false};
+  const today = days.has(localDay(0));
+  let cursor = today ? 0 : (days.has(localDay(-1)) ? -1 : null);
+  if (cursor === null) return {len: 0, today: false};
+  let len = 0;
+  while (days.has(localDay(cursor))){ len++; cursor--; }
+  return {len, today};
+}
+function progHasData(){ return progCards().length > 0 || quizAttempts().length > 0; }
+
+/* the small sidebar entry point, shown once there's anything to show */
+function updateProgRow(){
+  const wrap = $("progwrap");
+  if (!wrap) return;
+  const show = progHasData();
+  wrap.style.display = show ? "" : "none";
+  const btn = $("progbtn");
+  if (btn) btn.disabled = running && !$("statsbox").classList.contains("open");
+}
+
+let statsPrevFocus = null;
+function openStats(){
+  if (!progHasData()) return;
+  statsPrevFocus = document.activeElement;
+  $("statsbox").classList.add("open");
+  renderStats();
+  $("statclose").focus();
+}
+window.openStats = openStats;
+function closeStats(){
+  $("statsbox").classList.remove("open");
+  if (statsPrevFocus && statsPrevFocus.focus && document.contains(statsPrevFocus))
+    statsPrevFocus.focus();
+  statsPrevFocus = null;
+}
+window.closeStats = closeStats;
+$("statclose").onclick = closeStats;
+$("progbtn").onclick = () => openStats();
+$("statsbox").addEventListener("click", (e) => { if (e.target === $("statsbox")) closeStats(); });
+
+function tile(n, label, cls){
+  return `<div class="st-tile"><div class="n${cls ? " " + cls : ""}">${n}</div>` +
+         `<div class="l">${esc(label)}</div></div>`;
+}
+function renderStats(){
+  if (!$("statsbox").classList.contains("open")) return;
+  const trees = profileTrees();
+  const cards = progCards();
+  const attempts = quizAttempts();
+  $("statscope").textContent = activeProfile() ? "· " + activeProfile() : "· all trees";
+
+  if (!cards.length && !attempts.length){
+    $("statsbody").innerHTML =
+      `<div class="st-empty"><div class="big">🌱</div>` +
+      `<p>Grow a tree and let the glossary fill in — your recall strength, ` +
+      `review forecast and quiz scores show up here.</p></div>`;
+    return;
+  }
+
+  const investigations = trees.reduce((s, t) => s + Object.keys(t.nodes).length, 0);
+  const dueNow = cards.filter(cardDue).length;
+  const tiles =
+    `<div class="st-tiles">` +
+    tile(cards.length, cards.length === 1 ? "card" : "cards") +
+    tile(dueNow, "due now", dueNow ? "due" : "") +
+    tile(trees.length, trees.length === 1 ? "tree" : "trees") +
+    tile(investigations, investigations === 1 ? "investigation" : "investigations") +
+    `</div>`;
+
+  // ---- recall strength (maturity split) ----
+  let strength = "";
+  if (cards.length){
+    const buckets = {new: 0, young: 0, mature: 0};
+    for (const e of cards) buckets[cardMaturity(e)]++;
+    const pct = (v) => (v / cards.length * 100).toFixed(2) + "%";
+    const seg = (k) => buckets[k] ? `<i class="sg-${k}" style="width:${pct(buckets[k])}"></i>` : "";
+    const leg = (k, dotCls, label, hint) =>
+      `<span title="${esc(hint)}"><i class="dot ${dotCls}"></i>${esc(label)} <b>${buckets[k]}</b></span>`;
+    strength =
+      `<div class="st-sec"><h4>recall strength</h4>` +
+      `<div class="st-strength" role="img" aria-label="` +
+        `${buckets.new} new, ${buckets.young} building, ${buckets.mature} solid">` +
+        seg("new") + seg("young") + seg("mature") + `</div>` +
+      `<div class="st-legend">` +
+        leg("new", "sg-new", "new", "not yet recalled from memory") +
+        leg("young", "sg-young", "building", "recalled, still on short intervals") +
+        leg("mature", "sg-mature", "solid", "surviving 3+ weeks between reviews") +
+      `</div></div>`;
+  }
+
+  // ---- 14-day forecast ----
+  let forecast = "";
+  if (cards.length){
+    const N = 14;
+    const bucket = new Array(N).fill(0);
+    let later = 0;
+    for (const e of cards){
+      if (cardDue(e)){ bucket[0]++; continue; }
+      const d = dayDiff(e.rev.due);
+      if (d >= 1 && d < N) bucket[d]++;
+      else if (d >= N) later++;
+    }
+    const max = Math.max(1, ...bucket);
+    const bars = bucket.map((v, i) => {
+      const day = localDay(i);
+      const title = `${v} due ${i === 0 ? "now" : "on " + fmtDate(day)}`;
+      return `<div class="fbar${i === 0 ? " today" : ""}" title="${esc(title)}">` +
+        `<span class="fn">${v || ""}</span>` +
+        `<i style="height:${(v / max * 100).toFixed(2)}%"></i></div>`;
+    }).join("");
+    const axis = bucket.map((_, i) => {
+      const day = localDay(i);
+      const wd = i === 0 ? "now"
+        : new Date(day + "T12:00").toLocaleDateString(undefined, {weekday: "narrow"});
+      return `<span>${esc(wd)}</span>`;
+    }).join("");
+    forecast =
+      `<div class="st-sec"><h4>coming up<span class="sub">next ${N} days</span></h4>` +
+      `<div class="st-forecast">${bars}</div>` +
+      `<div class="st-axis">${axis}</div>` +
+      (later ? `<p class="st-note">+${later} more scheduled beyond two weeks.</p>` : "") +
+      `</div>`;
+  }
+
+  // ---- habit / streak ----
+  let habit = "";
+  if (cards.length){
+    const s = currentStreak();
+    const line = s.len === 0
+      ? (dueNow ? `no streak yet — a review today starts one.` : `all caught up.`)
+      : s.today
+        ? `reviewed today — keep it going.`
+        : dueNow ? `review today to extend it.` : `still going.`;
+    habit =
+      `<div class="st-sec"><h4>habit</h4>` +
+      `<div class="st-streak"><span class="big">${s.len}</span>` +
+      `<span class="u">day${s.len === 1 ? "" : "s"} in a row · ${esc(line)}</span></div></div>`;
+  }
+
+  // ---- quizzes ----
+  let quizzes = "";
+  if (attempts.length){
+    const frac = attempts.map(a => a.score / a.total);
+    const avg = Math.round(frac.reduce((x, y) => x + y, 0) / frac.length * 100);
+    const best = Math.round(Math.max(...frac) * 100);
+    const recent = attempts.slice(-6).reverse();
+    const pill = (a) => {
+      const f = a.score / a.total;
+      const cls = f >= 0.8 ? "good" : f < 0.5 ? "poor" : "";
+      return `<span class="qpill ${cls}" title="${esc(oneLine(a.topic, 60))}` +
+             `${a.ts ? " · " + fmtDate(a.ts) : ""}">${a.score}/${a.total}</span>`;
+    };
+    quizzes =
+      `<div class="st-sec"><h4>quizzes` +
+        `<span class="sub">${attempts.length} attempt${attempts.length === 1 ? "" : "s"} · ` +
+        `avg ${avg}% · best ${best}%</span></h4>` +
+      `<div class="st-quiz">${recent.map(pill).join("")}</div></div>`;
+  } else {
+    quizzes = `<div class="st-sec"><h4>quizzes</h4>` +
+      `<p class="st-note">no quizzes yet — “quiz me” on a tree tracks your scores here.</p></div>`;
+  }
+
+  $("statsbody").innerHTML = tiles + strength + forecast + habit + quizzes;
+}
 
 /* in-text references: occurrences of defined terms inside tutor answers
    become tappable — a popover shows the definition right there */
@@ -3619,6 +3921,8 @@ function paletteActions(){
     if (due) acts.push({icon: "🔁", label: "review the glossary",
       sub: `${due} card${due === 1 ? "" : "s"} due`, run(){ openReview(); }});
   }
+  if (progHasData()) acts.push({icon: "📊", label: "progress",
+    sub: "recall strength · forecast · streak · quizzes", run(){ openStats(); }});
   if (tree && !running){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
@@ -4365,6 +4669,7 @@ document.addEventListener("keydown", (e) => {
     if ($("quizbox").classList.contains("open")){ closeQuiz(); return; }
     if ($("surveybox").classList.contains("open")){ closeSurvey(); return; }
     if ($("reviewbox").classList.contains("open")){ closeReview(); return; }
+    if ($("statsbox").classList.contains("open")){ closeStats(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
     if (!$("selchip").hidden){ hideSelchip(); return; }
@@ -4427,7 +4732,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(
