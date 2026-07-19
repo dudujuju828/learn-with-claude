@@ -1082,7 +1082,8 @@
   list. The chips above the list switch the active profile, which scopes
   both the list and the review deck — each interest keeps its own
   flashcards instead of shuffling into one pile. <b>all</b> shows
-  everything; a tree's profile travels and syncs with it.</p>
+  everything; a tree's profile travels and syncs with it, and the ✎ chip
+  renames the active profile everywhere.</p>
   <p><b>🔁 review</b> — every defined term in the active profile's trees is
   a flashcard. Recall it, flip, grade yourself (again / good / easy), and
   the card is scheduled further out each time — spaced repetition without
@@ -2158,6 +2159,22 @@ function setProfile(name){
   }
   renderAll(true);
 }
+/* rename an interest area everywhere: every tree filed under it is
+   restamped (so the new name syncs), and the active pref follows. Renaming
+   onto an existing profile merges the two. */
+function renameProfile(){
+  if (running) return;
+  const from = activeProfile();
+  if (!from) return;
+  const name = cleanProfileName(prompt(`rename profile "${from}" to:`, from));
+  if (!name || name === from) return;
+  for (const t of Object.values(store))
+    if (treeProfile(t) === from){ t.profile = name; persistTree(t); }
+  prefs.profile = name;
+  savePrefs();
+  renderAll(true);
+}
+window.renameProfile = renameProfile;
 function fileTreeUnder(value){
   const tree = cur();
   if (!tree) return;
@@ -2865,7 +2882,9 @@ function renderTreeList(){
     [["", "all"], ...profiles.map(p => [p, p])].map(([val, lbl]) =>
       `<button class="pchip${active === val ? " on" : ""}"` +
       `${active === val ? ` aria-pressed="true"` : ` aria-pressed="false"`}` +
-      ` onclick="setProfile('${esc(val)}')">${esc(oneLine(lbl, 24))}</button>`).join("");
+      ` onclick="setProfile('${esc(val)}')">${esc(oneLine(lbl, 24))}</button>`).join("") +
+    (active ? `<button class="pchip" onclick="renameProfile()" title="rename this profile"` +
+              ` aria-label="rename profile ${esc(active)}">✎</button>` : "");
   const list = $("treelist");
   const stamp = (t) => t.saved_at || t.created || "";
   const items = Object.values(store).filter(inProfile)
