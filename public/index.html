@@ -701,22 +701,33 @@
   #reviewbox .qsum{text-align:center; padding:1rem 0 .4rem}
   #reviewbox .qsum .big{font-size:1.7rem; margin-bottom:.4rem}
 
-  /* ---- progress dashboard (read-only stats over review + quizzes) ---- */
-  #statsbox{
+  /* ---- progress dashboard (read-only stats over review + quizzes),
+          and the ★ highlights hub which shares its skeleton ---- */
+  #statsbox, #hlbox{
     display:none; position:fixed; inset:0; z-index:95;
     background:color-mix(in srgb, var(--bg) 76%, transparent);
     align-items:center; justify-content:center; padding:1rem;
   }
-  #statsbox.open{display:flex}
-  #statsbox .box{
+  #statsbox.open, #hlbox.open{display:flex}
+  #statsbox .box, #hlbox .box{
     background:var(--card); border:1px solid var(--line); border-radius:1rem;
     padding:1.1rem 1.3rem 1.3rem; width:min(34rem,94vw); max-height:88dvh;
     overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
   }
-  #statsbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
-  #statsbox #stattitle{font-weight:600}
-  #statsbox #statscope{flex:1; color:var(--muted); font-size:.82rem;
+  #statsbox .sthead, #hlbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
+  #statsbox #stattitle, #hlbox #hltitle{font-weight:600}
+  #statsbox #statscope, #hlbox #hlscope{flex:1; color:var(--muted); font-size:.82rem;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #hlbox .hltree{font-weight:600; margin:1rem 0 .4rem}
+  #hlbox .hltree:first-child{margin-top:0}
+  #hlbox .hlrow{
+    display:block; width:100%; text-align:left; font-family:inherit; font-size:.95em;
+    background:var(--bg); border:1px solid var(--line); border-radius:.6rem;
+    padding:.5rem .7rem; margin:.35rem 0; cursor:pointer; color:var(--fg);
+  }
+  #hlbox .hlrow:hover{border-color:var(--term)}
+  #hlbox .hlrow mark{background:var(--termbg); color:inherit; border-radius:.25rem; padding:.02rem .15rem}
+  #hlbox .hlrow .where{color:var(--muted); font-size:.76rem; margin-top:.25rem}
   #statsbox .st-tiles{
     display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin-bottom:1.1rem;
   }
@@ -952,7 +963,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
-    #quizbox, #reviewbox, #statsbox, #notesbox, #tutoreditor, #overview, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #statsbox, #hlbox, #notesbox, #tutoreditor, #overview, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1077,6 +1088,11 @@
   the card is scheduled further out each time — spaced repetition without
   leaving the app. The schedule syncs with the trees, so any device
   continues where you stopped.</p>
+  <p><b>★ highlights</b> — select a longer stretch of an answer and the chip
+  offers <b>★ highlight</b>: a highlighter band that persists and syncs
+  (tap a mark to lift it). The <b>★ highlights</b> button in the words tab
+  collects every marked passage across the profile's trees — tap one to
+  jump back to it in context.</p>
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
@@ -1212,6 +1228,9 @@
       </div>
       <div id="progwrap" style="display:none">
         <div class="btnrow"><button id="progbtn" title="your recall strength, upcoming reviews, streak and quiz scores">📊 progress</button></div>
+      </div>
+      <div id="hlwrap" style="display:none">
+        <div class="btnrow"><button id="hlbtn" title="every passage you highlighted, across this profile's trees"></button></div>
       </div>
       <div id="termswrap" style="display:none">
         <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span>
@@ -1353,6 +1372,17 @@
       <button id="statclose" class="ghost" aria-label="close progress">✕</button>
     </div>
     <div id="statsbody"></div>
+  </div>
+</div>
+
+<div id="hlbox" role="dialog" aria-modal="true" aria-label="highlights">
+  <div class="box">
+    <div class="sthead">
+      <span id="hltitle">★ highlights</span>
+      <span id="hlscope"></span>
+      <button id="hlclose" class="ghost" aria-label="close highlights">✕</button>
+    </div>
+    <div id="hlbody"></div>
   </div>
 </div>
 
@@ -3120,6 +3150,7 @@ window.defineMissing = defineMissing;
 let glossAll = false;   // words tab scope: this tree, or every tree
 function renderTerms(){
   updateRevRow();
+  updateHlRow();
   const tree = cur();
   const wrap = $("termswrap");
   let items;
@@ -3951,6 +3982,58 @@ $("statclose").onclick = closeStats;
 $("progbtn").onclick = () => openStats();
 $("statsbox").addEventListener("click", (e) => { if (e.target === $("statsbox")) closeStats(); });
 
+/* ★ highlights hub — every marked passage across the profile's trees,
+   grouped by tree; tap one to stand at the mark in its conversation.
+   Orphaned marks (their node was pruned) are skipped, matching render. */
+function profileHighlights(){
+  const out = [];
+  for (const tree of profileTrees()){
+    const hs = highlightsOf(tree).filter(h => getNode(tree, h.node));
+    if (hs.length) out.push({tree, hs});
+  }
+  out.sort((a, b) => (b.tree.saved_at || "").localeCompare(a.tree.saved_at || ""));
+  return out;
+}
+function updateHlRow(){
+  const n = profileHighlights().reduce((s, g) => s + g.hs.length, 0);
+  $("hlwrap").style.display = n ? "" : "none";
+  if (n) $("hlbtn").innerHTML = `${ico("★")}highlights · ${n}`;
+}
+let hlPrevFocus = null;
+function openHl(){
+  const groups = profileHighlights();
+  if (!groups.length) return;
+  hlPrevFocus = document.activeElement;
+  $("hlscope").textContent = activeProfile() ? "· " + activeProfile() : "· all trees";
+  $("hlbody").innerHTML = groups.map(({tree, hs}) =>
+    `<div class="hltree">${ico("🌳")}${esc(oneLine(tree.root_topic, 48))}</div>` +
+    hs.map(h =>
+      `<button class="hlrow" data-tree="${esc(tree.id)}" data-node="${h.node}" data-turn="${h.turn}"` +
+      ` title="jump to this passage in its conversation">` +
+      `<mark>${esc(oneLine(h.text, 140))}</mark>` +
+      `<div class="where">${esc(oneLine(getNode(tree, h.node).label, 40))} · turn ${h.turn}</div>` +
+      `</button>`).join("")).join("");
+  $("hlbody").querySelectorAll(".hlrow").forEach(b => {
+    b.onclick = () => {
+      closeHl();
+      openSearchHit(b.dataset.tree, +b.dataset.node, +b.dataset.turn);
+    };
+  });
+  $("hlbox").classList.add("open");
+  $("hlclose").focus();
+}
+window.openHl = openHl;
+function closeHl(){
+  $("hlbox").classList.remove("open");
+  if (hlPrevFocus && hlPrevFocus.focus && document.contains(hlPrevFocus))
+    hlPrevFocus.focus();
+  hlPrevFocus = null;
+}
+window.closeHl = closeHl;
+$("hlclose").onclick = closeHl;
+$("hlbtn").onclick = () => openHl();
+$("hlbox").addEventListener("click", (e) => { if (e.target === $("hlbox")) closeHl(); });
+
 function tile(n, label, cls){
   return `<div class="st-tile"><div class="n${cls ? " " + cls : ""}">${n}</div>` +
          `<div class="l">${esc(label)}</div></div>`;
@@ -4445,6 +4528,11 @@ function paletteActions(){
   }
   if (progHasData()) acts.push({icon: "📊", label: "progress",
     sub: "recall strength · forecast · streak · quizzes", run(){ openStats(); }});
+  {
+    const nhl = profileHighlights().reduce((s, g) => s + g.hs.length, 0);
+    if (nhl) acts.push({icon: "★", label: "highlights",
+      sub: `${nhl} marked passage${nhl === 1 ? "" : "s"}`, run(){ openHl(); }});
+  }
   if (tree && !running){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
@@ -5232,6 +5320,7 @@ document.addEventListener("keydown", (e) => {
       closeReview(); return;
     }
     if ($("statsbox").classList.contains("open")){ closeStats(); return; }
+    if ($("hlbox").classList.contains("open")){ closeHl(); return; }
     if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
@@ -5296,7 +5385,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "notesbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "notesbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(
