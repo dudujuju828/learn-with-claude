@@ -103,24 +103,63 @@ def test_tree_store():
         tree = {"format": "learn-with-claude/knowledge-tree", "version": 1,
                 "id": "abc123", "root_topic": "how DNS works", "root_id": 1,
                 "nodes": {}, "quiz": {"questions": [1, 2, 3]}}
-        store.put(tree)
+        assert store.put(tree) == {"ok": True, "rev": 1}
         assert (Path(d) / "how-dns-works.know.json").is_file()   # CLI naming
         assert store.get("abc123")["quiz"] == tree["quiz"]        # verbatim
         # same topic, different id -> new file, not an overwrite
         store.put({**tree, "id": "def456"})
         assert (Path(d) / "how-dns-works-2.know.json").is_file()
-        assert {t["id"] for t in store.list()} == {"abc123", "def456"}
-        # re-put by id overwrites in place
-        store.put({**tree, "root_topic": "how DNS works", "extra": 1})
-        assert len(store.list()) == 2
+        live = [t for t in store.list() if not t["deleted"]]
+        assert {t["id"] for t in live} == {"abc123", "def456"}
+        # legacy re-put (no base_rev) overwrites in place and bumps the rev
+        assert store.put({**tree, "extra": 1})["rev"] == 2
+        assert len([t for t in store.list() if not t["deleted"]]) == 2
+        # delete leaves a tombstone so other devices see the deletion
         store.delete("abc123")
-        assert {t["id"] for t in store.list()} == {"def456"}
+        listed = {t["id"]: t for t in store.list()}
+        assert not listed["def456"]["deleted"]
+        assert listed["abc123"]["deleted"] and listed["abc123"]["rev"] == 3
+        assert store.get("abc123") is None
         try:
             store.put({"format": "wrong", "id": "abc123"})
             assert False, "bad format must raise"
         except ApiError:
             pass
-    print("ok  tree store (naming, verbatim, collisions, delete)")
+    print("ok  tree store (naming, verbatim, collisions, tombstones)")
+
+
+def test_tree_store_revs():
+    with tempfile.TemporaryDirectory() as d:
+        store = TreeStore(Path(d))
+        tree = {"format": "learn-with-claude/knowledge-tree", "version": 1,
+                "id": "abc123", "root_topic": "revs", "root_id": 1, "nodes": {}}
+        assert store.put(tree, 0) == {"ok": True, "rev": 1}
+        # stale base -> conflict carrying the current server copy
+        r = store.put({**tree, "mine": 1}, 0)
+        assert "conflict" in r and r["conflict"]["rev"] == 1
+        assert r["conflict"]["tree"]["id"] == "abc123"
+        # matching base -> accepted, rev bumps, the stored doc carries it
+        assert store.put({**tree, "mine": 2}, 1) == {"ok": True, "rev": 2}
+        assert store.get("abc123")["rev"] == 2
+        # a CLI rewrite drops the rev stamp -> rev derives from the file
+        # mtime, which is far larger, so clients pull and merge the change
+        path = Path(d) / "revs.know.json"
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        del doc["rev"]
+        path.write_text(json.dumps(doc), encoding="utf-8")
+        derived = next(t["rev"] for t in store.list() if t["id"] == "abc123")
+        assert derived > 2
+        r = store.put({**tree, "mine": 3}, 2)
+        assert "conflict" in r and r["conflict"]["rev"] == derived
+        # deleted elsewhere: an edit based on any old rev loses...
+        store.delete("abc123")
+        r = store.put({**tree, "mine": 4}, derived)
+        assert r["conflict"].get("deleted") is True
+        # ...but an explicit create (base 0) resurrects the tree
+        r = store.put({**tree, "mine": 5}, 0)
+        assert r["ok"] and r["rev"] > derived
+        assert not next(t for t in store.list() if t["id"] == "abc123")["deleted"]
+    print("ok  tree store rev protocol (CAS, mtime fallback, tombstone rules)")
 
 
 def test_tutor_store():
@@ -148,5 +187,6 @@ if __name__ == "__main__":
     test_tool_policy()
     test_overflow_prompt()
     test_tree_store()
+    test_tree_store_revs()
     test_tutor_store()
     print("\nall green")

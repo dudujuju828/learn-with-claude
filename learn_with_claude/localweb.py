@@ -23,6 +23,7 @@ import json
 import os
 import re
 import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -68,15 +69,49 @@ def handle_config() -> dict:
 # --------------------------------------------------------------------------- #
 # trees on disk — the same files the CLI shell reads and writes
 # --------------------------------------------------------------------------- #
+_LEGACY = object()  # "no base_rev in the request" sentinel
+
+
 class TreeStore:
     """id -> .know.json file in the knowledge dir. Filenames follow the CLI's
     topic-slug convention; the documents are stored verbatim (the web tree
     carries fields like quiz/saved_at this package's KnowledgeTree doesn't
-    model, and round-tripping through it would drop them)."""
+    model, and round-tripping through it would drop them).
+
+    Speaks the same rev protocol as the Vercel backend (api/trees.js): each
+    doc carries a stamped integer ``rev``; a put says which rev it was based
+    on and conflicts (409) when that is stale; deletions leave a tombstone in
+    .tombstones.json. A file the CLI rewrote loses its stamp — its rev is
+    then derived from the file mtime, which is larger than any stamped rev,
+    so the web client pulls the CLI's changes and merges instead of skipping
+    them."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
         self.lock = threading.Lock()
+
+    @staticmethod
+    def _rev_of(doc: dict, path: Path) -> int:
+        rev = doc.get("rev")
+        if isinstance(rev, int) and rev > 0:
+            return rev
+        try:
+            return int(path.stat().st_mtime)
+        except OSError:
+            return 1
+
+    def _tombstones(self) -> dict:
+        try:
+            data = json.loads((self.root / ".tombstones.json").read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def _write_tombstones(self, stones: dict) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        (self.root / ".tombstones.json").write_text(
+            json.dumps(stones, indent=2), encoding="utf-8"
+        )
 
     def _scan(self) -> dict:
         """id -> (path, doc). Unreadable or foreign files are skipped."""
@@ -92,29 +127,76 @@ class TreeStore:
 
     def list(self) -> list:
         with self.lock:
+            known = self._scan()
             trees = []
-            for tid, (path, _doc) in self._scan().items():
+            for tid, (path, doc) in known.items():
                 st = path.stat()
                 trees.append({
                     "id": tid,
+                    "rev": self._rev_of(doc, path),
+                    "deleted": False,
                     "size": st.st_size,
+                    "updated_at": _iso(st.st_mtime),
                     "uploadedAt": _iso(st.st_mtime),
+                })
+            for tid, stone in self._tombstones().items():
+                if tid in known:
+                    continue  # the file reappeared (restored backup): it wins
+                trees.append({
+                    "id": tid, "rev": int(stone.get("rev") or 1), "deleted": True,
+                    "size": 0, "updated_at": stone.get("at") or "",
+                    "uploadedAt": stone.get("at") or "",
                 })
             return trees
 
     def get(self, tid: str) -> "dict | None":
         with self.lock:
             hit = self._scan().get(tid)
-            return hit[1] if hit else None
+            if not hit:
+                return None
+            path, doc = hit
+            doc["rev"] = self._rev_of(doc, path)
+            return doc
 
-    def put(self, tree: dict) -> None:
+    def put(self, tree: dict, base_rev=_LEGACY) -> dict:
+        """Returns {"ok": True, "rev": n} or {"conflict": <409 body>}."""
         tid = str(tree.get("id") or "")
         if tree.get("format") != FORMAT or not _TREE_ID.match(tid):
             raise ApiError("body must be {tree} in knowledge-tree format")
         with self.lock:
             known = self._scan()
-            if tid in known:
-                path = known[tid][0]
+            stones = self._tombstones()
+            hit = known.get(tid)
+            cur_rev = self._rev_of(hit[1], hit[0]) if hit else 0
+
+            if base_rev is _LEGACY:
+                pass  # legacy client: last write wins, as before the protocol
+            elif hit:
+                try:
+                    base = int(base_rev or 0)
+                except (TypeError, ValueError):
+                    base = 0
+                if base != cur_rev:
+                    stale = dict(hit[1])
+                    stale["rev"] = cur_rev
+                    return {"conflict": {
+                        "error": "conflict: newer revision on server",
+                        "rev": cur_rev, "tree": stale,
+                    }}
+            elif tid in stones:
+                try:
+                    base = int(base_rev or 0)
+                except (TypeError, ValueError):
+                    base = 0
+                if base > 0:  # an edit of something deleted elsewhere loses
+                    return {"conflict": {
+                        "error": "conflict: deleted elsewhere",
+                        "rev": int(stones[tid].get("rev") or 1), "deleted": True,
+                    }}
+                cur_rev = int(stones[tid].get("rev") or 1)  # base 0 resurrects
+
+            if hit:
+                path = hit[0]
             else:
                 stem = slug(str(tree.get("root_topic") or "") or tid) or tid
                 path = self.root / f"{stem}.know.json"
@@ -122,16 +204,27 @@ class TreeStore:
                 while path.exists():  # same topic, different tree
                     path = self.root / f"{stem}-{n}.know.json"
                     n += 1
+            new_rev = cur_rev + 1
+            tree = dict(tree)
+            tree["rev"] = new_rev
             self.root.mkdir(parents=True, exist_ok=True)
             path.write_text(
                 json.dumps(tree, indent=2, ensure_ascii=False), encoding="utf-8"
             )
+            if tid in stones:
+                del stones[tid]
+                self._write_tombstones(stones)
+            return {"ok": True, "rev": new_rev}
 
     def delete(self, tid: str) -> None:
         with self.lock:
             hit = self._scan().get(tid)
+            cur_rev = self._rev_of(hit[1], hit[0]) if hit else 0
             if hit:
                 hit[0].unlink(missing_ok=True)
+            stones = self._tombstones()
+            stones[tid] = {"rev": cur_rev + 1, "at": _iso(time.time())}
+            self._write_tombstones(stones)
 
 
 def _iso(ts: float) -> str:
@@ -271,8 +364,14 @@ def make_handler(trees: TreeStore, tutors: TutorStore):
             try:
                 body = self._body()
                 if path == "/api/trees":
-                    trees.put(body.get("tree") if isinstance(body.get("tree"), dict) else {})
-                    self._send_json(200, {"ok": True})
+                    result = trees.put(
+                        body.get("tree") if isinstance(body.get("tree"), dict) else {},
+                        body.get("base_rev", _LEGACY) if isinstance(body, dict) else _LEGACY,
+                    )
+                    if "conflict" in result:
+                        self._send_json(409, result["conflict"])
+                    else:
+                        self._send_json(200, result)
                 elif path == "/api/tutors":
                     tutors.put(body.get("doc"))
                     self._send_json(200, {"ok": True})

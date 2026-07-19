@@ -1,8 +1,9 @@
 {
   "name": "learn-with-claude-web",
   "private": true,
-  "description": "Node dependency for api/trees.js (server-side tree history in Vercel Blob)",
+  "description": "Node dependencies for the api/ routes (server-side tree history in Neon Postgres; @vercel/blob only for the one-off migration script)",
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.1",
     "@vercel/blob": "^2.6.1"
   }
 }

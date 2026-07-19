@@ -1763,38 +1763,123 @@ function persistTree(t){
 }
 
 /* ------------------------------------------------------------------ */
-/* server sync — trees mirror to /api/trees (Vercel Blob) so any       */
-/* device that logs in sees the same history. localStorage stays the   */
-/* working copy; pushes are debounced; last write wins per tree.       */
+/* server sync — trees mirror to /api/trees so any device that logs    */
+/* in sees the same history. localStorage stays the working copy; the  */
+/* server is the arbiter: every tree carries a server-stamped rev, a   */
+/* push says which rev it was based on, and a stale push gets a 409    */
+/* with the server's copy — we merge and retry, so the phone's review  */
+/* grades and the desktop's new branches both survive. Deletions       */
+/* propagate as tombstones instead of resurrecting from other devices. */
 /* ------------------------------------------------------------------ */
-const dirty = new Set();
+const DIRTY_KEY = "lwc.dirty.v1";
+const dirty = new Set((() => {
+  try { return JSON.parse(localStorage.getItem(DIRTY_KEY)) || []; } catch { return []; }
+})());
 let pushTimer = null;
 
+function saveDirty(){
+  try { localStorage.setItem(DIRTY_KEY, JSON.stringify([...dirty])); } catch {}
+}
 function markDirty(id){
   dirty.add(id);
+  saveDirty();
   clearTimeout(pushTimer);
   pushTimer = setTimeout(flushDirty, 1500);
+}
+/* a merge or tombstone must not touch the tree the queue is actively
+   growing — the running thunks hold live references into it */
+function busyWith(id){ return running && activeRun && activeRun.treeId === id; }
+
+/* fold our local changes into a newer server copy. Turns are append-only
+   per node, so per node the longer conversation wins; glossary entries
+   merge by key (a definition beats none, the later review state wins);
+   whichever side saved later keeps its quiz state. */
+function mergeTrees(local, server){
+  const out = structuredClone(server);
+  out.nodes = out.nodes || {};
+  for (const [nid, ln] of Object.entries(local.nodes || {})){
+    const sn = out.nodes[nid];
+    if (!sn || (ln.turns || []).length > (sn.turns || []).length)
+      out.nodes[nid] = structuredClone(ln);
+  }
+  for (const [nid, n] of Object.entries(out.nodes)){
+    const l = (local.nodes || {})[nid], s = (server.nodes || {})[nid];
+    const kids = new Set([...((l && l.children) || []), ...((s && s.children) || [])]);
+    n.children = [...kids].filter(c => out.nodes[String(c)]).sort((a, b) => a - b);
+  }
+  out.next = Math.max(out.next || 1, local.next || 1);
+  if (out.root_id == null) out.root_id = local.root_id;
+  const sg = out.glossary = out.glossary || {};
+  for (const [k, le] of Object.entries(local.glossary || {})){
+    const se = sg[k];
+    if (!se){ sg[k] = structuredClone(le); continue; }
+    if (!se.def && le.def) se.def = le.def;
+    if (le.rev && (!se.rev || (le.rev.last || "") > (se.rev.last || "")))
+      se.rev = structuredClone(le.rev);
+  }
+  if ((local.saved_at || "") > (server.saved_at || "")){
+    if (local.quiz) out.quiz = structuredClone(local.quiz);
+    if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
+  }
+  out.rev = server.rev || 0;   // the merge builds on the server's revision
+  out.saved_at = new Date().toISOString();
+  return out;
+}
+
+/* push one tree. "retry" = we merged a newer server copy in, push again;
+   "deleted" = a tombstone, the tree was removed on another device. */
+async function pushTree(id){
+  const tree = store[id];
+  if (!tree) return "gone";
+  const res = await fetch("/api/trees", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({tree, base_rev: tree.rev || 0}),
+  });
+  if (res.status === 401){ showLogin(); return "logout"; }
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (res.status === 409){
+    if (data.deleted) return "deleted";
+    if (!data.tree || data.tree.format !== FORMAT) return "err";
+    if (busyWith(id)) return "busy";
+    store[id] = mergeTrees(tree, data.tree);
+    try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
+    if (currentId === id) renderAll(true);
+    return "retry";
+  }
+  if (!res.ok) return "err";
+  tree.rev = data.rev || tree.rev;
+  return "ok";
 }
 async function flushDirty(){
   clearTimeout(pushTimer); pushTimer = null;
   for (const id of [...dirty]){
     dirty.delete(id);
-    const tree = store[id];
-    if (!tree) continue;
-    try {
+    let verdict = "retry";
+    for (let attempt = 0; verdict === "retry" && attempt < 3; attempt++){
       setSync("saving");
-      await api("trees", {tree});
-      setSync("ok");
-    } catch (e){
-      if (e.message === "logged out") return;
-      dirty.add(id);
-      setSync("err");
-      return;
+      try { verdict = await pushTree(id); }
+      catch { verdict = "err"; }
     }
+    if (verdict === "logout"){ dirty.add(id); saveDirty(); return; }
+    if (verdict === "deleted"){
+      if (!busyWith(id)){
+        delete store[id];
+        if (currentId === id){ currentId = null; currentNode = null; }
+        try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
+        renderAll(true);
+      } else dirty.add(id);
+      continue;
+    }
+    if (verdict === "err"){ dirty.add(id); saveDirty(); setSync("err"); return; }
+    if (verdict === "busy" || verdict === "retry") dirty.add(id);
   }
+  saveDirty();
   if (!dirty.size) setSync("ok");
 }
 function deleteTreeRemote(id){
+  saveDirty();   // callers drop the id from dirty first — persist that
   fetch("/api/trees?id=" + encodeURIComponent(id), {method: "DELETE"}).catch(() => {});
 }
 function setSync(state){
@@ -1828,23 +1913,30 @@ async function syncFromServer(){
   const remote = new Map(index.map(t => [t.id, t]));
   for (const [id, meta] of remote){
     const local = store[id];
-    // cheap freshness check on list metadata; the pulled document's own
-    // saved_at is the authoritative comparison
-    if (local && new Date(meta.uploadedAt).getTime() <=
-                 new Date(local.saved_at || local.created || 0).getTime() + 2000) continue;
+    if (meta.deleted){
+      // a tombstone: deleted on another device. "delete" means everywhere
+      // (the delete dialog says so), local edits don't rescue it
+      if (local && !busyWith(id)){
+        delete store[id];
+        dirty.delete(id);
+        if (currentId === id){ currentId = null; currentNode = null; }
+      }
+      continue;
+    }
+    if (local && (local.rev || 0) >= (meta.rev || 0)) continue;
+    if (local && dirty.has(id)) continue;   // the push will 409-merge instead
     try {
       const r = await fetch("/api/trees?id=" + encodeURIComponent(id));
       if (!r.ok) continue;
       const {tree} = await r.json();
       if (!tree || tree.format !== FORMAT) continue;
-      if (!local || (tree.saved_at || tree.created || "") >= (local.saved_at || local.created || "")){
-        store[id] = tree;
-      }
+      if (!busyWith(id)) store[id] = tree;
     } catch {}
   }
   for (const id of Object.keys(store)){
     if (!remote.has(id)) dirty.add(id);   // local-only trees go up
   }
+  saveDirty();
   try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
   // a deep link pointing at a tree that only existed on the server can be
   // honoured now that the merge brought it in
@@ -4148,7 +4240,8 @@ window.addEventListener("beforeunload", (e) => {
     if (!tree) continue;
     try {
       navigator.sendBeacon("/api/trees",
-        new Blob([JSON.stringify({tree})], {type: "application/json"}));
+        new Blob([JSON.stringify({tree, base_rev: tree.rev || 0})],
+                 {type: "application/json"}));
     } catch {}
   }
   if (running){ e.preventDefault(); e.returnValue = ""; }

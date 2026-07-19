@@ -1,13 +1,15 @@
 // Custom tutors — user-defined tutor styles, stored as one small JSON doc in
-// Vercel Blob (settings/tutors.json) so they follow the user across devices.
+// the docs table (id "settings:tutors") so they follow the user across
+// devices. Whole-document last-write-wins: the doc is tiny, edited rarely,
+// and never edited concurrently in practice.
 //
 //   GET  /api/tutors           -> { doc: {saved_at, tutors: [{id,name,style}]} | null }
-//   POST /api/tutors {doc}     -> { ok }   (whole-document last-write-wins)
+//   POST /api/tutors {doc}     -> { ok }
 
-const { list, put } = require("@vercel/blob");
+const { sql } = require("./_db");
 const { authed } = require("./_auth");
 
-const PATH = "settings/tutors.json";
+const DOC_ID = "settings:tutors";
 const MAX_TUTORS = 20;
 const MAX_NAME = 40;
 const MAX_STYLE = 4000;
@@ -28,24 +30,18 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method === "GET") {
-      const page = await list({ prefix: PATH, limit: 5 });
-      const blob = page.blobs.find((b) => b.pathname === PATH);
-      if (!blob) return res.status(200).json({ doc: null });
-      const r = await fetch(blob.url + "?b=" + Date.now(), { cache: "no-store" });
-      if (!r.ok) return res.status(502).json({ error: "blob fetch failed" });
-      return res.status(200).json({ doc: await r.json() });
+      const rows = await sql`
+        SELECT doc FROM docs WHERE id = ${DOC_ID} AND NOT deleted`;
+      return res.status(200).json({ doc: rows.length ? rows[0].doc : null });
     }
 
     if (req.method === "POST" || req.method === "PUT") {
       const doc = req.body && req.body.doc;
       if (!validDoc(doc)) return res.status(400).json({ error: "invalid tutors document" });
-      await put(PATH, JSON.stringify(doc), {
-        access: "public",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: "application/json",
-        cacheControlMaxAge: 60,
-      });
+      await sql`
+        INSERT INTO docs (id, doc) VALUES (${DOC_ID}, ${JSON.stringify(doc)}::jsonb)
+        ON CONFLICT (id) DO UPDATE SET
+          doc = EXCLUDED.doc, rev = docs.rev + 1, deleted = false, updated_at = now()`;
       return res.status(200).json({ ok: true });
     }
 
