@@ -122,7 +122,10 @@ directly (a local `claude` login can't run on a server), so it needs an
   lands in the conversation as your own turn (🧑), where you can read it,
   define terms inside it, or branch from it. Select a longer stretch and the
   same chip offers **★ highlight** — a highlighter over the tutor's words
-  that stays put across reloads and devices (tap a mark to lift it). **anki
+  that stays put across reloads and devices (tap a mark to lift it), travels
+  in `.know.json`, and shows up in both exports — the Markdown quotes each
+  marked passage under its turn, the HTML reading page bands it in
+  highlighter colour. **anki
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term into
   an in-app flashcard (recall → flip → grade yourself again / good / easy,
