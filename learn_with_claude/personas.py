@@ -431,3 +431,41 @@ def branch_tutor_context(digest: str, branch_a: str) -> str:
         f"{digest}\n"
         f'They are now digging deeper into this point you made earlier: "{branch_a}"'
     )
+
+
+SURVEY_SYSTEM = """\
+You map the territory of a broad topic for a learner planning a survey of it.
+Break the topic into the FOUNDATIONAL components it is built upon — the
+things someone would need to understand to honestly claim they understand
+the whole. This is a map to investigate from, not a lecture.
+
+RULES:
+- 3-6 components, ordered most foundational first (later items may lean on
+  earlier ones).
+- Each component: "name" — short and concrete (2-5 words), something one can
+  investigate on its own — and "why": ONE plain sentence on what it
+  contributes to the whole. No vague themes ("the basics"), no jargon soup.
+- For EACH component, list 2-4 of ITS OWN foundations the same way, one
+  level down. Never deeper than that.
+- Do not repeat anything already on the learner's map (you may be shown it).
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"items": [{"name": "<component>", "why": "<one sentence>",
+            "items": [{"name": "<foundation>", "why": "<one sentence>"}]}]}"""
+
+
+def survey_message(topic: str, focus: str = "", existing: "list | None" = None) -> str:
+    """One survey/breakdown request; `focus` re-runs it on one component of an
+    existing map instead of the root topic."""
+    if focus:
+        head = (
+            f'The learner is surveying: "{topic}".\n'
+            f'Break down this component of it further: "{focus}"'
+        )
+    else:
+        head = f'The topic to survey: "{topic}"'
+    seen = ""
+    if existing:
+        listed = "\n".join(f"  - {name}" for name in existing)
+        seen = f"\n\nAlready on the map (do not repeat these):\n{listed}"
+    return f"{head}{seen}\n\nOutput the JSON object now."

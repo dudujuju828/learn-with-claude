@@ -25,6 +25,7 @@ from .personas import (
     LEARNER_LEVELS,
     NEXT_CONCEPT_SYSTEM,
     QUIZ_SYSTEM,
+    SURVEY_SYSTEM,
     TUTOR_MODES,
     branch_learner_message,
     branch_tutor_context,
@@ -36,6 +37,7 @@ from .personas import (
     learner_system,
     next_concept_message,
     quiz_message,
+    survey_message,
     tutor_system,
 )
 from .render import space_sentences
@@ -251,6 +253,44 @@ def handle_quiz(body: dict, call_model) -> dict:
     return {"questions": questions, "cost": cost}
 
 
+def _survey_items(raw, depth: int) -> list:
+    """Validate/clip a survey breakdown: [{name, why, items?}] at most
+    `depth` levels deep, at most 6 items per level."""
+    items = []
+    for it in (raw if isinstance(raw, list) else [])[:6]:
+        if not isinstance(it, dict):
+            continue
+        name = str(it.get("name") or "").strip()[:80]
+        if not name:
+            continue
+        entry = {"name": name, "why": str(it.get("why") or "").strip()[:300]}
+        if depth > 1:
+            subs = _survey_items(it.get("items"), depth - 1)
+            if subs:
+                entry["items"] = subs
+        items.append(entry)
+    return items
+
+
+def handle_survey(body: dict, call_model) -> dict:
+    """Map a broad topic: the foundational components it is built upon, two
+    levels deep. `focus` re-runs the breakdown on one component of the map;
+    `existing` lists names already mapped so the model doesn't repeat them."""
+    topic = (body.get("topic") or "").strip()
+    if not topic:
+        raise ApiError("missing 'topic'")
+    focus = (body.get("focus") or "").strip()[:120]
+    existing = [str(x).strip()[:80] for x in (body.get("existing") or [])
+                if str(x).strip()][:80]
+    message = survey_message(topic[:200], focus, existing)
+    text, cost = call_model(SURVEY_SYSTEM, [{"role": "user", "content": message}], "tutor")
+    data = first_json_object(text)
+    items = _survey_items(data.get("items") if isinstance(data, dict) else None, 2)
+    if not items:
+        raise ApiError("the model returned no usable breakdown — try again", 502)
+    return {"items": items, "cost": cost}
+
+
 def handle_export_md(body: dict) -> dict:
     tree = body.get("tree")
     if not isinstance(tree, dict):
@@ -282,6 +322,7 @@ def model_routes(call_model) -> dict:
         "next_concept": lambda body: handle_next_concept(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
+        "survey": lambda body: handle_survey(body, call_model),
         "export_md": handle_export_md,
         "export_html": handle_export_html,
         "digest": handle_digest,

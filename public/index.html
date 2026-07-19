@@ -609,6 +609,34 @@
     margin:.7rem 0 0; padding:.6rem .8rem; border-radius:.7rem; font-size:.92rem;
     background:var(--bg); border:1px solid var(--line);
   }
+  /* survey — the topic's foundations as a map to investigate from */
+  #surveybox{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #surveybox.open{display:flex}
+  #surveybox .box{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1.1rem 1.3rem 1.3rem; width:min(38rem,94vw); max-height:88dvh;
+    overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  #surveybox .shead{display:flex; align-items:center; gap:.7rem; margin-bottom:.3rem}
+  #surveybox .shead #surveytitle{flex:1; font-weight:600; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap}
+  #surveybox .shead #surveyprog{color:var(--muted); font-size:.85rem; flex:none}
+  .svitem{margin:.5rem 0; padding:.55rem .7rem; border:1px solid var(--line);
+    border-radius:.7rem}
+  .svitem.done{border-color:color-mix(in srgb, var(--ask) 55%, var(--line))}
+  .svitem .svrow{display:flex; align-items:center; gap:.55rem}
+  .svitem .svname{flex:1; min-width:0}
+  .svitem.done > .svrow .svname{color:var(--ask)}
+  .svitem .svacts{display:flex; gap:.35rem; flex:none}
+  .svitem .svacts button{font-size:.8rem; padding:.22rem .55rem}
+  .svitem .svwhy{color:var(--muted); font-size:.88rem; margin:.15rem 0 0; line-height:1.5}
+  .svitem .svkids{margin:.45rem 0 0 .35rem; padding-left:.65rem;
+    border-left:1px solid var(--line)}
+  .svitem .svkids .svitem{border:none; padding:.3rem 0; margin:.25rem 0}
   #quizbox .qnext{margin-top:.9rem; display:flex; gap:.5rem; justify-content:flex-end}
   #quizbox .qsum{text-align:center; padding:1rem 0 .4rem}
   #quizbox .qsum .big{font-size:2rem; margin-bottom:.4rem}
@@ -882,6 +910,12 @@
   <p><b>🎓 quiz me</b> — a few multiple-choice questions written from what
   this tree actually covered (your examples, your terms, your near-misses).
   Questions are written once and kept with the tree; retakes just reshuffle.</p>
+  <p><b>🗺 survey</b> — for a broad topic, map before diving: the tutor breaks
+  it into the foundations it's built on (each with a one-line why, two levels
+  deep). <b>investigate</b> any piece to run a normal conversation on it —
+  the first roots the tree, later ones build on what's covered — and
+  <b>⤵ deeper</b> breaks a piece down further. The map lives with the tree
+  and tracks what you've investigated, so you can come back any time.</p>
   <p><b>profiles</b> — file trees under named interests (say,
   <i>computer-science</i>) with the <b>this tree:</b> picker under the tree
   list. The chips above the list switch the active profile, which scopes
@@ -976,9 +1010,12 @@
       <div class="btnrow">
         <button class="primary" id="newbtn" title="one investigation">new</button>
         <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
+        <button id="surveybtn" title="map the topic's foundations first — investigate them piece by piece, any time">survey</button>
       </div>
       <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
-      related concepts to explore. Each turn is two real model calls (~5–7¢).</p>
+      related concepts to explore. Each turn is two real model calls (~5–7¢).
+      “survey” maps a broad topic into the foundations it's built on — you
+      pick what to investigate, one piece at a time.</p>
 
       <h2>tutor style</h2>
       <div class="newrow">
@@ -1116,6 +1153,19 @@
       <button id="quizclose" class="ghost" aria-label="close quiz">✕</button>
     </div>
     <div id="quizbody"></div>
+  </div>
+</div>
+
+<div id="surveybox" role="dialog" aria-modal="true" aria-label="topic survey">
+  <div class="box">
+    <div class="shead">
+      <span id="surveytitle"></span>
+      <span id="surveyprog"></span>
+      <button id="surveyclose" class="ghost" aria-label="close survey">✕</button>
+    </div>
+    <p class="hint" style="margin:0 0 .5rem">the foundations this topic is built on —
+    investigate them in any order, any time. ⤵ breaks one down further.</p>
+    <div id="surveybody"></div>
   </div>
 </div>
 
@@ -1814,7 +1864,8 @@ function breadcrumb(tree, id){
   return names.length ? names.join(" › ") : tree.root_topic;
 }
 function totalCost(tree){
-  return Object.values(tree.nodes).reduce((s, n) => s + (n.cost || 0), 0);
+  return Object.values(tree.nodes).reduce((s, n) => s + (n.cost || 0), 0)
+       + ((tree.survey && tree.survey.cost) || 0);
 }
 function deriveLabel(turns, tutorText){
   for (const t of turns) if (t.new_term) return t.new_term;
@@ -1904,6 +1955,7 @@ function mergeTrees(local, server){
   if ((local.saved_at || "") > (server.saved_at || "")){
     if (local.quiz) out.quiz = structuredClone(local.quiz);
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
+    if (local.survey) out.survey = structuredClone(local.survey);
     // presence (even "") is intent; absence means the field never existed
     // or a CLI round-trip dropped it — then the server's filing stands
     if (typeof local.profile === "string") out.profile = local.profile;
@@ -2240,7 +2292,13 @@ function renderConversation(keepScroll){
   const tree = cur();
   const conv = $("conv");
   if (!tree || currentNode == null || !getNode(tree, currentNode)){
-    conv.innerHTML = emptyHtml();
+    // a freshly surveyed tree has a map but no conversations yet
+    conv.innerHTML = (tree && tree.survey && tree.survey.items.length)
+      ? `<div class="empty"><div class="seed" aria-hidden="true">🗺</div>` +
+        `<h3>${esc(oneLine(tree.root_topic, 60))}</h3>` +
+        `<p>the map is drawn — pick a foundation and investigate it.</p>` +
+        `<p><button class="primary" onclick="openSurvey()">${ico("🗺")}open the survey</button></p></div>`
+      : emptyHtml();
     document.body.classList.remove("has-turns");
     $("askrow").style.display = "none";
     return;
@@ -2283,6 +2341,11 @@ function renderConversation(keepScroll){
     acts.push(`<button onclick="startQuiz()" title="a few questions on what this whole tree covered` +
               `${tree.quiz ? "" : " (one model call to write them)"}">${ico("🎓")}quiz` +
               `${last ? ` · ${last.score}/${last.total}` : ""}</button>`);
+  }
+  if (tree.survey && tree.survey.items && tree.survey.items.length){
+    const total = surveyNames(tree.survey.items).length;
+    acts.push(`<button onclick="openSurvey()" title="the map of this topic's foundations">` +
+              `${ico("🗺")}survey · ${surveyCovered(tree, tree.survey.items)}/${total}</button>`);
   }
   if (node.parent_id != null)
     acts.push(`<button class="kid" onclick="selectNode(${node.parent_id})" title="up to the conversation this branched from">${ico("↩")}up</button>`);
@@ -2933,6 +2996,169 @@ function nextQuiz(){ if (quiz){ quiz.i++; renderQuiz(); } }
 window.nextQuiz = nextQuiz;
 
 /* ------------------------------------------------------------------ */
+/* survey — map a broad topic into the foundations it's built upon,    */
+/* then investigate them piece by piece. The map lives on the tree     */
+/* (tree.survey, synced like everything else), remembers which pieces  */
+/* became conversations, and any piece can be broken down further.     */
+/* ------------------------------------------------------------------ */
+let surveyBusy = false;   // a "deeper" call is in flight
+
+function surveyItemAt(tree, path){
+  let items = (tree.survey && tree.survey.items) || [], it = null;
+  for (const i of path){
+    it = items && items[i];
+    if (!it) return null;
+    items = it.items;
+  }
+  return it;
+}
+function surveyNames(items, out = []){
+  for (const it of items || []){ out.push(it.name); surveyNames(it.items, out); }
+  return out;
+}
+function surveyCovered(tree, items){
+  let n = 0;
+  for (const it of items || []){
+    if (Number.isInteger(it.node) && getNode(tree, it.node)) n++;
+    n += surveyCovered(tree, it.items);
+  }
+  return n;
+}
+
+function surveyThunk(topic){
+  let treeId = null;
+  return async () => {
+    runLabel = "";
+    if (!treeId){
+      const tree = newTree(topic);
+      tree.survey = {items: [], cost: 0};
+      store[tree.id] = tree; currentId = tree.id; treeId = tree.id;
+      currentNode = null;
+      saveStore(); renderAll();
+    }
+    const tree = store[treeId];
+    if (!tree.survey.items.length){
+      activity = null;
+      setStatus(`mapping “${oneLine(topic, 40)}”…`); renderAll();
+      const r = await api("survey", {topic});
+      tree.survey.items = r.items;
+      tree.survey.cost = (tree.survey.cost || 0) + (r.cost || 0);
+      saveStore(); renderAll(true);
+    }
+    openSurvey();
+  };
+}
+function cmdSurvey(topic){ enqueue(surveyThunk(topic)); }
+
+/* investigating a piece = a normal conversation node. The first one roots
+   the tree; later ones follow on from the latest node with the usual
+   follow-up context, so the learner builds on what the survey already
+   covered instead of starting cold each time. */
+function surveyInvestThunk(treeId, path){
+  let node = null, ctx = null;
+  return async () => {
+    runLabel = "";
+    const tree = store[treeId];
+    const item = surveyItemAt(tree, path);
+    if (!item) return;
+    if (!node){
+      const order = Object.keys(tree.nodes).map(Number).sort((a, b) => a - b);
+      if (!order.length){
+        node = makeNode(tree, item.name);
+        ctx = {kind: "root", topic: `${item.name} — a foundation of ${tree.root_topic}`};
+      } else {
+        const recap = order.map(id =>
+          `[${getNode(tree, id).label}]\n${conversationDigest(getNode(tree, id).turns)}`).join("\n");
+        const prev = getNode(tree, order[order.length - 1]);
+        node = makeNode(tree, item.name, prev.id, prev.turns.length || 1, "");
+        ctx = {kind: "followup", topic: tree.root_topic, recap,
+               concept: item.name, opening_question: ""};
+      }
+      item.node = node.id;
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    activeRun = {treeId, nodeId: node.id};
+    await runInvestigation(tree, node, ctx);
+  };
+}
+function surveyInvestigate(pathStr){
+  const tree = cur(); if (!tree || running) return;
+  closeSurvey();
+  enqueue(surveyInvestThunk(tree.id, JSON.parse(pathStr)));
+}
+window.surveyInvestigate = surveyInvestigate;
+
+async function surveyDeeper(pathStr){
+  const tree = cur(); if (!tree || !tree.survey || surveyBusy || running) return;
+  const item = surveyItemAt(tree, JSON.parse(pathStr));
+  if (!item) return;
+  surveyBusy = true;
+  renderSurvey();
+  try {
+    setStatus(`breaking down “${oneLine(item.name, 40)}”…`);
+    const r = await api("survey", {topic: tree.root_topic, focus: item.name,
+                                   existing: surveyNames(tree.survey.items)});
+    item.items = r.items;
+    tree.survey.cost = (tree.survey.cost || 0) + (r.cost || 0);
+    saveStore();
+    clearStatus();
+  } catch (e){
+    if (e.message !== "logged out") setError(e.message);
+  } finally {
+    surveyBusy = false;
+    renderAll(true);
+    renderSurvey();
+  }
+}
+window.surveyDeeper = surveyDeeper;
+
+function openSurvey(){
+  const tree = cur();
+  if (!tree || !tree.survey || !tree.survey.items.length) return;
+  $("surveytitle").textContent = "🗺 " + oneLine(tree.root_topic, 40);
+  $("surveybox").classList.add("open");
+  renderSurvey();
+}
+function closeSurvey(){ $("surveybox").classList.remove("open"); }
+window.openSurvey = openSurvey; window.closeSurvey = closeSurvey;
+$("surveyclose").onclick = closeSurvey;
+$("surveybox").addEventListener("click", (e) => { if (e.target === $("surveybox")) closeSurvey(); });
+
+function renderSurvey(){
+  const tree = cur();
+  if (!tree || !tree.survey) return;
+  const row = (item, path) => {
+    const covered = Number.isInteger(item.node) && getNode(tree, item.node);
+    const acts = [];
+    if (covered){
+      acts.push(`<button class="kid" onclick="closeSurvey();selectNode(${item.node})"` +
+                ` title="open that conversation">${ico("✓")}open</button>`);
+    } else if (!running && !surveyBusy){
+      acts.push(`<button class="primary" onclick="surveyInvestigate('${JSON.stringify(path)}')"` +
+                ` title="a full investigation of this piece">investigate</button>`);
+    }
+    if (!(item.items && item.items.length) && path.length < 3 && !running && !surveyBusy)
+      acts.push(`<button onclick="surveyDeeper('${JSON.stringify(path)}')"` +
+                ` title="what is THIS built on? (one model call)">${ico("⤵")}deeper</button>`);
+    return `<div class="svitem${covered ? " done" : ""}">` +
+      `<div class="svrow"><span class="svname">${esc(item.name)}</span>` +
+      `<span class="svacts">${acts.join("")}</span></div>` +
+      (item.why ? `<div class="svwhy">${esc(item.why)}</div>` : "") +
+      ((item.items && item.items.length)
+        ? `<div class="svkids">${item.items.map((c, i) => row(c, [...path, i])).join("")}</div>`
+        : "") +
+      `</div>`;
+  };
+  const total = surveyNames(tree.survey.items).length;
+  const done = surveyCovered(tree, tree.survey.items);
+  $("surveyprog").textContent = `${done}/${total} investigated`;
+  $("surveybody").innerHTML =
+    tree.survey.items.map((it, i) => row(it, [i])).join("") +
+    (surveyBusy ? `<p class="hint">breaking it down…</p>` : "");
+}
+
+/* ------------------------------------------------------------------ */
 /* review — spaced flashcards over the glossary. Every defined term    */
 /* in every tree is a card; grading it (again / good / easy) schedules */
 /* it further out, so each card comes back just before you'd forget    */
@@ -3396,6 +3622,8 @@ function paletteActions(){
   if (tree && !running){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
+    if (tree.survey && tree.survey.items && tree.survey.items.length)
+      acts.push({icon: "🗺", label: "survey", sub: "the topic's foundations map", run(){ openSurvey(); }});
     acts.push({icon: "🔊", label: "listen", sub: "read this conversation aloud", run(){ listenNode(); }});
     acts.push({icon: "💾", label: "save .know.json", sub: "", run(){ $("exportjson").click(); }});
     acts.push({icon: "📄", label: "export markdown", sub: "", run(){ $("exportmd").click(); }});
@@ -3544,6 +3772,7 @@ matchMedia("(max-width:900px)").addEventListener("change", () => {
 function renderAll(keepScroll){
   renderHeader(); renderMap(); renderLoose(); renderTreeList(); renderTerms();
   renderConversation(keepScroll);
+  if ($("surveybox").classList.contains("open")) renderSurvey();
   updateHash();
 }
 
@@ -3699,7 +3928,8 @@ function offerRetry(err){
 function setRunning(on){
   running = on;
   document.body.classList.toggle("running", on);
-  $("newbtn").disabled = $("fullbtn").disabled = $("topic").disabled = on;
+  $("newbtn").disabled = $("fullbtn").disabled = $("surveybtn").disabled =
+    $("topic").disabled = on;
   $("importbtn").disabled = on;
   updateRevRow();   // the review button sits out runs too
 }
@@ -3998,6 +4228,7 @@ function guardTopic(){
 }
 $("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t); };
 $("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t); };
+$("surveybtn").onclick = () => { const t = guardTopic(); if (t) cmdSurvey(t); };
 $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") $("newbtn").click(); });
 $("stopbtn").onclick = () => { stopRequested = true; setStatus("stopping after this turn…"); };
 
@@ -4132,6 +4363,7 @@ document.addEventListener("keydown", (e) => {
     if ($("palette").classList.contains("open")){ closePalette(); return; }
     if ($("overview").classList.contains("open")){ closeOverview(); return; }
     if ($("quizbox").classList.contains("open")){ closeQuiz(); return; }
+    if ($("surveybox").classList.contains("open")){ closeSurvey(); return; }
     if ($("reviewbox").classList.contains("open")){ closeReview(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
@@ -4195,7 +4427,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "reviewbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(

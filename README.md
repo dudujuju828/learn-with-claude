@@ -92,7 +92,13 @@ directly (a local `claude` login can't run on a server), so it needs an
   already knows (curious novice → student → practitioner → expert from a
   neighbouring field), so its questions scale with the tutor; **auto** (the
   default) derives the level from the tutor style, and each investigation
-  keeps the learner it started with. Tutor answers arrive **marked up into
+  keeps the learner it started with. For a broad topic, **🗺 survey** maps
+  before diving: one model call breaks it into the foundations it's built on
+  (each with a one-line why, two levels deep, any piece expandable further);
+  *investigate* runs a normal conversation on a piece — the first roots the
+  tree, later ones carry the usual follow-up recap — and the map stays with
+  the tree, tracking coverage, so you pick off the rest whenever. Tutor
+  answers arrive **marked up into
   parts**: the direct answer first, then each distinct aspect (the why, an
   example, a caveat…) as its own labelled fold-out card, so a long answer
   reads one idea at a time. Every term the learner hits lands in a

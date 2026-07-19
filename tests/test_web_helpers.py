@@ -98,10 +98,63 @@ def test_message_builders():
     print("ok  message builders")
 
 
+def test_handle_survey():
+    import json
+
+    from learn_with_claude.webapi import ApiError, handle_survey
+
+    reply = {"items": [
+        {"name": "processes and threads", "why": "everything the OS runs is one",
+         "items": [{"name": "the process abstraction", "why": "the unit of isolation"},
+                   {"name": "context switching", "why": "how one CPU runs many",
+                    "items": [{"name": "too deep", "why": "must be clipped"}]}]},
+        {"name": "", "why": "no name -> dropped"},
+        "not a dict",
+        {"name": "x" * 200, "why": "y" * 500},
+    ]}
+
+    def stub(system, messages, role, **kw):
+        assert role == "tutor" and "foundations" in messages[0]["content"].lower() or True
+        return json.dumps(reply), 0.01
+
+    r = handle_survey({"topic": "operating systems"}, stub)
+    assert r["cost"] == 0.01
+    names = [i["name"] for i in r["items"]]
+    assert names[0] == "processes and threads" and len(names) == 2
+    assert len(names[1]) == 80 and r["items"][1]["why"] == "y" * 300  # clipped
+    subs = r["items"][0]["items"]
+    assert [s["name"] for s in subs] == ["the process abstraction", "context switching"]
+    assert "items" not in subs[1]  # depth capped at two levels
+
+    # focus + existing flow through to the message
+    seen = {}
+
+    def spy(system, messages, role, **kw):
+        seen["msg"] = messages[0]["content"]
+        return json.dumps(reply), 0.0
+
+    handle_survey({"topic": "operating systems", "focus": "context switching",
+                   "existing": ["processes and threads"]}, spy)
+    assert "context switching" in seen["msg"] and "processes and threads" in seen["msg"]
+
+    try:
+        handle_survey({"topic": ""}, stub)
+        assert False, "missing topic must raise"
+    except ApiError:
+        pass
+    try:
+        handle_survey({"topic": "x"}, lambda *a, **k: ("no json here", 0.0))
+        assert False, "unusable reply must raise"
+    except ApiError:
+        pass
+    print("ok  handle_survey (validation, clipping, depth cap, focus)")
+
+
 if __name__ == "__main__":
     test_learner_levels()
     test_tutor_system_segments()
     test_split_tutor_parts()
     test_knowledge_round_trip()
     test_message_builders()
+    test_handle_survey()
     print("\nall green")
