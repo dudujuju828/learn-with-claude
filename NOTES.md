@@ -5,6 +5,36 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 12 — Survey: "know it"
+
+### What it is
+Every uncovered piece in the 🗺 survey map gets a **know it** action beside
+*investigate*: mark a foundation you already understand and it counts as
+covered — shown with the same done styling and a **✓ known** chip (tap to
+unmark) — without spending a conversation on it. The progress line becomes
+"n/total covered" (investigated or known). The flag lives on the survey item
+(`item.known`), so it syncs, exports, and round-trips with the tree like the
+rest of the map.
+
+### Why this one
+- The survey flow assumes you start from zero, but its own learner picker
+  admits you often don't (practitioner, expert-from-a-neighbouring-field).
+  For anyone with partial background, half the mapped foundations are
+  already known — and the coverage tracker stays misleadingly red unless
+  you pay ~$0.05–0.07/turn to "investigate" things you could teach.
+  Marking them known makes the map honest and leaves the investigate
+  buttons pointing at the actual frontier.
+- Small and safe: one optional boolean on survey items, carried by the
+  existing survey last-write-wins sync rule and (since Feature 9) the file
+  round-trip; two small UI branches in `renderSurvey`.
+
+### Candidates rejected (this cycle)
+- **Due-count in tab title + PWA icon badge** — real retention nudge, but
+  smaller than making survey coverage truthful; next in line.
+- **Cross-tree highlights hub** — still parked.
+
+---
+
 ## Feature 11 — (correction) drag-and-drop import already existed; polish it, then: resume where you stopped reading
 
 ### The miss, on the record
