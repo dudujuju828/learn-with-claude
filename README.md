@@ -107,27 +107,37 @@ directly (a local `claude` login can't run on a server), so it needs an
   they sync, export, and travel in `.know.json`; defined terms get a dotted
   underline wherever they appear in answers (tap for the definition in a
   popover), the sidebar glossary unfolds each term with a jump back to where
-  it came up, old trees backfill with one *define missing* click, and your
+  it came up (and an *✎ edit* to fix any auto-written definition by hand —
+  the correction rides the sync and wins the merge), old trees backfill with
+  one *define missing* click, and your
   own unknowns count too: **select a word or two in any answer** and a
   floating chip offers *✎ define* — the term joins the glossary with the
   same machinery (underlines, flashcards, export; *✕ forget* removes it
   again) — or *⛏ dig*, for when a definition isn't enough: the tutor is
   asked what that thing actually **is** in this context, and the answer
   lands in the conversation as your own turn (🧑), where you can read it,
-  define terms inside it, or branch from it. **anki
+  define terms inside it, or branch from it. Select a longer stretch and the
+  same chip offers **★ highlight** — a highlighter over the tutor's words
+  that stays put across reloads and devices (tap a mark to lift it). **anki
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term into
-  an in-app flashcard (recall → flip → grade yourself again / good / easy),
+  an in-app flashcard (recall → flip → grade yourself again / good / easy,
+  or fix a card's definition inline the moment you spot it's wrong),
   scheduled out on a spaced-repetition ladder (1d → 3d → ×2.5) so each card
   comes back just before you'd forget it; the schedule lives on the glossary
-  entry, so it syncs across devices and travels in `.know.json`. Trees file
+  entry, so it syncs across devices and travels in `.know.json`. A **📊
+  progress** panel turns that review-and-quiz data into an at-a-glance view —
+  recall strength (card maturity), a 14-day review forecast, your current
+  streak, and quiz history — scoped to the active profile. Trees file
   under **profiles** — named interest areas like *computer-science* — and the
   active profile scopes the tree list and the review deck, so each interest
   keeps its own flashcards; the profile name lives on the tree document and
   syncs, merges, and exports with it. **🎓
   quiz me** writes a handful of multiple-choice questions from what the tree
   actually covered (one model call, kept with the tree — retakes just
-  reshuffle), explains every answer, and records your scores. You
+  reshuffle), explains every answer, and records your scores. Each tree also
+  gets **📝 my notes** — a free-text space for your own synthesis of what you
+  learned, which autosaves, syncs with the tree, and heads every export. You
   can also **ask the tutor yourself** under any conversation — your question
   is answered with the node's context and stored as your own turn
   (`user: true`), which the simulated learner never sees. Conversations
