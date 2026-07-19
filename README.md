@@ -150,7 +150,8 @@ directly (a local `claude` login can't run on a server), so it needs an
   under **profiles** — named interest areas like *computer-science* — and the
   active profile scopes the tree list and the review deck, so each interest
   keeps its own flashcards; the profile name lives on the tree document and
-  syncs, merges, and exports with it. **🎓
+  syncs, merges, and exports with it (and the ✎ chip renames a profile
+  across every tree filed under it). **🎓
   quiz me** writes a handful of multiple-choice questions from what the tree
   actually covered (one model call, kept with the tree — retakes just
   reshuffle), explains every answer, and records your scores. Each tree also
