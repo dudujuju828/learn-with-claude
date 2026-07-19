@@ -5,6 +5,35 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 8 — Search finds your own words
+
+### What it is
+The **search every tree** box now also matches the two things *you* wrote:
+each tree's **my notes** text and every **passage highlight**. A note hit is
+labelled "my notes" and opens straight into that tree's notes editor; a
+highlight hit is labelled "highlight" and jumps to the marked turn (where the
+passage is sitting there highlighted). Turn and glossary hits keep priority;
+the 25-hit cap covers all four sources.
+
+### Why this one
+- "Search across every tree" is an advertised flagship, and it silently
+  skipped exactly the words a studying user is most likely to look for —
+  their own synthesis (Feature 4) and the passages they marked as mattering
+  (Feature 5). Searching a phrase you *know you wrote* and getting "no
+  matches" reads as a bug.
+- Tiny risk: a pure extension of `searchHits` (same hit shape, same snippet
+  renderer, same cap), one new click path for note hits, no storage or
+  backend changes.
+
+### Candidates rejected (this cycle)
+- **Cross-tree highlights hub** — still attractive; search now covers the
+  "find that passage again" need, so the aggregated browse view can wait.
+- **Highlights in the Markdown/HTML exports** — the natural next parity step
+  (exports already carry notes); noted for a future cycle.
+- **Archive/pin trees** — organisational nicety, still below the line.
+
+---
+
 ## Feature 7 — Read-aloud voice & speed
 
 ### What it is
