@@ -1521,7 +1521,14 @@ const THEMES = {
          think:'#d9b64a', ask:'#7fd3a4', ans:'#8fbef2', term:'#e29ac7',
          termbg:'#3a2f37', prebg:'#32352f', danger:'#df8a6f', accent:'#d4b45e',
          primary:'#d4b45e', onprim:'#20221f'},
+  // for low-vision readers: every text pair ≥7:1 (WCAG AAA), borders ≥3:1
+  contrast:{bg:'#000000', card:'#0d0d0d', fg:'#ffffff', line:'#7a7a7a', muted:'#d6d6d6',
+         think:'#ffd75e', ask:'#7dedaa', ans:'#8fd0ff', term:'#ffa1d8',
+         termbg:'#2b1f27', prebg:'#161616', danger:'#ff9070', accent:'#ffd75e',
+         primary:'#ffd75e', onprim:'#000000'},
 };
+const DARK_THEMES = new Set(["dark", "contrast"]);
+function darkTheme(){ return DARK_THEMES.has(prefs.theme); }
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
@@ -1561,7 +1568,7 @@ function applyPrefs(){
   r.setProperty("--ws", prefs.ws + "em");
   r.setProperty("--font", `'${prefs.font}'`);
   // scrollbars, select dropdowns, autofill — native widgets follow the theme
-  const scheme = prefs.theme === "dark" ? "dark" : "light";
+  const scheme = darkTheme() ? "dark" : "light";
   r.colorScheme = scheme;
   document.querySelector('meta[name="theme-color"]').content = t.bg;
   // remember the resolved vars so the head boot script can restore the whole
@@ -2731,8 +2738,7 @@ function renderConversation(keepScroll){
 }
 
 function confColor(conf){
-  const dark = prefs.theme === "dark";
-  return `hsl(${Math.round(conf * 1.2)},48%,${dark ? 58 : 40}%)`;
+  return `hsl(${Math.round(conf * 1.2)},48%,${darkTheme() ? 58 : 40}%)`;
 }
 function renderMap(){
   const tree = cur();
