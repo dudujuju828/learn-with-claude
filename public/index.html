@@ -1082,7 +1082,8 @@
   own question with the same context. It's recorded as your turn (🧑), and the
   simulated learner never sees it.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
-  another device or the CLI — the file format is identical.</p>
+  another device or the CLI — the file format is identical. Coming back the
+  other way, <b>drop the file anywhere</b> on the page (or use <b>import</b>).</p>
   <h3>keyboard</h3>
   <table>
     <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>jump anywhere — trees, nodes, terms, commands</td></tr>
@@ -1246,7 +1247,8 @@
         <button id="saveall" title="every tree in one backup file — import brings them all back">save all</button>
         <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
       </div>
-      <p class="hint">trees live in this browser. save the file to move one to your PC or the CLI.</p>
+      <p class="hint">trees live in this browser. save the file to move one to your PC or the
+      CLI — and drop a .know.json anywhere on the page to import it.</p>
     </section>
   </aside>
 
@@ -5282,21 +5284,31 @@ window.addEventListener("resize", updateReadbar);
 $("jumpbtn").onclick = () =>
   window.scrollTo({top: document.body.scrollHeight, behavior: reducedMotion() ? "auto" : "smooth"});
 
-/* drag a .know.json anywhere onto the page to import it */
+/* drag a .know.json anywhere onto the page to import it. Only file drags
+   count — dragging text around keeps its native behaviour. */
 let dragDepth = 0;
+const dragHasFiles = (e) =>
+  e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
 document.addEventListener("dragenter", (e) => {
+  if (!dragHasFiles(e)) return;
   e.preventDefault();
   if (!running){ dragDepth++; document.body.classList.add("dragging"); }
 });
-document.addEventListener("dragover", (e) => e.preventDefault());
-document.addEventListener("dragleave", () => {
+document.addEventListener("dragover", (e) => { if (dragHasFiles(e)) e.preventDefault(); });
+document.addEventListener("dragleave", (e) => {
+  if (!dragHasFiles(e)) return;
   if (--dragDepth <= 0){ dragDepth = 0; document.body.classList.remove("dragging"); }
 });
-document.addEventListener("drop", (e) => {
+document.addEventListener("dragend", () => {
+  dragDepth = 0; document.body.classList.remove("dragging");
+});
+document.addEventListener("drop", async (e) => {
+  if (!dragHasFiles(e)) return;
   e.preventDefault();
   dragDepth = 0; document.body.classList.remove("dragging");
-  const f = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f && !running) importTreeFile(f);
+  if (running) return;
+  const files = [...(e.dataTransfer.files || [])];   // every file, not just the first
+  for (const f of files) await importTreeFile(f);
 });
 
 /* login */

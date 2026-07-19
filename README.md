@@ -88,7 +88,8 @@ directly (a local `claude` login can't run on a server), so it needs an
   into it, or ✕ to dismiss the ones you don't care about, ↩ to bring them
   back), live cost, and `.know.json`
   import/export compatible with the CLI (plus the CLI's standalone HTML
-  reading page via *export html*). A **tutor style** picker switches the
+  reading page via *export html*; dropping `.know.json` files anywhere on
+  the page imports them). A **tutor style** picker switches the
   answers between balanced / highly technical / precise / simple / concise
   (the original terse style), applied from the next turn — or write your own
   **custom tutor** (name + how it should answer, with a try-before-saving
