@@ -75,7 +75,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   localStorage working copy and syncs (debounced push, boot merge,
   last-write-wins per tree).
 - `public/index.html` — the shell as a dyslexia-friendly page: font switcher
-  (OpenDyslexic / Lexend / Atkinson / Comic Sans), five colour themes, text /
+  (OpenDyslexic / Lexend / Atkinson / Comic Sans), six colour themes
+  (including a black **high-contrast** theme with every text pairing at
+  WCAG AAA, for low-vision readers), text /
   line / letter / word spacing, keyboard-only **reading ruler** and
   **focus line** (typoscope) stepping visual lines, read aloud (per block, or
   🔊 listen through a whole conversation — with your pick of the browser's
