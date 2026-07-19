@@ -5,6 +5,24 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 6 — Rename a tree's topic
+
+### What it is
+An **✎** on each tree in the list renames that tree's topic — the display title
+*and* the export filename. You could already rename a node; you couldn't fix the
+tree's own title, which is fixed at creation from whatever you typed to start it
+(typos and all). The rename persists, syncs, and — since the merge takes the
+server's copy as its base — the local title now wins when it's newer (added
+alongside the note/quiz/profile last-write-wins fields).
+
+### Why this one
+- A small but universal gap: the topic phrase you type to start a tree becomes
+  its permanent title and filename, and there was no way to tidy it. Very low
+  risk (a pure display/label field, no re-investigation implied), and it
+  deliberately steps outside the study-suite work of the last few cycles.
+
+---
+
 ## Feature 5 — Passage highlights
 
 ### What it is

@@ -322,9 +322,10 @@
     white-space:nowrap; font-size:.92rem}
   #treelist .item .meta{color:var(--muted); font-size:.76rem;
     font-variant-numeric:tabular-nums}
-  #treelist .item .del{border:none; background:none; color:var(--muted);
-    padding:0 .2rem; font-size:.9rem}
+  #treelist .item .del, #treelist .item .ren{border:none; background:none;
+    color:var(--muted); padding:0 .2rem; font-size:.9rem}
   #treelist .item .del:hover{color:var(--danger)}
+  #treelist .item .ren:hover{color:var(--fg)}
   #map{font-size:.88rem}
   #map .maptree, #map .maptree ul{list-style:none; margin:0; padding:0}
   #map .maptree ul{margin-left:.55rem; padding-left:.6rem; border-left:1px solid var(--line)}
@@ -2184,6 +2185,7 @@ function mergeTrees(local, server){
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
     if (local.survey) out.survey = structuredClone(local.survey);
     if (typeof local.note === "string") out.note = local.note;
+    if (typeof local.root_topic === "string" && local.root_topic) out.root_topic = local.root_topic;
     // presence (even "") is intent; absence means the field never existed
     // or a CLI round-trip dropped it — then the server's filing stands
     if (typeof local.profile === "string") out.profile = local.profile;
@@ -2719,6 +2721,8 @@ function renderTreeList(){
     return `<div class="item${t.id === currentId ? " active" : ""}" onclick="openTree('${t.id}')"` +
       ` tabindex="0" role="button"${t.id === currentId ? ` aria-current="true"` : ""}>` +
       `<div class="top"><span class="lbl">${esc(oneLine(t.root_topic, 44))}</span>` +
+      `<button class="ren" title="rename this tree's topic" aria-label="rename tree topic"` +
+      ` onclick="event.stopPropagation();renameTree('${t.id}')">✎</button>` +
       `<button class="del" title="remove from this browser" aria-label="delete tree"` +
       ` onclick="event.stopPropagation();deleteTree('${t.id}')">✕</button></div>` +
       `<div class="meta">${n} node${n === 1 ? "" : "s"} · ${fmtCost(totalCost(t))}` +
@@ -4533,6 +4537,22 @@ function renameNode(nodeId){
   saveStore(); renderAll(true);
 }
 window.renameNode = renameNode;
+
+/* rename a tree's topic — the display title and export filename. Only ever a
+   display/label field, so no re-investigation is implied. */
+function renameTree(id){
+  if (running) return;
+  const t = store[id];
+  if (!t) return;
+  const name = prompt("rename this tree's topic:", t.root_topic);
+  if (name == null) return;
+  const v = name.trim().replace(/\s+/g, " ").slice(0, 200);
+  if (!v || v === t.root_topic) return;
+  t.root_topic = v;
+  persistTree(t);
+  renderAll(true);
+}
+window.renameTree = renameTree;
 
 function removeBranch(nodeId){
   const tree = cur(); if (!tree || running) return;
