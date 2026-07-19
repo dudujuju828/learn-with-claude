@@ -78,7 +78,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   (OpenDyslexic / Lexend / Atkinson / Comic Sans), five colour themes, text /
   line / letter / word spacing, keyboard-only **reading ruler** and
   **focus line** (typoscope) stepping visual lines, read aloud (per block, or
-  🔊 listen through a whole conversation), **search across every tree**,
+  🔊 listen through a whole conversation — with your pick of the browser's
+  voices and a 0.5–2× speed control, and a ▶ sample button to audition them),
+  **search across every tree**,
   branch buttons under every answer (plus a **loose threads** list of the
   words the learner flagged but never chased — tap one to branch straight
   into it), live cost, and `.know.json`
