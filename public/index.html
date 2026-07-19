@@ -803,6 +803,16 @@
     color:var(--fg);
   }
   #terms .gdeflinks{margin-top:.3rem; color:var(--muted); font-size:.8rem}
+  #terms .gedit{margin:.1rem 0 .45rem 1.35rem}
+  #terms .gedit textarea{
+    width:100%; min-height:3.6rem; resize:vertical; font-family:inherit;
+    font-size:.85rem; line-height:1.5; padding:.45rem .6rem; color:var(--fg);
+    background:var(--card); border:1px solid var(--term); border-radius:.55rem;
+    letter-spacing:inherit;
+  }
+  #terms .gedit .grow{display:flex; gap:.4rem; margin-top:.35rem; align-items:center}
+  #terms .gedit .grow button{font-size:.8rem; padding:.24rem .6rem}
+  #terms .gedit .ghint{color:var(--muted); font-size:.74rem; margin-left:auto}
   .cl{cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px}
   .cl:hover{color:var(--fg)}
   .term[role=button]{cursor:pointer}
@@ -2044,7 +2054,10 @@ function mergeTrees(local, server){
   for (const [k, le] of Object.entries(local.glossary || {})){
     const se = sg[k];
     if (!se){ sg[k] = structuredClone(le); continue; }
-    if (!se.def && le.def) se.def = le.def;
+    // a hand edit (stamped) wins by recency; otherwise a definition beats none
+    if (le.edited && (!se.edited || le.edited > se.edited)){
+      se.def = le.def; se.edited = le.edited;
+    } else if (!se.def && le.def) se.def = le.def;
     if (le.rev && (!se.rev || (le.rev.last || "") > (se.rev.last || "")))
       se.rev = structuredClone(le.rev);
   }
@@ -2842,13 +2855,27 @@ function renderTerms(){
     const e = entry(i);
     const def = e && e.def;
     const foldKey = (glossAll ? i.tree.id + ":" : "") + i.key;
+    const editing = editGloss && editGloss.treeId === i.tree.id && editGloss.key === i.key;
+    if (editing){
+      return `<details class="gentry" data-gfold="${esc(foldKey)}" open>` +
+        `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}</summary>` +
+        `<div class="gedit"><textarea aria-label="edit the definition of ${esc(i.term)}"` +
+        ` oninput="glossEditInput(this.value)" placeholder="write the definition…">` +
+        `${esc(editGloss.draft)}</textarea>` +
+        `<div class="grow"><button class="primary" onclick="saveEditDef()">save</button>` +
+        `<button onclick="cancelEditDef()">cancel</button>` +
+        `<span class="ghint">feeds review, export &amp; anki</span></div></div></details>`;
+    }
     const links = [];
     if (Number.isInteger(i.nodeId))
       links.push(glossAll
         ? `<span class="cl" tabindex="0" role="button" onclick="openSearchHit('${esc(i.tree.id)}',${i.nodeId},${i.turn})">` +
           `↪ ${esc(oneLine(i.tree.root_topic, 26))}</span>`
         : `<span class="cl" tabindex="0" role="button" onclick="jumpToTerm(${i.nodeId},${i.turn})">↪ where I met it</span>`);
-    if (!def && !glossAll)
+    if (def)
+      links.push(`<span class="cl" tabindex="0" role="button" data-tree="${esc(i.tree.id)}" data-key="${esc(i.key)}"` +
+                 ` onclick="startEditDef(this.dataset.tree,this.dataset.key)">✎ edit</span>`);
+    else if (!glossAll)
       links.push(`<span class="cl" tabindex="0" role="button" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`);
     if (e && e.src === "you")
       links.push(`<span class="cl" tabindex="0" role="button" data-tree="${esc(i.tree.id)}" data-key="${esc(i.key)}"` +
@@ -2925,6 +2952,39 @@ function forgetTerm(treeId, key){
   renderTerms(); renderConversation(true);   // drop its underlines too
 }
 window.forgetTerm = forgetTerm;
+
+/* edit a definition by hand — auto-definitions are a cheap first draft; the
+   corrected text flows straight into review, export, and anki. The edit is
+   stamped (entry.edited) so a cross-device merge keeps the newer wording
+   instead of the "a definition beats none" default. */
+let editGloss = null;   // {treeId, key, draft} while an inline editor is open
+function startEditDef(treeId, key){
+  const t = store[treeId]; if (!t) return;
+  const e = glossaryOf(t)[key]; if (!e) return;
+  editGloss = {treeId, key, draft: e.def || ""};
+  glossOpen.add((glossAll ? treeId + ":" : "") + key);
+  renderTerms();
+  const ta = $("terms").querySelector(".gedit textarea");
+  if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+window.startEditDef = startEditDef;
+window.glossEditInput = (v) => { if (editGloss) editGloss.draft = v; };
+function saveEditDef(){
+  if (!editGloss) return;
+  const t = store[editGloss.treeId];
+  const e = t && glossaryOf(t)[editGloss.key];
+  if (e){
+    e.def = (editGloss.draft || "").trim().slice(0, 600);
+    e.edited = new Date().toISOString();
+    persistTree(t);
+  }
+  editGloss = null;
+  renderTerms(); renderConversation(true); renderHeader();
+}
+window.saveEditDef = saveEditDef;
+function cancelEditDef(){ editGloss = null; renderTerms(); }
+window.cancelEditDef = cancelEditDef;
+
 let glossTimer = null;
 $("glossfilter").addEventListener("input", () => {
   clearTimeout(glossTimer);
@@ -4671,6 +4731,7 @@ document.addEventListener("keydown", (e) => {
     if ($("reviewbox").classList.contains("open")){ closeReview(); return; }
     if ($("statsbox").classList.contains("open")){ closeStats(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
+    if (editGloss){ cancelEditDef(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
     if (!$("selchip").hidden){ hideSelchip(); return; }
     stopSpeech(); closePanel(true); closeMenu();

@@ -5,6 +5,43 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 2 — Editable glossary definitions
+
+### What it is
+Any defined term in the glossary now has an **✎ edit** action that opens an
+inline textarea to rewrite its definition. The corrected text flows straight
+into the flashcard review, the markdown/HTML export, and the Anki export — the
+same machinery the auto-generated definition already fed. Save/cancel, Esc to
+cancel, works in both the single-tree and "all trees" glossary scopes.
+
+The edit is **stamped** (`entry.edited`), and the cross-device sync merge was
+updated to prefer the newer stamped edit — otherwise the old merge rule
+("a definition beats none") would silently drop a hand-edited definition when
+the server already had one. Legacy behaviour (no stamp) is unchanged.
+
+### Why this one
+- Definitions are written by a cheap model (`haiku`, effort `none`) the moment a
+  term appears, so they're a serviceable *first draft* — sometimes too generic,
+  occasionally off. Because they become the answer side of spaced-repetition
+  flashcards, a wrong definition means you rehearse wrong information. Letting
+  the user correct/personalise it is squarely on the learning path.
+- Low risk, high reuse: it's a small, self-contained addition to the existing
+  glossary entry UI (mirrors the "define it" / "forget" actions), stores nothing
+  new except an optional timestamp, and needs no backend change. The only
+  non-trivial part — making an edit survive a sync conflict — was fixed in the
+  one merge function and verified against four cases.
+
+### Candidates rejected (this cycle)
+- **Undo toast for deletions** — genuinely useful safety, but restoring a
+  tree that was already tombstoned + pushed to the server is fiddly and touches
+  the sync protocol; higher risk than it looks.
+- **Typed-recall review mode** — auto-grading free-text definitions is
+  unreliable; the established self-grade paradigm already covers recall.
+- **Bulk profile assignment** — organisational nicety, lower marginal value
+  than fixing wrong flashcard answers.
+
+---
+
 ## Feature 1 — Progress dashboard (spaced-repetition + quiz stats)
 
 ### What it is
