@@ -5,6 +5,37 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 14 — ★ Highlights hub
+
+### What it is
+A **★ highlights · n** button in the words tab (and a ⌘K entry) opens a
+modal listing **every passage you highlighted across the active profile's
+trees**, grouped by tree (most recently touched first), each shown in its
+highlighter band with the node and turn it lives in. Tap a passage and
+you're standing at the mark in its conversation. Orphaned highlights
+(their node was pruned) are skipped, matching what the conversation
+renders; the button hides when there's nothing marked.
+
+### Why this one
+- The last unserved leg of the highlights feature-family: Feature 5 made
+  marks, Feature 8 made them searchable (when you know the words), Feature
+  9 archived them in exports. Rereading your marks *without* a query — the
+  "flip through your underlines" revision pass — needed an aggregated view.
+  Deferred three cycles as lower-priority; with the rest of the study loop
+  saturated it's now the best value on the board.
+- Pure read-only aggregation over existing data, cloned from the progress
+  modal's skeleton (overlay, Esc chain, Tab trap, print hide, focus
+  restore), navigating through the existing `openSearchHit` path.
+
+### Candidates rejected (this cycle)
+- **High-contrast theme** — real accessibility value; the five themes were
+  contrast-validated, but a dedicated black/white/yellow theme is a fair
+  future cycle.
+- **CLI parity commands (note/highlights in the terminal)** — the CLI is
+  the minority surface; web-first still pays better.
+
+---
+
 ## Feature 13 — The due count follows you: tab title + app badge
 
 ### What it is
