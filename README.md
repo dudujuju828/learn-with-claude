@@ -81,7 +81,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   line / letter / word spacing, keyboard-only **reading ruler** and
   **focus line** (typoscope) stepping visual lines, read aloud (per block, or
   🔊 listen through a whole conversation — with your pick of the browser's
-  voices and a 0.5–2× speed control, and a ▶ sample button to audition them),
+  voices and a 0.5–2× speed control, a ▶ sample button to audition them,
+  and the word being spoken highlighted in the text as you listen,
+  karaoke-style),
   **search across every tree** (turns, glossary, and your own notes and
   highlights — a note hit opens the notes editor, a highlight hit jumps to
   the marked passage),
