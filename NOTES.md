@@ -5,6 +5,51 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 17 — Read aloud follows along, word by word
+
+### What it is
+While read-aloud speaks a block (click-to-hear or the 🔊 listen-through
+flow), the word being spoken is highlighted in the text — karaoke-style, in
+the theme's primary colour pair — so eyes and ears stay on the same word.
+The standard follow-along aid every dedicated reading tool (Immersive
+Reader, Kurzweil) ships, and squarely aimed at this app's dyslexic
+audience: multimodal reinforcement plus never losing your place.
+
+### Why this one (and why the risk collapsed)
+- Deferred in Feature 16 as "the standout remaining accessibility
+  delighter", parked only because live DOM rewriting during speech would
+  fight the glossary-underline and passage-highlight passes. The **CSS
+  Custom Highlight API** (`CSS.highlights` + `::highlight()`) removes that
+  entire class of risk: the current word is a `Range` painted by CSS, no
+  DOM mutation at all, so the three annotation systems can't interact.
+  Verified working (including `var()` theme colours in `::highlight()`) in
+  this machine's Edge before starting.
+- Progressive enhancement at every layer: no API → no highlight (block
+  outline stays); voice never fires word boundaries (some mobile/remote
+  voices) → no highlight; boundary lands on text a re-render detached →
+  that word just doesn't paint. Speech itself is untouched.
+- The utterance text derivation moves from a DOM clone to a walker that
+  builds the identical string *plus* a char→(text node, offset) map — the
+  map is what turns a boundary event's `charIndex` into a `Range`.
+
+### Deliberately left out
+- **Follow-scroll within a long block** (auto-scrolling the highlighted
+  word into view): fights the user's own scrolling in the click-to-hear
+  case; the listen flow already centres each block. Revisit if blocks
+  ever outgrow a screen.
+- **The CLI's standalone HTML export** keeps its simpler read-aloud, as
+  decided in Feature 7.
+
+### Candidates rejected (this cycle)
+- **navigator.share for exports on mobile** — still next in line; smaller
+  value than the reading aid this app is *for*.
+- **Auto theme following the OS light/dark switch live** — first visit
+  already honours `prefers-color-scheme`; a live "auto" option is marginal
+  next to six explicit themes.
+- **CLI note/highlight commands** — the minority surface, again.
+
+---
+
 ## Feature 16 — Rename a profile
 
 ### What it is
