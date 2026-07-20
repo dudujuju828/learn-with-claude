@@ -5,6 +5,43 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 18 — Exports go through the share sheet on touch devices
+
+### What it is
+On a touch-first device (primary pointer is coarse), every file the app
+saves — save .know.json, export md, export html, anki cards, and the
+save-all backup — opens the OS **share sheet** instead of forcing a
+browser download: AirDrop it, Save to Files, drop it in Drive, send it to
+the other device where you'll keep reading. Desktop keeps the plain
+download. Anything the platform won't share (unsupported type, expired
+tap-activation after a slow export, no share support at all) falls back
+to the download; dismissing the sheet is treated as "changed my mind",
+not an error.
+
+### Why this one
+- Carried as "next in line" for two cycles. The app is explicitly
+  multi-device (sync, PWA, import-by-drop), and its portability story is
+  "each tree is a single file" — but on phones that file used to land in
+  the browser's downloads limbo, exactly where mobile users lose things.
+  The share sheet is how files leave apps on mobile.
+- Smallest possible surface: all five save paths already funnel through
+  the one `download()` helper, so the change is one function plus a
+  `File`/`canShare` feature check. Existing desktop behaviour is
+  untouched (coarse-pointer gate, not width, so a narrow desktop window
+  still downloads).
+
+### Candidates rejected (this cycle)
+- **Follow-scroll for the karaoke highlight in long blocks** —
+  deliberately left out of Feature 17; would fight the user's own
+  scrolling in click-to-hear.
+- **Voice/speed/karaoke parity in the CLI's standalone HTML export** —
+  share artifact, simpler on purpose (decided in Feature 7, still holds).
+- **PWA share *target* (receiving .know.json from other apps)** — the
+  inbound half; Android-only in practice and needs service-worker POST
+  handling; the outbound half is where the daily friction is.
+
+---
+
 ## Feature 17 — Read aloud follows along, word by word
 
 ### What it is
