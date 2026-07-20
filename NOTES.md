@@ -5,6 +5,53 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 20 — Type the answer: verified recall in review
+
+### What it is
+A **⌨ type** toggle in the review deck flips the cards around: you're
+shown the definition and you **type the term** it defines. The app checks
+your answer itself — case, punctuation, and hyphen/space differences are
+ignored, and a small typo counts as *close* (shown with the exact
+spelling) rather than wrong, which matters for a dyslexia-focused tool.
+The verdict (✓ / ≈ / ✗, with what you typed) appears with the revealed
+term, and the matching grade button is pre-focused — but *you* still
+grade, so a synonym the checker couldn't know about isn't held against
+you. **skip typing** falls back to the classic flip for that card. The
+choice persists like any reading pref and is remembered next session;
+scheduling semantics are completely unchanged.
+
+### Why this one
+- The session brief asked for a quizzing/testing feature, and this is the
+  testing loop's real weakness: both existing surfaces (per-tree quiz,
+  review deck) test *recognition*, and review grades are self-reported —
+  "yeah, I knew that" is exactly the self-deception spaced repetition
+  suffers from. Typing the answer converts the deck into *verified
+  production practice*, the strongest form of the testing effect, at zero
+  model cost.
+- Feature 2 rejected "typed-recall review mode" because auto-grading a
+  free-text **definition** is unreliable. That objection doesn't apply in
+  the other direction: the **term** is short and objective — Anki's
+  type-in-answer has graded it for two decades. The earlier rejection was
+  about the wrong side of the card.
+- Contained and pattern-shaped: one pref boolean, one header toggle, two
+  render branches inside the existing review modal, ~40 lines of check
+  logic. No storage, sync, or backend changes; classic mode untouched.
+
+### Candidates rejected (this cycle)
+- **Local zero-cost MCQ over the profile's glossary** — would answer
+  Feature 13's "quiz over a whole profile" objection (it was model-call
+  heavy; this is free), but it's a *third* recognition surface when
+  recognition is already served twice; recall is the uncovered axis.
+- **Quiz misses feed the review deck** — quiz questions aren't
+  term-shaped; turning a missed question into a card needs another model
+  call and a new card type.
+- **Per-question quiz analytics** (which questions you repeatedly miss) —
+  bookkeeping, not a new practice loop.
+- **🔊 on quiz questions** — audio polish parked since Feature 19, not
+  testing.
+
+---
+
 ## Feature 19 — Hear the flashcard
 
 ### What it is
