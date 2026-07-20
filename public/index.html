@@ -1107,7 +1107,9 @@
   own question with the same context. It's recorded as your turn (🧑), and the
   simulated learner never sees it.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
-  another device or the CLI — the file format is identical. Coming back the
+  another device or the CLI — the file format is identical. On a phone or
+  tablet, saving opens the <b>share sheet</b> (AirDrop, Save to Files, Drive…)
+  instead of a download. Coming back the
   other way, <b>drop the file anywhere</b> on the page (or use <b>import</b>).</p>
   <h3>keyboard</h3>
   <table>
@@ -1497,9 +1499,32 @@ function randHex(n){
   const a = new Uint8Array(n/2); crypto.getRandomValues(a);
   return [...a].map(b => b.toString(16).padStart(2, "0")).join("");
 }
+/* every file the app saves leaves through here. On a touch-first device
+   the OS share sheet is how files leave apps (AirDrop, Save to Files,
+   Drive, the other device) — browser downloads are where mobile users
+   lose things. Desktop keeps the plain download (coarse-pointer gate,
+   not width). Share bows out to the download when the platform won't
+   take the file or the tap-activation expired during a slow export;
+   dismissing the sheet means "changed my mind", not "download instead". */
 function download(name, text, mime){
+  const blob = new Blob([text], {type: mime});
+  if (matchMedia("(pointer:coarse)").matches &&
+      navigator.share && navigator.canShare){
+    try {
+      const file = new File([blob], name, {type: mime});
+      if (navigator.canShare({files: [file]})){
+        navigator.share({files: [file], title: name}).catch((e) => {
+          if (!e || e.name !== "AbortError") saveBlob(name, blob);
+        });
+        return;
+      }
+    } catch {}
+  }
+  saveBlob(name, blob);
+}
+function saveBlob(name, blob){
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], {type: mime}));
+  a.href = URL.createObjectURL(blob);
   a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
