@@ -1390,6 +1390,8 @@
     <div class="rhead">
       <span id="revprog"></span>
       <span class="qkbd" id="revkbd"><kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade</span>
+      <button id="revundo" class="ghost" hidden
+        title="undo the last grade — or press u" aria-label="undo the last grade">↩</button>
       <button id="revtypebtn" class="ghost" aria-pressed="false"
         title="type the answer — the definition asks, you type the term">⌨ type</button>
       <button id="revclose" class="ghost" aria-label="close review">✕</button>
@@ -3929,6 +3931,7 @@ $("reviewbox").addEventListener("click", (e) => { if (e.target === $("reviewbox"
 function renderReview(){
   if (!review) return;
   stopSpeech();   // flipping or grading swaps the card — end its audio too
+  $("revundo").hidden = !review.undo;
   if (review.i >= review.queue.length){   // summary
     $("revprog").textContent = "done";
     const more = dueCards().length;
@@ -3938,10 +3941,11 @@ function renderReview(){
           ? `${review.again} came back for another look — they'll be waiting ${dueWord(nextDueDay()) || "tomorrow"}.`
           : `clean sweep. the next card is due ${dueWord(nextDueDay()) || "later"}.`}` +
       `${more ? ` ${more} more ${more === 1 ? "is" : "are"} still due — another round when you're ready.` : ""}</p>` +
-      `<div class="qnext" style="justify-content:center">` +
+      `<div class="qnext" style="justify-content:center; flex-wrap:wrap">` +
       (more ? `<button class="primary" onclick="openReview()">keep going · ${more}</button>` +
               `<button onclick="closeReview()">done</button>`
             : `<button class="primary" onclick="closeReview()">done</button>`) +
+      (review.undo ? `<button class="ghost" onclick="undoGrade()">↩ undo the last grade</button>` : "") +
       `</div></div>`;
     $("reviewbody").querySelector("button")?.focus();
     return;
@@ -3951,8 +3955,8 @@ function renderReview(){
   if (!e || !e.def){ review.i++; renderReview(); return; }   // tree or def vanished mid-session
   const t = store[c.treeId];
   const left = review.queue.length - review.i;
-  $("revprog").textContent = `${left} card${left === 1 ? "" : "s"} left` +
-                             (review.again ? ` · ${review.again} to repeat` : "");
+  $("revprog").textContent = `${left} left` +
+                             (review.again ? ` · ${review.again} repeat` : "");
   // hearing an unfamiliar term pronounced is part of learning it — the 🔊
   // rides speak(), so voice/speed prefs and the karaoke paint apply here too
   const say = (what) => canSpeak()
@@ -4087,6 +4091,9 @@ function gradeReview(g){
   if (!review || !review.revealed || review.editing) return;
   const c = review.queue[review.i];
   const e = cardEntry(c);
+  // a one-slot stash so a fat-fingered grade can be taken back
+  review.undo = {c, prevRev: e && e.rev ? structuredClone(e.rev) : null,
+                 requeued: g === 0};
   if (e){
     e.rev = nextRev(e.rev, g);
     const t = store[c.treeId];
@@ -4100,6 +4107,25 @@ function gradeReview(g){
   renderReview();
 }
 window.gradeReview = gradeReview;
+function undoGrade(){
+  if (!review || !review.undo) return;
+  const u = review.undo;
+  const e = cardEntry(u.c);
+  if (e){
+    if (u.prevRev) e.rev = u.prevRev; else delete e.rev;
+    const t = store[u.c.treeId];
+    if (t) persistTree(t);
+  }
+  if (u.requeued){ review.queue.pop(); review.again--; }   // withdraw the "again" copy
+  review.i--;
+  review.done--;
+  review.revealed = true;   // back on the answer side, grade it properly
+  review.typed = ""; review.verdict = null;
+  review.undo = null;       // one step back, not a history
+  renderReview();
+}
+window.undoGrade = undoGrade;
+$("revundo").onclick = undoGrade;
 
 /* the sidebar row: how many cards are waiting, or when the next one is */
 function updateRevRow(){
@@ -5577,6 +5603,11 @@ document.addEventListener("keydown", (e) => {
     if (/^[1-3]$/.test(e.key)){
       const b = document.querySelectorAll("#reviewbody .rg")[+e.key - 1];
       if (b){ e.preventDefault(); b.click(); }
+      return;
+    }
+    if (e.key === "u"){
+      const b = $("revundo");
+      if (b && !b.hidden){ e.preventDefault(); b.click(); }
       return;
     }
     if (e.key === "s" && canSpeak()){
