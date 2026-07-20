@@ -5,6 +5,42 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 21 — Undo the last review grade
+
+### What it is
+An **↩** in the review header (and an *undo the last grade* button on
+the session summary, plus the **u** key) takes back the one grade you
+just gave: the card's schedule is restored to exactly what it was, an
+"again" requeue is withdrawn, and you're standing back on that card's
+answer side to grade it properly. One step only — it's a mis-tap eraser,
+not a history — and it clears when the session closes.
+
+### Why this one
+- Grading is the single most-repeated tap in the app and the only one
+  that's both instant and irreversible: on a phone the three grade
+  buttons sit in a row, and one fat-finger writes a wrong interval into
+  the schedule the entire retention loop depends on (a mis-tapped
+  *easy* hides a weak card for days). Every serious SRS ships undo as a
+  core button; checked first (Feature 11 lesson) — nothing like it
+  exists anywhere in the app.
+- Tiny and fully local: a one-slot stash of the previous `entry.rev`
+  taken at grade time, one restore function, one header button. No new
+  storage, no sync semantics (the restored state persists through the
+  same `persistTree` path the grade used).
+
+### Candidates rejected (this cycle)
+- **🔊 on quiz questions** — the remaining mute surface, but quizzes are
+  an occasional per-tree activity while grading happens dozens of times
+  a day; parked again, next in line.
+- **Profile-wide quiz stitched from cached per-tree questions** — zero
+  model cost, but a mixed attempt has no natural home in `tree.quizzes`,
+  and recognition testing is already served twice.
+- **Undo for tree deletion** — re-examined and re-dropped for the same
+  reason as Feature 3: deletion is confirm-gated and undo would tangle
+  with the sync tombstone protocol.
+
+---
+
 ## Feature 20 — Type the answer: verified recall in review
 
 ### What it is
