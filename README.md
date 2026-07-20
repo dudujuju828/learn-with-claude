@@ -164,7 +164,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   across every tree filed under it). **🎓
   quiz me** writes a handful of multiple-choice questions from what the tree
   actually covered (one model call, kept with the tree — retakes just
-  reshuffle), explains every answer, and records your scores. Each tree also
+  reshuffle), explains every answer, and records your scores; the 🔊 beside
+  the question — or the **s** key — reads it and each choice aloud, then the
+  explanation once you've answered. Each tree also
   gets **📝 my notes** — a free-text space for your own synthesis of what you
   learned, which autosaves, syncs with the tree, and heads every export. You
   can also **ask the tutor yourself** under any conversation — your question
