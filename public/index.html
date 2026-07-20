@@ -250,7 +250,7 @@
   /* touch niceties: real finger targets, no zoom on input focus */
   @media (pointer:coarse){
     button{min-height:2.5rem}
-    .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico,.rcard .rsay{min-height:0}
+    .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico,.rcard .rsay,#quizbox .rsay{min-height:0}
     /* small glyphs keep their size but their touch targets grow outward */
     .who .copy{padding:.5rem .55rem; margin:-.5rem -.55rem -.5rem auto}
     .rcard .rsay{padding:.5rem .55rem; margin:-.5rem -.35rem}
@@ -689,11 +689,11 @@
   .rcard .rdef{margin-top:.9rem; text-align:left; line-height:1.6; font-size:.95rem}
   .rcard .rlinks{margin-top:.7rem; font-size:.82rem; color:var(--muted); text-align:left;
     display:flex; gap:.8rem; flex-wrap:wrap}
-  .rcard .rsay{
+  .rcard .rsay, #quizbox .rsay{
     border:none; background:none; color:var(--muted); cursor:pointer;
     font-size:.9rem; padding:0 .3rem; line-height:1; vertical-align:2px;
   }
-  .rcard .rsay:hover{color:var(--fg)}
+  .rcard .rsay:hover, #quizbox .rsay:hover{color:var(--fg)}
   .rcard .redit{margin-top:.9rem; text-align:left}
   .rcard .redit textarea{
     width:100%; min-height:4.2rem; resize:vertical; font-family:inherit;
@@ -3518,6 +3518,7 @@ function quizProgHtml(){
          `<span class="qkbd"><kbd>1</kbd>–<kbd>4</kbd> answer · <kbd>Enter</kbd> next</span>`;
 }
 function closeQuiz(){
+  stopSpeech();   // a question being read shouldn't outlive the modal
   $("quizbox").classList.remove("open"); quiz = null;
   renderAll(true);   // the "quiz me (last: x/y)" link picks up the new score
   if (quizPrevFocus && quizPrevFocus.focus && document.contains(quizPrevFocus))
@@ -3529,6 +3530,7 @@ $("quizbox").addEventListener("click", (e) => { if (e.target === $("quizbox")) c
 
 function renderQuiz(){
   if (!quiz) return;
+  stopSpeech();   // advancing swaps the question — end its audio too
   const n = quiz.order.length;
   if (quiz.i >= n){   // summary
     const tree = cur();
@@ -3568,16 +3570,40 @@ function renderQuiz(){
   const perm = quiz.perm[quiz.order[quiz.i]];
   $("quizprog").innerHTML = quizProgHtml();
   $("quizscore").textContent = quiz.i ? `${quiz.score} right so far` : "";
+  // decoding four dense options under test pressure is exactly where the
+  // dyslexic reader needs the 🔊 — question first, then each choice in order
+  const qsay = canSpeak()
+    ? `<button class="rsay" onclick="speakQuiz()" title="hear the question and choices — or press s"` +
+      ` aria-label="hear the question and choices aloud">🔊</button>` : "";
   $("quizbody").innerHTML =
-    `<div class="qq">${esc(q.q)}</div>` +
+    `<div class="qq">${esc(q.q)}${qsay}</div>` +
     perm.map((orig, pos) =>
       `<button class="qc" data-pos="${pos}" onclick="answerQuiz(${orig})">` +
-      `<span class="qn" aria-hidden="true">${pos + 1}</span>${esc(q.choices[orig])}</button>`
+      `<span class="qn" aria-hidden="true">${pos + 1}</span><span class="qtext">${esc(q.choices[orig])}</span></button>`
     ).join("") +
     `<div id="quizwhy"></div><div class="qnext" id="quiznext"></div>`;
   quiz.answered = false;
   $("quizbody").querySelector(".qc")?.focus();
 }
+/* read the question, then each choice, chained. Answering, advancing,
+   closing, or a fresh 🔊 all abort the chain — the token outlives the
+   cancelled utterance's onend, which would otherwise revive it. */
+let quizSpeakToken = 0;
+function speakQuiz(){
+  if (!quiz || !canSpeak()) return;
+  const tok = ++quizSpeakToken;
+  stopSpeech();
+  const els = [document.querySelector("#quizbody .qq"),
+               ...document.querySelectorAll("#quizbody .qc .qtext")];
+  const qi = quiz.i;
+  (function next(k){
+    if (tok !== quizSpeakToken || !quiz || quiz.i !== qi || quiz.answered ||
+        k >= els.length) return;
+    if (els[k] && document.contains(els[k])) speak(els[k], () => next(k + 1));
+    else next(k + 1);
+  })(0);
+}
+window.speakQuiz = speakQuiz;
 function retryQuiz(missesOnly){
   const tree = cur();
   if (!tree || !tree.quiz) return;
@@ -3595,6 +3621,7 @@ function retryQuiz(missesOnly){
 window.retryQuiz = retryQuiz;
 function answerQuiz(orig){
   if (!quiz || quiz.answered) return;
+  stopSpeech();   // answering ends the question read-through
   quiz.answered = true;
   const q = quiz.qs[quiz.order[quiz.i]];
   const perm = quiz.perm[quiz.order[quiz.i]];
@@ -3607,7 +3634,12 @@ function answerQuiz(orig){
     if (perm[pos] === q.answer) b.classList.add("correct");
     else if (perm[pos] === orig && !right) b.classList.add("wrong");
   });
-  if (q.why) $("quizwhy").innerHTML = `<div class="qwhy">${right ? "✓" : "✗"} ${esc(q.why)}</div>`;
+  if (q.why){
+    const wsay = canSpeak()
+      ? `<button class="rsay" onclick="speakCard(this)" title="hear the explanation — or press s"` +
+        ` aria-label="hear the explanation aloud">🔊</button>` : "";
+    $("quizwhy").innerHTML = `<div class="qwhy">${right ? "✓" : "✗"} ${esc(q.why)}${wsay}</div>`;
+  }
   $("quiznext").innerHTML =
     `<button class="primary" onclick="nextQuiz()">${quiz.i + 1 >= quiz.order.length ? "see score" : "next"}</button>`;
   $("quiznext").querySelector("button").focus();
@@ -5597,6 +5629,14 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "Enter"){
       const nb = document.querySelector("#quiznext button");
       if (nb){ e.preventDefault(); nb.click(); }
+      return;
+    }
+    if (e.key === "s" && canSpeak()){
+      // before answering: the question and its choices; after: the why
+      e.preventDefault();
+      const why = document.querySelector("#quizbody .qwhy");
+      if (quiz && quiz.answered && why) speakBlock(why);
+      else speakQuiz();
       return;
     }
   }
