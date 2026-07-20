@@ -677,7 +677,8 @@
   }
   #reviewbox .rhead{display:flex; align-items:center; gap:.7rem; margin-bottom:.6rem;
     color:var(--muted); font-size:.85rem}
-  #reviewbox .rhead #revprog{flex:1}
+  #reviewbox .rhead #revprog{flex:1; min-width:0; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis}
   .rcard{
     text-align:center; padding:1.3rem .9rem 1.1rem; border:1px solid var(--line);
     border-radius:.8rem; background:var(--bg);
@@ -712,6 +713,17 @@
   .rgrades .rg.rg0{color:var(--danger)}
   #reviewbox .qsum{text-align:center; padding:1rem 0 .4rem}
   #reviewbox .qsum .big{font-size:1.7rem; margin-bottom:.4rem}
+  /* typed recall — the ⌨ mode: the definition asks, you type the term */
+  #revtypebtn{font-size:.8rem; color:var(--muted); white-space:nowrap; padding:.34rem .45rem}
+  #revtypebtn:hover{color:var(--fg)}
+  #revtypebtn.on{color:var(--accent)}
+  .rcard .rtype{display:flex; gap:.5rem; margin-top:.9rem}
+  .rcard .rtype input{flex:1; min-width:0; width:auto; border-color:var(--term);
+    background:var(--card)}
+  .rcard .rverd{margin-top:.55rem; font-size:.88rem}
+  .rcard .rverd.vok{color:var(--ask)}
+  .rcard .rverd.vclose{color:var(--think)}
+  .rcard .rverd.vmiss{color:var(--danger)}
 
   /* ---- progress dashboard (read-only stats over review + quizzes),
           and the ★ highlights hub which shares its skeleton ---- */
@@ -1374,7 +1386,9 @@
   <div class="box">
     <div class="rhead">
       <span id="revprog"></span>
-      <span class="qkbd"><kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade</span>
+      <span class="qkbd" id="revkbd"><kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade</span>
+      <button id="revtypebtn" class="ghost" aria-pressed="false"
+        title="type the answer — the definition asks, you type the term">⌨ type</button>
       <button id="revclose" class="ghost" aria-label="close review">✕</button>
     </div>
     <div id="reviewbody"></div>
@@ -1572,7 +1586,8 @@ function darkTheme(){ return DARK_THEMES.has(prefs.theme); }
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
-                       tmode: "balanced", think: true, llevel: "auto", profile: ""};
+                       tmode: "balanced", think: true, llevel: "auto", profile: "",
+                       revtype: false};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -3838,7 +3853,41 @@ function dueWord(day){
   return diff <= 0 ? "today" : diff === 1 ? "tomorrow" : `in ${diff} days`;
 }
 
-let review = null;        // {queue, i, done, again, revealed}
+/* typed recall (the ⌨ mode): what the user typed vs the card's term.
+   Checking is deliberately forgiving — case, punctuation and hyphen/space
+   differences never count, and a small typo is "close", not wrong: this
+   is a recall check, not a spelling test. */
+function normTerm(s){
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+function editDist(a, b){
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m || !n) return m || n;
+  let pp = null, prev = [...Array(n + 1).keys()];
+  for (let i = 1; i <= m; i++){
+    const row = [i];
+    for (let j = 1; j <= n; j++){
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1,
+                        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      // an adjacent-letter swap counts once — the classic dyslexic slip
+      if (pp && i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        row[j] = Math.min(row[j], pp[j - 2] + 1);
+    }
+    pp = prev; prev = row;
+  }
+  return prev[n];
+}
+function typedVerdict(guess, term){
+  const g = normTerm(guess), t = normTerm(term);
+  if (!g) return null;   // nothing typed — a plain flip, no verdict
+  if (g === t) return "ok";
+  const slack = t.length >= 8 ? 2 : t.length >= 4 ? 1 : 0;
+  return editDist(g, t) <= slack ? "close" : "miss";
+}
+
+let review = null;        // {queue, i, done, again, revealed, typed, verdict}
 let revPrevFocus = null;
 
 const REV_SESSION_CAP = 25;   // a friendly session; the rest stay due
@@ -3911,10 +3960,28 @@ function renderReview(){
     `<div class="rtree">${ico("🌳")}${esc(oneLine(t ? t.root_topic : "", 48))}</div>` +
     `<div class="rterm">${esc(e.term)}${say("the term")}</div>${inner}</div>`;
   if (!review.revealed){
-    $("reviewbody").innerHTML =
-      card(`<p class="rprompt">say what it means — out loud counts.</p>`) +
-      `<div class="rflip"><button class="primary" id="revflip" onclick="revealReview()">show the answer</button></div>`;
-    $("revflip").focus();
+    if (prefs.revtype){
+      // typed recall: the definition asks, you type the term it defines
+      $("reviewbody").innerHTML =
+        `<div class="rcard">` +
+        `<div class="rtree">${ico("🌳")}${esc(oneLine(t ? t.root_topic : "", 48))}</div>` +
+        `<div class="rdef" style="margin-top:0">${esc(e.def)}${say("the definition")}</div>` +
+        `<div class="rtype"><input id="revanswer" type="text" autocomplete="off"` +
+        ` autocapitalize="none" spellcheck="false" enterkeyhint="done"` +
+        ` aria-label="type the term this definition describes" placeholder="the term is…">` +
+        `<button class="primary" onclick="checkTyped()">check</button></div></div>` +
+        `<div class="rflip"><button id="revflip" class="ghost" onclick="revealReview()">skip typing — just show it</button></div>`;
+      const inp = $("revanswer");
+      inp.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter"){ ev.preventDefault(); checkTyped(); }
+      });
+      inp.focus();
+    } else {
+      $("reviewbody").innerHTML =
+        card(`<p class="rprompt">say what it means — out loud counts.</p>`) +
+        `<div class="rflip"><button class="primary" id="revflip" onclick="revealReview()">show the answer</button></div>`;
+      $("revflip").focus();
+    }
   } else if (review.editing){
     // fix the definition right here — the moment you notice it's wrong
     $("reviewbody").innerHTML =
@@ -3931,13 +3998,22 @@ function renderReview(){
     if (Number.isInteger(e.node))
       links.push(`<span class="cl" tabindex="0" role="button"` +
         ` onclick="closeReview();openSearchHit('${esc(c.treeId)}',${e.node},${e.turn})">↪ where I met it</span>`);
+    // the verdict of a typed answer rides with the revealed term; a miss
+    // might still be a fair synonym, so the user keeps the final grade
+    const verd = review.verdict === "ok"
+        ? `<div class="rverd vok">✓ you typed it right</div>`
+      : review.verdict === "close"
+        ? `<div class="rverd vclose">≈ close — you typed “${esc(review.typed)}”; the exact spelling is above</div>`
+      : review.verdict === "miss"
+        ? `<div class="rverd vmiss">✗ you typed “${esc(review.typed)}” — a fair synonym still counts, you decide</div>`
+      : "";
     $("reviewbody").innerHTML =
-      card(`<div class="rdef">${esc(e.def)}${say("the answer")}</div><div class="rlinks">${links.join("")}</div>`) +
+      card(verd + `<div class="rdef">${esc(e.def)}${say("the answer")}</div><div class="rlinks">${links.join("")}</div>`) +
       `<div class="rgrades">` +
       `<button class="rg rg0" onclick="gradeReview(0)">again<small>${ivl(0)}</small></button>` +
       `<button class="rg rg1" onclick="gradeReview(1)">good<small>${ivl(1)}</small></button>` +
       `<button class="rg rg2" onclick="gradeReview(2)">easy<small>${ivl(2)}</small></button></div>`;
-    $("reviewbody").querySelector(".rg1")?.focus();
+    $("reviewbody").querySelector(review.verdict === "miss" ? ".rg0" : ".rg1")?.focus();
   }
 }
 function startReviewEdit(){
@@ -3974,10 +4050,36 @@ function cancelReviewEdit(){
 window.cancelReviewEdit = cancelReviewEdit;
 function revealReview(){
   if (!review || review.revealed) return;
+  review.typed = ""; review.verdict = null;   // a plain flip carries no verdict
   review.revealed = true;
   renderReview();
 }
 window.revealReview = revealReview;
+function checkTyped(){
+  if (!review || review.revealed) return;
+  const e = cardEntry(review.queue[review.i]);
+  const typed = ($("revanswer") ? $("revanswer").value : "").trim();
+  review.typed = typed.slice(0, 120);
+  review.verdict = e ? typedVerdict(typed, e.term) : null;
+  review.revealed = true;
+  renderReview();
+}
+window.checkTyped = checkTyped;
+/* the ⌨ toggle: definition-first typed recall instead of flip-and-judge */
+function setRevType(on){
+  prefs.revtype = !!on; savePrefs();
+  const b = $("revtypebtn");
+  b.classList.toggle("on", prefs.revtype);
+  b.setAttribute("aria-pressed", String(prefs.revtype));
+  $("revkbd").innerHTML = prefs.revtype
+    ? `<kbd>Enter</kbd> checks · <kbd>1</kbd>–<kbd>3</kbd> grade`
+    : `<kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade`;
+}
+$("revtypebtn").onclick = () => {
+  setRevType(!prefs.revtype);
+  if (review && !review.revealed) renderReview();   // the current card swaps face
+};
+setRevType(prefs.revtype);
 function gradeReview(g){
   if (!review || !review.revealed || review.editing) return;
   const c = review.queue[review.i];
@@ -3991,6 +4093,7 @@ function gradeReview(g){
   if (g === 0){ review.again++; review.queue.push(c); }
   review.i++;
   review.revealed = false;
+  review.typed = ""; review.verdict = null;
   renderReview();
 }
 window.gradeReview = gradeReview;
@@ -5474,9 +5577,11 @@ document.addEventListener("keydown", (e) => {
       return;
     }
     if (e.key === "s" && canSpeak()){
-      // the side you're looking at: the term before the flip, the answer after
-      const el = document.querySelector(
-        "#reviewbody " + (review && review.revealed ? ".rdef" : ".rterm"));
+      // the side you're looking at — in ⌨ mode the definition asks and
+      // the term answers, so the two sides swap
+      const el = document.querySelector("#reviewbody " +
+        (review && review.revealed ? (prefs.revtype ? ".rterm" : ".rdef")
+                                   : (prefs.revtype ? ".rdef" : ".rterm")));
       if (el){ e.preventDefault(); speakBlock(el); }
       return;
     }
