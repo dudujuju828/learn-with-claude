@@ -471,6 +471,12 @@
   .tutor-b .parttext p:first-child{margin-top:.15em}
   .tutor-b .parttext p:last-child{margin-bottom:0}
   .speaking{outline:2px solid var(--accent); outline-offset:2px}
+  /* the word being spoken right now — painted by the CSS Custom Highlight
+     API over a Range, no DOM change, so it can't disturb the glossary
+     underlines or passage highlights sharing the text. primary/onprim is
+     each theme's validated contrast pair; browsers without the API just
+     ignore the rule (the block outline above still shows). */
+  ::highlight(lwc-word){background-color:var(--primary); color:var(--onprim)}
   .donechip{
     display:inline-block; background:var(--card); border:1px solid var(--ask);
     color:var(--ask); border-radius:.6rem; padding:.15rem .7rem; font-size:.84rem;
@@ -1149,7 +1155,7 @@
   <div class="row"><label>colours</label></div>
   <div class="swatches" id="swatches" role="radiogroup" aria-label="colour theme"></div>
   <div class="row" style="margin-top:.6rem">
-    <label for="speakbtn">🔊 read aloud — click any block to hear it (Esc stops)</label>
+    <label for="speakbtn">🔊 read aloud — click any block to hear it; the word being spoken lights up (Esc stops)</label>
     <button id="speakbtn" class="toggle" role="switch">off</button>
   </div>
   <div class="row" id="voicerow">
@@ -1873,9 +1879,18 @@ function deleteTutor(){
 let speakingEl = null;
 let playList = [], playIdx = -1;
 
+/* karaoke follow-along: the word being spoken is highlighted via the CSS
+   Custom Highlight API — a Range painted by CSS, never a DOM rewrite.
+   No API, or a voice that never fires word boundaries? No highlight;
+   speech itself is untouched. */
+const wordPaint = (typeof Highlight === "function" && typeof CSS !== "undefined" &&
+                   CSS.highlights) ? CSS.highlights : null;
+function clearWordPaint(){ try { wordPaint?.delete("lwc-word"); } catch {} }
+
 function stopSpeech(){
   playList = []; playIdx = -1;
   try { speechSynthesis.cancel(); } catch {}
+  clearWordPaint();
   if (speakingEl){ speakingEl.classList.remove("speaking"); speakingEl = null; }
 }
 /* voice + speed come from the reading settings; an unknown saved voice
@@ -1918,20 +1933,55 @@ function speakSample(){
   stopSpeech();
   try { speechSynthesis.speak(ttsUtterance("This is how reading aloud will sound.")); } catch {}
 }
+/* what speak() will say, plus where each character of it lives in the DOM —
+   the map is how a boundary event's charIndex becomes a Range. Skips what
+   the spoken text always skipped (speaker label, buttons, decorations) and
+   collapses whitespace the same way. */
+function speechMap(el){
+  const raw = [];
+  (function walk(n){
+    if (n.nodeType === 3){
+      for (let i = 0; i < n.data.length; i++) raw.push({ch: n.data[i], node: n, offset: i});
+    } else if (n.nodeType === 1 && (n.matches(".gref") ||   // term buttons READ
+               !n.matches('.who,button,input,[aria-hidden="true"]'))){
+      for (const c of n.childNodes) walk(c);
+    }
+  })(el);
+  let text = ""; const map = [];
+  for (const r of raw){
+    if (/\s/.test(r.ch)){
+      if (text && !text.endsWith(" ")){ text += " "; map.push(null); }
+    } else { text += r.ch; map.push(r); }
+  }
+  if (text.endsWith(" ")){ text = text.slice(0, -1); map.pop(); }
+  return {text, map};
+}
 function speak(el, onDone){
   if (typeof SpeechSynthesisUtterance === "undefined"){ onDone?.(); return; }
-  const clone = el.cloneNode(true);
-  clone.querySelectorAll(".gref").forEach(n => n.replaceWith(n.textContent));
-  clone.querySelectorAll('.who,button,input,[aria-hidden="true"]').forEach(n => n.remove());
-  const text = clone.textContent.replace(/\s+/g, " ").trim();
+  const {text, map} = speechMap(el);
   if (!text){ onDone?.(); return; }
   const u = ttsUtterance(text);
+  if (wordPaint) u.onboundary = (e) => {
+    if (e.name && e.name !== "word") return;
+    let i = e.charIndex || 0;
+    while (text[i] === " ") i++;
+    const run = (text.slice(i).match(/^\S+/) || [""])[0].length;  // to next space
+    const len = Math.min(e.charLength > 0 ? e.charLength : run, run);
+    const a = map[i], b = map[i + len - 1];
+    if (!len || !a || !b) return;
+    try {
+      const r = document.createRange();
+      r.setStart(a.node, a.offset); r.setEnd(b.node, b.offset + 1);
+      wordPaint.set("lwc-word", new Highlight(r));
+    } catch {}   // e.g. the conversation re-rendered mid-speech
+  };
   u.onend = u.onerror = () => {
+    clearWordPaint();
     if (speakingEl === el){ el.classList.remove("speaking"); speakingEl = null; }
     onDone?.();
   };
   speakingEl = el; el.classList.add("speaking");
-  try { speechSynthesis.speak(u); } catch { onDone?.(); }
+  try { speechSynthesis.speak(u); } catch { clearWordPaint(); onDone?.(); }
 }
 function speakBlock(el){ stopSpeech(); speak(el); }
 /* listen to the whole conversation, block by block (Esc stops) */
