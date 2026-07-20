@@ -93,7 +93,8 @@ directly (a local `claude` login can't run on a server), so it needs an
   back), live cost, and `.know.json`
   import/export compatible with the CLI (plus the CLI's standalone HTML
   reading page via *export html*; dropping `.know.json` files anywhere on
-  the page imports them). A **tutor style** picker switches the
+  the page imports them, and on phones and tablets every export opens the
+  OS share sheet — AirDrop, Save to Files, Drive — instead of a download). A **tutor style** picker switches the
   answers between balanced / highly technical / precise / simple / concise
   (the original terse style), applied from the next turn — or write your own
   **custom tutor** (name + how it should answer, with a try-before-saving
