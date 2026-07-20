@@ -5,6 +5,39 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 22 — The quiz speaks: hear the question, the choices, the why
+
+### What it is
+Quizzes were the last mute surface. A **🔊** beside the quiz question
+(or the **s** key) reads the question and then each choice in order,
+karaoke word-painting included, in your chosen voice and speed — so a
+dyslexic reader isn't decoding four dense options under test pressure
+with no support. After you answer, the explanation gets its own 🔊 (and
+**s** switches to it). Speech stops the moment you answer, advance, or
+close; every control hides when the browser can't speak.
+
+### Why this one
+- Deferred in Feature 19 ("a natural follow-up if quizzes feel mute")
+  and again in Feature 21 — read-aloud now exists on conversations,
+  glossary and flashcards, which makes its absence on the *most
+  reading-intense* interaction (a timed-feeling, four-options-at-once
+  test) the sharpest remaining gap for the app's stated audience.
+- Pattern-shaped: `speak()` + karaoke already work on any element and
+  skip buttons; the one real change is wrapping each choice's text in a
+  span (buttons themselves are unspeakable by design) and chaining
+  speaks with the existing `onDone` callback.
+
+### Candidates rejected (this cycle)
+- **Follow-scroll for karaoke in long blocks** — still parked (fights
+  the user's own scrolling).
+- **PWA share target (receiving .know.json)** — Android-only in
+  practice, needs service-worker POST handling; the outbound half
+  shipped in Feature 18.
+- **Speaking the summary's missed-question list** — same machinery, far
+  colder surface; fold in later if the quiz 🔊 earns its keep.
+
+---
+
 ## Feature 21 — Undo the last review grade
 
 ### What it is
