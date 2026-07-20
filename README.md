@@ -145,7 +145,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   chosen voice; a **⌨ type** toggle turns the deck around into typed
   recall — the definition asks, you type the term, and the check is
   forgiving: case, punctuation, and one typo or swapped pair of letters
-  read as *close*, not wrong, and the final grade stays yours),
+  read as *close*, not wrong, and the final grade stays yours; and **↩**
+  — the **u** key — takes back a fat-fingered grade, restoring the
+  card's schedule exactly),
   scheduled out on a spaced-repetition ladder (1d → 3d → ×2.5) so each card
   comes back just before you'd forget it; the schedule lives on the glossary
   entry, so it syncs across devices and travels in `.know.json`. The due
