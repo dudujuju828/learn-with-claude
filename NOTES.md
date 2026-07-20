@@ -5,6 +5,41 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 19 — Hear the flashcard
+
+### What it is
+Review cards can be spoken: a small **🔊** beside the term (both sides)
+and beside the revealed definition reads it aloud with your chosen voice
+and speed, karaoke word-painting included — and the **s** key says the
+term (front) or the answer (back) without leaving the keyboard flow.
+Speech stops the moment the card changes or the modal closes. Hidden
+entirely when the browser has no speech synthesis.
+
+### Why this one
+- The review deck is the app's most-repeated surface, and it presents
+  *unfamiliar technical terms* as bare text — for the dyslexic audience,
+  decoding "idempotency" is exactly the hard part, and hearing a term
+  pronounced correctly is itself part of learning it (the card even says
+  "out loud counts"). Read-aloud existed everywhere in the app except
+  here.
+- Tiny and pattern-shaped: `speak()` (with Feature 17's karaoke) works on
+  any element and already skips buttons, so the 🔊 rides the existing
+  machinery; the keyboard branch slots into the review keydown block that
+  already does 1/2/3 and Space.
+- Checked first: review already had keyboard grading (1/2/3, Space/Enter
+  flip) — this cycle's other candidate — so pronunciation was the real
+  gap.
+
+### Candidates rejected (this cycle)
+- **Keyboard grading in review** — already shipped long ago; the audit
+  caught it before duplicate work (the Feature 11 lesson).
+- **🔊 on quiz questions** — same argument, smaller surface; a natural
+  follow-up cycle if quizzes feel mute in practice.
+- **Follow-scroll for karaoke in long blocks** — still parked (fights
+  user scrolling).
+
+---
+
 ## Feature 18 — Exports go through the share sheet on touch devices
 
 ### What it is
