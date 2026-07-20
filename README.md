@@ -140,7 +140,9 @@ directly (a local `claude` login can't run on a server), so it needs an
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term into
   an in-app flashcard (recall → flip → grade yourself again / good / easy,
-  or fix a card's definition inline the moment you spot it's wrong),
+  fix a card's definition inline the moment you spot it's wrong, or tap
+  🔊 — the **s** key — to hear the term or its answer pronounced in your
+  chosen voice),
   scheduled out on a spaced-repetition ladder (1d → 3d → ×2.5) so each card
   comes back just before you'd forget it; the schedule lives on the glossary
   entry, so it syncs across devices and travels in `.know.json`. The due
