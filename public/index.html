@@ -250,9 +250,10 @@
   /* touch niceties: real finger targets, no zoom on input focus */
   @media (pointer:coarse){
     button{min-height:2.5rem}
-    .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico{min-height:0}
+    .who .copy,#treelist .del,#aapanel .step,#tabbar button .ico,.rcard .rsay{min-height:0}
     /* small glyphs keep their size but their touch targets grow outward */
     .who .copy{padding:.5rem .55rem; margin:-.5rem -.55rem -.5rem auto}
+    .rcard .rsay{padding:.5rem .55rem; margin:-.5rem -.35rem}
     #treelist .del{padding:.45rem .5rem; margin:-.45rem -.35rem -.45rem 0}
     input[type=text],input[type=search],input[type=password],select{font-size:max(1rem,16px); min-height:2.7rem}
     #treelist .item{padding:.5rem .55rem}
@@ -687,6 +688,11 @@
   .rcard .rdef{margin-top:.9rem; text-align:left; line-height:1.6; font-size:.95rem}
   .rcard .rlinks{margin-top:.7rem; font-size:.82rem; color:var(--muted); text-align:left;
     display:flex; gap:.8rem; flex-wrap:wrap}
+  .rcard .rsay{
+    border:none; background:none; color:var(--muted); cursor:pointer;
+    font-size:.9rem; padding:0 .3rem; line-height:1; vertical-align:2px;
+  }
+  .rcard .rsay:hover{color:var(--fg)}
   .rcard .redit{margin-top:.9rem; text-align:left}
   .rcard .redit textarea{
     width:100%; min-height:4.2rem; resize:vertical; font-family:inherit;
@@ -1094,7 +1100,9 @@
   a flashcard. Recall it, flip, grade yourself (again / good / easy), and
   the card is scheduled further out each time — spaced repetition without
   leaving the app. The schedule syncs with the trees, so any device
-  continues where you stopped.</p>
+  continues where you stopped. The <b>🔊</b> on a card (or the <b>s</b>
+  key) says the term — and after the flip, the answer — in your chosen
+  voice.</p>
   <p><b>★ highlights</b> — select a longer stretch of an answer and the chip
   offers <b>★ highlight</b>: a highlighter band that persists and syncs
   (tap a mark to lift it). The <b>★ highlights</b> button in the words tab
@@ -2009,6 +2017,13 @@ function speak(el, onDone){
   try { speechSynthesis.speak(u); } catch { clearWordPaint(); onDone?.(); }
 }
 function speakBlock(el){ stopSpeech(); speak(el); }
+function canSpeak(){
+  return typeof SpeechSynthesisUtterance !== "undefined" && !!window.speechSynthesis;
+}
+/* the 🔊 on a review card: speak the element the button sits in (the term
+   or the definition — speak() skips the button's own glyph) */
+function speakCard(btn){ stopSpeech(); speak(btn.parentElement); }
+window.speakCard = speakCard;
 /* listen to the whole conversation, block by block (Esc stops) */
 function listenNode(){
   stopSpeech();
@@ -3848,6 +3863,7 @@ function openReview(){
 }
 window.openReview = openReview;
 function closeReview(){
+  stopSpeech();   // a card being spoken shouldn't outlive the modal
   $("reviewbox").classList.remove("open"); review = null;
   renderAll(true);   // due counts changed
   if (revPrevFocus && revPrevFocus.focus && document.contains(revPrevFocus))
@@ -3860,6 +3876,7 @@ $("reviewbox").addEventListener("click", (e) => { if (e.target === $("reviewbox"
 
 function renderReview(){
   if (!review) return;
+  stopSpeech();   // flipping or grading swaps the card — end its audio too
   if (review.i >= review.queue.length){   // summary
     $("revprog").textContent = "done";
     const more = dueCards().length;
@@ -3884,10 +3901,15 @@ function renderReview(){
   const left = review.queue.length - review.i;
   $("revprog").textContent = `${left} card${left === 1 ? "" : "s"} left` +
                              (review.again ? ` · ${review.again} to repeat` : "");
+  // hearing an unfamiliar term pronounced is part of learning it — the 🔊
+  // rides speak(), so voice/speed prefs and the karaoke paint apply here too
+  const say = (what) => canSpeak()
+    ? `<button class="rsay" onclick="speakCard(this)" title="hear it aloud — or press s"` +
+      ` aria-label="hear ${what} aloud">🔊</button>` : "";
   const card = (inner) =>
     `<div class="rcard">` +
     `<div class="rtree">${ico("🌳")}${esc(oneLine(t ? t.root_topic : "", 48))}</div>` +
-    `<div class="rterm">${esc(e.term)}</div>${inner}</div>`;
+    `<div class="rterm">${esc(e.term)}${say("the term")}</div>${inner}</div>`;
   if (!review.revealed){
     $("reviewbody").innerHTML =
       card(`<p class="rprompt">say what it means — out loud counts.</p>`) +
@@ -3910,7 +3932,7 @@ function renderReview(){
       links.push(`<span class="cl" tabindex="0" role="button"` +
         ` onclick="closeReview();openSearchHit('${esc(c.treeId)}',${e.node},${e.turn})">↪ where I met it</span>`);
     $("reviewbody").innerHTML =
-      card(`<div class="rdef">${esc(e.def)}</div><div class="rlinks">${links.join("")}</div>`) +
+      card(`<div class="rdef">${esc(e.def)}${say("the answer")}</div><div class="rlinks">${links.join("")}</div>`) +
       `<div class="rgrades">` +
       `<button class="rg rg0" onclick="gradeReview(0)">again<small>${ivl(0)}</small></button>` +
       `<button class="rg rg1" onclick="gradeReview(1)">good<small>${ivl(1)}</small></button>` +
@@ -5444,11 +5466,18 @@ document.addEventListener("keydown", (e) => {
       return;
     }
   }
-  /* review: Space/Enter flips the card, 1-3 grade it */
+  /* review: Space/Enter flips the card, 1-3 grade it, s says it aloud */
   if ($("reviewbox").classList.contains("open") && !typing){
     if (/^[1-3]$/.test(e.key)){
       const b = document.querySelectorAll("#reviewbody .rg")[+e.key - 1];
       if (b){ e.preventDefault(); b.click(); }
+      return;
+    }
+    if (e.key === "s" && canSpeak()){
+      // the side you're looking at: the term before the flip, the answer after
+      const el = document.querySelector(
+        "#reviewbody " + (review && review.revealed ? ".rdef" : ".rterm"));
+      if (el){ e.preventDefault(); speakBlock(el); }
       return;
     }
     if (e.key === "Enter" || e.key === " "){
