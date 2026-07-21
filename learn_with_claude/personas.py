@@ -512,11 +512,18 @@ RULES:
   explanation is genuinely complete and correct, say that here instead.
 - "question": ONE short probing question that would push their
   understanding a step deeper — what a good tutor would ask next.
+- "verdict": your honest overall read, exactly one of:
+  "clean" — complete and correct; nothing important is missing or wrong.
+  "close" — the core is right, but the one thing in "missing" matters.
+  "gappy" — a major gap or misconception; the picture doesn't hold yet.
+  Be consistent: if "missing" says the explanation is complete, the
+  verdict MUST be "clean". Judge generously on wording, strictly on ideas.
 - Plain, friendly language. 1-3 short sentences per field. Sentence case,
   never ALL CAPS.
 
 OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
-{"right": "...", "missing": "...", "question": "..."}"""
+{"right": "...", "missing": "...", "question": "...",
+ "verdict": "<clean|close|gappy>"}"""
 
 
 def teachback_message(root_topic: str, label: str, digest: str, explanation: str) -> str:

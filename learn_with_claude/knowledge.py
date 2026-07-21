@@ -182,6 +182,26 @@ class KnowledgeTree:
                 m.setdefault(key, []).append(text)
         return m
 
+    TEACH_TAGS = {"clean": "✓ clean", "close": "≈ close", "gappy": "△ gappy"}
+
+    def teach_map(self) -> dict:
+        """node_id -> teach-back attempts (oldest first). Attempts live in
+        extras['teach'] (written by the web app's explain-it-back); ones
+        whose node was pruned are skipped, matching the app."""
+        out: dict = {}
+        for a in (self.extras.get("teach") or []):
+            if not isinstance(a, dict) or not str(a.get("text") or "").strip():
+                continue
+            try:
+                nid = int(a.get("node"))
+            except (TypeError, ValueError):
+                continue
+            if nid in self.nodes:
+                out.setdefault(nid, []).append(a)
+        for lst in out.values():
+            lst.sort(key=lambda a: str(a.get("when") or ""))
+        return out
+
     # --- persistence -----------------------------------------------------
     def to_dict(self) -> dict:
         d = {
@@ -349,4 +369,24 @@ class KnowledgeTree:
             for e in defined:
                 out.append(f"- **{e['term']}** — {e['def']}")
             out.append("")
+
+        teach = self.teach_map()
+        if teach:
+            out.append("## Explained back")
+            out.append("")
+            for nid in sorted(teach):
+                last = teach[nid][-1]
+                verdict = str(last.get("verdict") or "").strip()
+                tag = self.TEACH_TAGS.get(verdict, "")
+                n = len(teach[nid])
+                out.append(f"**[{nid}] {self.nodes[nid].label}**"
+                           + (f" — {tag}" if tag else "")
+                           + (f" (attempt {n})" if n > 1 else ""))
+                out.append("")
+                out.append(f"> 🗣 {last['text']}")
+                out.append("")
+                missing = str(last.get("missing") or "").strip()
+                if verdict != "clean" and missing:
+                    out.append(f"The gap that mattered: {missing}")
+                    out.append("")
         return "\n".join(out)

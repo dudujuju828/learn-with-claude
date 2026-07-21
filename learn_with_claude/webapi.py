@@ -288,6 +288,8 @@ def handle_teachback(body: dict, call_model) -> dict:
             fb[k] = space_sentences(str(data.get(k) or "").strip())[:1200]
     if not (fb.get("right") or fb.get("missing")):
         raise ApiError("the tutor returned no usable feedback — try again", 502)
+    verdict = str(data.get("verdict") or "").strip().lower()
+    fb["verdict"] = verdict if verdict in ("clean", "close", "gappy") else "close"
     return {**fb, "cost": cost}
 
 

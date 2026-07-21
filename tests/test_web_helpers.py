@@ -82,6 +82,14 @@ def test_knowledge_round_trip():
                        "not a dict"],
         "quiz": {"made": "2026-07-13", "questions": []},   # unknown top-level key
         "profile": "computer-science",                     # another web-side extra
+        "teach": [
+            {"node": 1, "when": "2026-07-20T10:00:00Z", "text": "an early rough take",
+             "missing": "the gap", "verdict": "gappy"},
+            {"node": 1, "when": "2026-07-21T10:00:00Z", "text": "my own words on widgets",
+             "missing": "nothing — complete", "verdict": "clean"},
+            {"node": 99, "when": "2026-07-21T10:00:00Z", "text": "orphaned attempt"},
+            "not a dict",
+        ],
     }
     kb = KnowledgeTree.from_dict(d)
     assert kb.nodes[1].learner_level == "expert"
@@ -103,10 +111,17 @@ def test_knowledge_round_trip():
     assert "## My notes" in md and "A second paragraph." in md
     assert "> ★ I highlighted: a" in md                    # under its turn
     assert "orphaned passage" not in md                    # no such node — dropped
+    # teach-back: latest attempt per node, verdict tagged, orphans dropped
+    assert "## Explained back" in md and "my own words on widgets" in md
+    assert "✓ clean (attempt 2)" in md
+    assert "an early rough take" not in md                 # superseded attempt
+    assert "The gap that mattered" not in md               # clean — no gap line
+    assert "orphaned attempt" not in md
     html = tree_to_html(kb)
     assert "Glossary" in html and "A thing." in html
     assert "My notes" in html and "A second paragraph." in html
     assert "★ I highlighted" in html and "<mark>a</mark>" in html
+    assert "Explained back" in html and "my own words on widgets" in html
     # an empty note adds no section
     d2 = dict(d); d2.pop("note")
     assert "My notes" not in KnowledgeTree.from_dict(d2).to_markdown()
@@ -211,7 +226,8 @@ def test_handle_teachback():
 
     reply = {"right": "You nailed that the array index comes from the hash.",
              "missing": "Collisions — two keys can land on the same slot.",
-             "question": "What should happen when they do?"}
+             "question": "What should happen when they do?",
+             "verdict": "Close"}
     seen = {}
 
     def stub(system, messages, role, **kw):
@@ -227,6 +243,14 @@ def test_handle_teachback():
     assert r["cost"] == 0.02
     assert r["right"].startswith("You nailed") and "Collisions" in r["missing"]
     assert r["question"] == "What should happen when they do?"
+    assert r["verdict"] == "close"                    # normalised
+    # an unknown or absent verdict falls back to the middle of the scale
+    r2 = handle_teachback({"explanation": "x"},
+                          lambda *a, **k: (json.dumps({**reply, "verdict": "great"}), 0.0))
+    assert r2["verdict"] == "close"
+    r3 = handle_teachback({"explanation": "x"},
+                          lambda *a, **k: (json.dumps({**reply, "verdict": "gappy"}), 0.0))
+    assert r3["verdict"] == "gappy"
 
     # an empty explanation is a 400, unusable model output a 502
     for bad, status in ((({"explanation": ""}), 400),):

@@ -650,6 +650,31 @@ def tree_to_html(tree) -> str:
             f"{entries}</section>"
         )
 
+    teach = tree.teach_map() if hasattr(tree, "teach_map") else {}
+    teach_html = ""
+    if teach:
+        tags = {"clean": "✓ clean", "close": "≈ close", "gappy": "△ gappy"}
+        blocks = []
+        for nid in sorted(teach):
+            last = teach[nid][-1]
+            verdict = str(last.get("verdict") or "").strip()
+            tag = tags.get(verdict, "")
+            missing = str(last.get("missing") or "").strip()
+            blocks.append(
+                f'<div class="turn"><div class="block ans">'
+                f'<div class="label">🗣 [{nid}] {_esc(tree.nodes[nid].label)}'
+                + (f" — {_esc(tag)}" if tag else "") + "</div>"
+                f'<p>{_esc(last["text"])}</p>'
+                + (f'<p class="muted">The gap that mattered: {_esc(missing)}</p>'
+                   if verdict != "clean" and missing else "")
+                + "</div></div>"
+            )
+        teach_html = (
+            '<section class="node" id="explainedback"><h2>🗣 Explained back</h2>'
+            '<div class="muted">What I could say in my own words, checked by the tutor.</div>'
+            + "".join(blocks) + "</section>"
+        )
+
     meta = (f'<p class="muted">Created {_esc(tree.created)} · {len(tree.nodes)} '
             f'investigations · total cost ${tree.total_cost():.4f}</p>')
 
@@ -678,6 +703,7 @@ def tree_to_html(tree) -> str:
         + "</div>"
         + "".join(sections)
         + glossary_html
+        + teach_html
         + "</div>"
         + '<div id="ruler"></div>'
         + ai_config_html()
