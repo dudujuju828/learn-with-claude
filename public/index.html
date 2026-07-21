@@ -1951,10 +1951,37 @@ const wordPaint = (typeof Highlight === "function" && typeof CSS !== "undefined"
                    CSS.highlights) ? CSS.highlights : null;
 function clearWordPaint(){ try { wordPaint?.delete("lwc-word"); } catch {} }
 
+/* while a conversation block is being read aloud, keep the spoken word on
+   screen: when it drifts into the bottom fifth of the viewport (or above
+   the top) the page glides so the word sits comfortably in view again.
+   Your own scrolling always wins — wheel, touch, or a scroll key stops
+   following for the rest of that block; the next block re-arms it. Never
+   operates inside modals (only #conv scrolls the page). */
+let speechFollow = false;
+function armSpeechFollow(el){ speechFollow = !!(el.closest && el.closest("#conv")); }
+function stopSpeechFollow(){ speechFollow = false; }
+window.addEventListener("wheel", stopSpeechFollow, {passive: true});
+window.addEventListener("touchmove", stopSpeechFollow, {passive: true});
+window.addEventListener("keydown", (e) => {
+  if (e.target.closest?.("input,select,textarea")) return;
+  if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(e.key))
+    stopSpeechFollow();
+});
+function followWord(range){
+  if (!speechFollow) return;
+  let r; try { r = range.getBoundingClientRect(); } catch { return; }
+  if (!r || (!r.height && !r.width)) return;   // detached by a re-render
+  const vh = window.innerHeight;
+  if (r.top >= 0 && r.bottom <= vh * 0.8) return;   // comfortably in view
+  window.scrollTo({top: Math.max(0, window.scrollY + r.top - vh * 0.35),
+                   behavior: reducedMotion() ? "auto" : "smooth"});
+}
+
 function stopSpeech(){
   playList = []; playIdx = -1;
   try { speechSynthesis.cancel(); } catch {}
   clearWordPaint();
+  stopSpeechFollow();
   if (speakingEl){ speakingEl.classList.remove("speaking"); speakingEl = null; }
 }
 /* voice + speed come from the reading settings; an unknown saved voice
@@ -2025,6 +2052,7 @@ function speak(el, onDone){
   const {text, map} = speechMap(el);
   if (!text){ onDone?.(); return; }
   const u = ttsUtterance(text);
+  armSpeechFollow(el);
   if (wordPaint) u.onboundary = (e) => {
     if (e.name && e.name !== "word") return;
     let i = e.charIndex || 0;
@@ -2037,6 +2065,7 @@ function speak(el, onDone){
       const r = document.createRange();
       r.setStart(a.node, a.offset); r.setEnd(b.node, b.offset + 1);
       wordPaint.set("lwc-word", new Highlight(r));
+      followWord(r);
     } catch {}   // e.g. the conversation re-rendered mid-speech
   };
   u.onend = u.onerror = () => {
