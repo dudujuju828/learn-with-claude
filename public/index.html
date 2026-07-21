@@ -881,6 +881,8 @@
   #gapsbox #gapchat .ga{margin:0; padding-left:.9rem; border-left:2px solid var(--line);
     white-space:pre-wrap}
   #gapsbox #gapchat .tbcard{margin:.55rem 0 0}
+  #teachbox .tbwhen button.copy{vertical-align:baseline}
+  #teachbox .tbwhen button.copy.sel{outline:2px solid var(--accent); outline-offset:1px}
 
   /* ---- help panel ---- */
   #helppanel{
@@ -1142,11 +1144,23 @@
   context, and the answer lands in the conversation as your turn.
   <b>✕ forget</b> in the sidebar takes a term back out. <b>anki cards</b>
   downloads the defined terms as a file Anki imports directly.</p>
-  <p><b>🗣 explain it back</b> — the Feynman step. Explain a conversation in
-  your own words, as if teaching a friend, and the tutor reads it against
-  what was actually covered: what's solid, the one gap that matters, and one
-  question to push deeper. Feedback on the ideas only — never the spelling.
-  Attempts stay with the tree, so you can watch your explanation improve.</p>
+  <p><b>🗣 explain it back</b> — the Feynman loop. Explain a conversation in
+  your own words, from memory, as if teaching a friend; the tutor reads it
+  against what was actually covered and answers with what's solid, the one
+  gap that matters, one question to push deeper — and an honest verdict:
+  <b>✓ clean</b>, <b>≈ close</b>, or <b>△ gappy</b>. Ideas only, never the
+  spelling. Then the loop: aim your next try at the gap and send again —
+  every attempt is kept, the trail of verdicts shows your explanation
+  getting cleaner, and tapping an old attempt brings its words back.
+  <b>⤳ chase it</b> sends the tutor's probing question into the
+  conversation as your own turn; the <b>🔊</b> (or <b>s</b>) reads the
+  feedback aloud. A <b>clean</b> explanation comes due again later —
+  3 days, then 7, then longer — and the <b>🗣 explain again</b> nudge in
+  the words tab (and ⌘K) takes you straight to what's due: re-explaining
+  just before you'd forget is the strongest rehearsal there is. Your
+  latest explanation of each conversation also heads into both exports,
+  and <b>📊 progress</b> tracks attempts, clean explanations, and what's
+  due another pass.</p>
   <p><b>🎓 quiz me</b> — a few multiple-choice questions written from what
   this tree actually covered (your examples, your terms, your near-misses).
   Questions are written once and kept with the tree; retakes just reshuffle.
@@ -1323,6 +1337,10 @@
         <h2>review</h2>
         <div class="btnrow"><button id="revbtn" class="primary"></button></div>
         <p class="hint" id="revhint"></p>
+      </div>
+      <div id="teachwrap" style="display:none">
+        <div class="btnrow"><button id="teachduebtn"></button></div>
+        <p class="hint">re-explaining just before you'd forget is the strongest rehearsal there is.</p>
       </div>
       <div id="progwrap" style="display:none">
         <div class="btnrow"><button id="progbtn" title="your recall strength, upcoming reviews, streak and quiz scores">📊 progress</button></div>
@@ -2265,24 +2283,137 @@ $("notesbox").addEventListener("click", (e) => { if (e.target === $("notesbox"))
 /* Feedback, not a grade. Attempts live on tree.teach (unioned on      */
 /* merge, like highlights) so they sync and travel in .know.json.      */
 /* ------------------------------------------------------------------ */
-let teachPrevFocus = null, teachBusy = false, teachNodeId = null;
+let teachPrevFocus = null, teachBusy = false, teachNodeId = null, teachShown = -1;
+const TEACH_TAGS = {clean: "✓", close: "≈", gappy: "△"};
+const TEACH_WORDS = {clean: "clean — nothing important missing",
+                     close: "close — the one gap matters",
+                     gappy: "gappy — big pieces missing"};
 function teachAttempts(tree, nodeId){
-  return (Array.isArray(tree.teach) ? tree.teach : []).filter(a => a.node === nodeId);
+  return (Array.isArray(tree.teach) ? tree.teach : [])
+    .filter(a => a.node === nodeId)
+    .sort((x, y) => (x.when || "").localeCompare(y.when || ""));
+}
+function teachBest(attempts){
+  if (attempts.some(a => a.verdict === "clean")) return "✓";
+  if (attempts.some(a => a.verdict === "close")) return "≈";
+  if (attempts.some(a => a.verdict === "gappy")) return "△";
+  return "";   // attempts from before verdicts existed
+}
+/* spaced re-explanation — due is derived entirely from the attempts, no
+   new storage: a clean streak climbs 3d → 7d → ×2.5 (the card ladder's
+   shape); anything less than clean is worth another pass tomorrow. */
+function teachIvl(attempts){
+  let streak = 0;
+  for (let i = attempts.length - 1; i >= 0 && attempts[i].verdict === "clean"; i--) streak++;
+  return streak ? Math.min(60, Math.round(3 * Math.pow(2.5, streak - 1))) : 1;
+}
+function teachDueDay(attempts){
+  const last = attempts[attempts.length - 1];
+  const d = new Date(((last.when || "").slice(0, 10) || localDay(0)) + "T12:00");
+  d.setDate(d.getDate() + teachIvl(attempts));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-` +
+         String(d.getDate()).padStart(2, "0");
+}
+function teachDueList(){
+  const out = [];
+  for (const t of profileTrees()){
+    if (!Array.isArray(t.teach) || !t.teach.length) continue;
+    const byNode = new Map();
+    for (const a of t.teach)
+      if (getNode(t, a.node)){
+        if (!byNode.has(a.node)) byNode.set(a.node, []);
+        byNode.get(a.node).push(a);
+      }
+    for (const [nid, list] of byNode){
+      list.sort((x, y) => (x.when || "").localeCompare(y.when || ""));
+      const due = teachDueDay(list);
+      if (due <= localDay(0))
+        out.push({treeId: t.id, nodeId: nid, label: getNode(t, nid).label, due});
+    }
+  }
+  out.sort((a, b) => a.due.localeCompare(b.due));
+  return out;
+}
+function openTeachDue(){
+  const d = teachDueList()[0]; if (!d || running) return;
+  if (currentId !== d.treeId) openTree(d.treeId);
+  selectNode(d.nodeId);
+  openTeach();
+}
+window.openTeachDue = openTeachDue;
+function teachStats(){
+  let attempts = 0, clean = 0, convs = 0; const nodes = new Set();
+  for (const t of profileTrees()){
+    for (const n of Object.values(t.nodes)) if (n.turns.some(x => x.tutor)) convs++;
+    for (const a of (Array.isArray(t.teach) ? t.teach : [])){
+      if (!getNode(t, a.node)) continue;
+      attempts++;
+      if (a.verdict === "clean") clean++;
+      nodes.add(t.id + ":" + a.node);
+    }
+  }
+  return {attempts, clean, convs, nodes: nodes.size, due: teachDueList().length};
 }
 function teachFeedbackHtml(a, label){
-  const card = (name, text) => text
-    ? `<div class="tbcard"><b>${name}</b>${esc(text)}</div>` : "";
-  return (label ? `<p class="tbwhen">${esc(label)}</p>` : "") +
+  const card = (name, text, extra = "") => text
+    ? `<div class="tbcard"><b>${name}</b>${esc(text)}${extra}</div>` : "";
+  const v = a.verdict && TEACH_WORDS[a.verdict]
+    ? `<p class="tbwhen"><b>${TEACH_TAGS[a.verdict]} ${esc(TEACH_WORDS[a.verdict])}</b>` +
+      (canSpeak() ? ` <button class="copy" onclick="speakTeach()"` +
+                    ` title="hear this feedback — the s key works too, Esc stops">🔊</button>` : "") +
+      `</p>`
+    : "";
+  const chase = a.question
+    ? `<div style="margin-top:.35rem"><button class="copy" onclick="chaseTeach()"` +
+      ` title="send this question to the tutor — the answer lands in the conversation as your turn (🧑)">⤳ chase it</button></div>`
+    : "";
+  return (label ? `<p class="tbwhen">${esc(label)}</p>` : "") + v +
          card("✓ what's solid", a.right) +
          card("△ the gap that matters", a.missing) +
-         card("? to chew on", a.question);
+         card("? to chew on", a.question, chase);
 }
+function teachTrailHtml(past){
+  if (past.length < 2) return "";
+  const chips = past.map((a, i) =>
+    `<button class="copy${i === teachShown ? " sel" : ""}" onclick="showTeachAttempt(${i})"` +
+    ` title="attempt ${i + 1} · ${esc((a.when || "").slice(0, 10))} — tap to revisit it">` +
+    `${TEACH_TAGS[a.verdict] || "·"} ${i + 1}</button>`).join(" ");
+  return `<p class="tbwhen">your attempts, oldest first: ${chips}</p>`;
+}
+function renderTeach(past, attempt, label){
+  $("tbfeedback").innerHTML =
+    teachTrailHtml(past) + (attempt ? teachFeedbackHtml(attempt, label) : "");
+}
+function showTeachAttempt(i){
+  const tree = cur(); if (!tree || teachNodeId == null) return;
+  const past = teachAttempts(tree, teachNodeId);
+  const a = past[i]; if (!a) return;
+  teachShown = i;
+  $("tbarea").value = a.text || "";   // revisiting seeds a refinement
+  renderTeach(past, a, `attempt ${i + 1} of ${past.length} · ${(a.when || "").slice(0, 10)}:`);
+}
+window.showTeachAttempt = showTeachAttempt;
+function chaseTeach(){
+  const tree = cur(); if (!tree || running || teachBusy || teachNodeId == null) return;
+  const past = teachAttempts(tree, teachNodeId);
+  const a = past[teachShown >= 0 ? teachShown : past.length - 1];
+  if (!a || !a.question) return;
+  const nodeId = teachNodeId;
+  closeTeach();
+  enqueue(askThunk(tree.id, nodeId, a.question));
+}
+window.chaseTeach = chaseTeach;
+function speakTeach(){
+  if (!canSpeak()) return;
+  speakBlock($("tbfeedback"));
+}
+window.speakTeach = speakTeach;
 function updateTeachMeta(){
   if (teachBusy) return;
   const words = $("tbarea").value.trim() ? $("tbarea").value.trim().split(/\s+/).length : 0;
   $("tbmeta").textContent = words
     ? `${words} word${words === 1 ? "" : "s"} · feedback is one model call`
-    : "saying it out loud counts too — but writing it is what gets checked";
+    : "explain it fresh, from memory — that's the rehearsal that counts";
 }
 function openTeach(){
   const tree = cur(); if (!tree || running || currentNode == null) return;
@@ -2291,12 +2422,11 @@ function openTeach(){
   teachPrevFocus = document.activeElement;
   teachNodeId = node.id;
   $("tbscope").textContent = "· " + oneLine(node.label, 60);
-  $("tbarea").value = "";
+  $("tbarea").value = "";   // fresh recall beats editing old words
   const past = teachAttempts(tree, node.id);
-  $("tbfeedback").innerHTML = past.length
-    ? teachFeedbackHtml(past[past.length - 1],
-        `last time (attempt ${past.length}, ${(past[past.length - 1].when || "").slice(0, 10)}):`)
-    : "";
+  teachShown = past.length - 1;
+  renderTeach(past, past[past.length - 1] || null,
+    past.length ? `last time (attempt ${past.length}, ${(past[past.length - 1].when || "").slice(0, 10)}):` : "");
   updateTeachMeta();
   $("teachbox").classList.add("open");
   $("tbarea").focus();
@@ -2317,12 +2447,19 @@ async function sendTeach(){
     });
     node.cost += r.cost;
     const attempt = {node: node.id, when: new Date().toISOString(), text: v,
-                     right: r.right || "", missing: r.missing || "", question: r.question || ""};
+                     right: r.right || "", missing: r.missing || "",
+                     question: r.question || "", verdict: r.verdict || ""};
     tree.teach = Array.isArray(tree.teach) ? tree.teach : [];
     tree.teach.push(attempt);
     persistTree(tree);
-    $("tbfeedback").innerHTML = teachFeedbackHtml(attempt);
-    $("tbmeta").textContent = "kept with the tree — explain it again any time";
+    const past = teachAttempts(tree, node.id);
+    teachShown = past.length - 1;
+    renderTeach(past, attempt);
+    const ivl = teachIvl(past);
+    $("tbmeta").textContent = attempt.verdict === "clean"
+      ? `clean — explain it again in ${ivl} day${ivl === 1 ? "" : "s"} to make it stick (you'll be nudged)`
+      : "aim at the gap: edit your words above and send again";
+    updateRevRow();   // the explain-again nudge may have moved
   } catch (e){
     $("tbmeta").textContent = oneLine(e.message, 140) + " — your words are still here; try again.";
   } finally {
@@ -2332,12 +2469,13 @@ async function sendTeach(){
 }
 function closeTeach(){
   if (teachBusy) return;   // mid-call: the answer is seconds away
+  stopSpeech();
   $("teachbox").classList.remove("open");
-  teachNodeId = null;
+  teachNodeId = null; teachShown = -1;
   if (teachPrevFocus && teachPrevFocus.focus && document.contains(teachPrevFocus))
     teachPrevFocus.focus();
   teachPrevFocus = null;
-  renderConversation(true);   // refresh the attempt count on the button
+  renderConversation(true);   // refresh the attempt badge on the button
 }
 window.closeTeach = closeTeach;
 $("tbsend").onclick = sendTeach;
@@ -3209,10 +3347,12 @@ function renderConversation(keepScroll){
               `${ico("📝")}notes${hasNote ? ' <span class="ndot" aria-hidden="true">●</span>' : ""}</button>`);
   }
   if (!running && node.turns.some(t => t.tutor)){
-    const nTb = teachAttempts(tree, node.id).length;
+    const tb = teachAttempts(tree, node.id);
+    const sym = teachBest(tb);
     acts.push(`<button onclick="openTeach()" title="explain this conversation in your own words —` +
-              ` the tutor says what's solid, what's missing, and asks one question to push deeper">` +
-              `${ico("🗣")}explain${nTb ? ` · ${nTb}` : ""}</button>`);
+              ` the tutor says what's solid, what's missing, and asks one question to push deeper` +
+              `${sym === "✓" ? " (best attempt so far: clean)" : ""}">` +
+              `${ico("🗣")}explain${sym ? ` ${sym}` : ""}${tb.length ? ` · ${tb.length}` : ""}</button>`);
   }
   const totalTurns = Object.values(tree.nodes).reduce((s, n) => s + n.turns.length, 0);
   if (!running && totalTurns >= 2){
@@ -4555,6 +4695,20 @@ $("revundo").onclick = undoGrade;
 /* the sidebar row: how many cards are waiting, or when the next one is */
 function updateRevRow(){
   updateProgRow();
+  // the explain-again nudge: conversations whose explanation is due a pass
+  {
+    const tdue = teachDueList();
+    const twrap = $("teachwrap");
+    if (twrap){
+      twrap.style.display = tdue.length ? "" : "none";
+      if (tdue.length){
+        const btn = $("teachduebtn");
+        btn.disabled = running;
+        btn.innerHTML = `${ico("🗣")}explain again · ${tdue.length} due`;
+        btn.title = "due another pass: " + oneLine(tdue.map(d => d.label).join(", "), 140);
+      }
+    }
+  }
   const cards = allCards();
   const due = cards.filter(c => cardDue(cardEntry(c))).length;
   dueCount = due;
@@ -4629,7 +4783,9 @@ function currentStreak(){
   while (days.has(localDay(cursor))){ len++; cursor--; }
   return {len, today};
 }
-function progHasData(){ return progCards().length > 0 || quizAttempts().length > 0; }
+function progHasData(){
+  return progCards().length > 0 || quizAttempts().length > 0 || teachStats().attempts > 0;
+}
 
 /* the small sidebar entry point, shown once there's anything to show */
 function updateProgRow(){
@@ -4659,6 +4815,7 @@ function closeStats(){
 window.closeStats = closeStats;
 $("statclose").onclick = closeStats;
 $("progbtn").onclick = () => openStats();
+$("teachduebtn").onclick = openTeachDue;
 $("statsbox").addEventListener("click", (e) => { if (e.target === $("statsbox")) closeStats(); });
 
 /* ★ highlights hub — every marked passage across the profile's trees,
@@ -4724,7 +4881,7 @@ function renderStats(){
   const attempts = quizAttempts();
   $("statscope").textContent = activeProfile() ? "· " + activeProfile() : "· all trees";
 
-  if (!cards.length && !attempts.length){
+  if (!cards.length && !attempts.length && !teachStats().attempts){
     $("statsbody").innerHTML =
       `<div class="st-empty"><div class="big">🌱</div>` +
       `<p>Grow a tree and let the glossary fill in — your recall strength, ` +
@@ -4835,7 +4992,21 @@ function renderStats(){
       `<p class="st-note">no quizzes yet — “quiz me” on a tree tracks your scores here.</p></div>`;
   }
 
-  $("statsbody").innerHTML = tiles + strength + forecast + habit + quizzes;
+  // ---- explained back (the Feynman loop) ----
+  let teach = "";
+  const ts = teachStats();
+  if (ts.attempts){
+    teach =
+      `<div class="st-sec"><h4>explained back` +
+        `<span class="sub">${ts.attempts} attempt${ts.attempts === 1 ? "" : "s"} in your own words</span></h4>` +
+      `<div class="st-tiles">` +
+      tile(`${ts.nodes}/${ts.convs}`, "conversations explained") +
+      tile(ts.clean, "clean") +
+      tile(ts.due, "due another pass", ts.due ? "due" : "") +
+      `</div></div>`;
+  }
+
+  $("statsbody").innerHTML = tiles + strength + forecast + habit + quizzes + teach;
 }
 
 /* in-text references: occurrences of defined terms inside tutor answers
@@ -5204,6 +5375,9 @@ function paletteActions(){
     const due = dueCards().length;
     if (due) acts.push({icon: "🔁", label: "review the glossary",
       sub: `${due} card${due === 1 ? "" : "s"} due`, run(){ openReview(); }});
+    const tdue = teachDueList().length;
+    if (tdue) acts.push({icon: "🗣", label: "explain again",
+      sub: `${tdue} conversation${tdue === 1 ? "" : "s"} due another pass`, run(){ openTeachDue(); }});
   }
   if (progHasData()) acts.push({icon: "📊", label: "progress",
     sub: "recall strength · forecast · streak · quizzes", run(){ openStats(); }});
@@ -6073,6 +6247,12 @@ document.addEventListener("keydown", (e) => {
       if (quiz && quiz.answered && why) speakBlock(why);
       else speakQuiz();
       return;
+    }
+  }
+  /* explain it back: s reads the feedback aloud */
+  if ($("teachbox").classList.contains("open") && !typing){
+    if (e.key === "s" && canSpeak() && $("tbfeedback").innerHTML){
+      e.preventDefault(); speakTeach(); return;
     }
   }
   /* review: Space/Enter flips the card, 1-3 grade it, s says it aloud */
