@@ -876,6 +876,11 @@
   }
   #teachbox .tbcard b, #gapsbox .tbcard b{display:block; margin-bottom:.25rem; font-size:.82rem; color:var(--muted)}
   #teachbox .tbwhen, #gapsbox .tbwhen{margin:.6rem 0 0; font-size:.82rem; color:var(--muted)}
+  #gapsbox #gapchat:not(:empty){margin-bottom:.6rem}
+  #gapsbox #gapchat .gq{margin:.5rem 0 .1rem; color:var(--muted); font-size:.9rem}
+  #gapsbox #gapchat .ga{margin:0; padding-left:.9rem; border-left:2px solid var(--line);
+    white-space:pre-wrap}
+  #gapsbox #gapchat .tbcard{margin:.55rem 0 0}
 
   /* ---- help panel ---- */
   #helppanel{
@@ -1103,12 +1108,16 @@
   picks the one concept that best builds on it — a why/how/when angle, not
   another "what is" — then investigates it. Its one-line <i>why</i> stays on
   the new conversation.</p>
-  <p><b>🧭 gaps</b> — for a topic you half-know: say what you already know
-  first (rough and honest beats polished), and the tutor maps what's solid,
-  what's shaky, and what's missing, then starts the investigation at the
-  biggest gap — pitched at your evident level, never re-explaining what you
-  have down, straightening the shaky bits as they come up. The map stays on
-  the tree (<b>🧭 baseline</b> in the header reopens it).</p>
+  <p><b>🧭 gaps</b> — for a topic you half-know: a short interview before
+  the digging. The tutor asks a few questions one at a time — following
+  what your answers reveal, probing a belief that sounds off, sampling what
+  you didn't mention — and stops as soon as it can place you (or when you
+  say <i>that's enough — map me</i>; “no idea” is a perfectly good answer).
+  Then it maps what's solid, what's shaky, and what's missing, and the
+  investigation starts at the biggest gap — pitched at your evident level,
+  never re-explaining what you have down, straightening the shaky bits as
+  they come up. The map and the transcript stay on the tree
+  (<b>🧭 baseline</b> in the header reopens them).</p>
   <p><b>⤵ branch</b> under any tutor answer re-investigates that answer more
   deeply, growing the tree. Every turn is two real model calls (~5–7¢).
   <b>loose threads</b> (under the tree map) lists the words the learner
@@ -1278,9 +1287,9 @@
       <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
       related concepts to explore. Each turn is two real model calls (~5–7¢).
       “survey” maps a broad topic into the foundations it's built on — you
-      pick what to investigate, one piece at a time. “gaps” asks what you
-      already know first and aims the investigation at what's actually
-      missing. Once a tree exists,
+      pick what to investigate, one piece at a time. “gaps” interviews you
+      first — a few quick questions on what you already know — then aims
+      the investigation at what's actually missing. Once a tree exists,
       <b>→ next</b> in its conversation header asks the tutor for one more.</p>
 
       <h2>tutor style</h2>
@@ -1523,16 +1532,18 @@
       <span id="gapscope"></span>
       <button id="gapclose" class="ghost" aria-label="close gaps">✕</button>
     </div>
-    <p class="hint" id="gaphint" style="margin:0 0 .6rem">Before the investigation: what do
-      you already know — or think you know — about this? Rough, half-remembered, guesses
-      welcome; honest beats polished. The tutor maps what's solid, what's shaky, and
-      what's missing, and the investigation starts at the biggest gap instead of from
-      zero.</p>
-    <textarea id="gaparea" aria-label="what you already know"
-      placeholder="What I think I know is…"></textarea>
+    <p class="hint" id="gaphint" style="margin:0 0 .6rem">A short interview before the
+      investigation: the tutor asks a few questions to find out where you actually
+      stand — what's solid, what's shaky, what's missing — then the digging starts at
+      the biggest gap instead of from zero. Rough, honest answers beat polished ones,
+      and “no idea” is a perfectly good answer.</p>
+    <div id="gapchat" aria-live="polite"></div>
+    <textarea id="gaparea" aria-label="your answer"
+      placeholder="Rough and honest — “no idea” counts…"></textarea>
     <div class="ntfoot">
       <span id="gapmeta" class="hint"></span>
-      <button id="gapgo" class="primary">find my gaps</button>
+      <button id="gapfinish" title="stop the interview here and map what you've said so far">that's enough — map me</button>
+      <button id="gapgo" class="primary">answer</button>
     </div>
     <div id="gapresult" aria-live="polite"></div>
   </div>
@@ -2338,14 +2349,17 @@ $("tbarea").addEventListener("keydown", (e) => {
 $("teachbox").addEventListener("click", (e) => { if (e.target === $("teachbox")) closeTeach(); });
 
 /* ------------------------------------------------------------------ */
-/* gaps — Ausubel's rule as a start mode: say what you already know,   */
-/* the tutor maps what's solid / shaky / missing (one model call) and  */
+/* gaps — Ausubel's rule as a start mode, run as an interview: the     */
+/* tutor asks a few diagnostic questions one at a time, following what */
+/* each answer reveals, then maps what's solid / shaky / missing and   */
 /* the investigation starts at the biggest gap, with the learner and   */
 /* tutor both seeded so they build on your baseline instead of zero.   */
-/* The map lives on tree.baseline: it syncs, exports, and can be       */
-/* reopened from the conversation header any time.                     */
+/* The map (and the transcript) lives on tree.baseline: it syncs,      */
+/* exports, and reopens from the conversation header any time.         */
 /* ------------------------------------------------------------------ */
 let gapsBusy = false, gapsTopic = null, gapsAssess = null, gapsPrevFocus = null;
+let gapsEx = [], gapsQ = "", gapsCost = 0;
+const GAPS_MAX_Q = 6;   // mirrors the server's interview budget
 function baselineSummary(b){
   const line = (label, arr) => (arr && arr.length) ? `${label}: ${arr.join("; ")}` : "";
   return [line("solid", b.solid), line("shaky", b.shaky), line("gaps", b.gaps)]
@@ -2360,53 +2374,87 @@ function baselineCardsHtml(b){
          (b.level ? `<p class="tbwhen">reads like a ${esc(b.level)} — the learner will ask at that level` +
                     (b.focus ? ` · first stop: ${esc(b.focus)}` : "") + `</p>` : "");
 }
+function renderGapsChat(){
+  let h = "";
+  for (const ex of gapsEx)
+    h += `<div class="gq">tutor: ${esc(ex.q)}</div><div class="ga">${esc(ex.a)}</div>`;
+  if (!gapsAssess && gapsQ)
+    h += `<div class="tbcard"><b>the tutor asks</b>${esc(gapsQ)}</div>`;
+  $("gapchat").innerHTML = h;
+  $("gapresult").innerHTML = gapsAssess ? baselineCardsHtml(gapsAssess) : "";
+  $("gaparea").style.display = gapsAssess ? "none" : "";
+  $("gapfinish").style.display = (!gapsAssess && gapsEx.length) ? "" : "none";
+  $("gapgo").textContent = gapsAssess ? "start the investigation" : "answer";
+  $("gapmeta").textContent = gapsAssess
+    ? "fair read? the investigation starts at the biggest gap"
+    : (gapsEx.length
+       ? `question ${gapsEx.length + 1} · usually 3–5 · each answer is one model call`
+       : "“no idea” is a perfectly good answer · each answer is one model call");
+  const box = $("gapsbox").querySelector(".box");
+  box.scrollTop = box.scrollHeight;   // keep the newest exchange in view
+}
 function openGaps(){
   const t = $("topic").value.trim();
   if (!t){ $("topic").focus(); return; }
   if (running) return;
-  gapsTopic = t; gapsAssess = null;
+  gapsTopic = t; gapsAssess = null; gapsEx = []; gapsCost = 0;
+  // the opening question is always the same, so it costs nothing — the
+  // model takes over from your first answer
+  gapsQ = `What do you already know about “${oneLine(t, 80)}” — or think you know? ` +
+          `Where have you met it before?`;
   gapsPrevFocus = document.activeElement;
   $("gapscope").textContent = "· " + oneLine(t, 60);
   $("gaparea").value = ""; $("gaparea").disabled = false;
-  $("gapresult").innerHTML = "";
-  $("gapgo").style.display = ""; $("gapgo").textContent = "find my gaps";
-  $("gapmeta").textContent = "one model call sizes you up — then the investigation starts aimed";
+  $("gapgo").style.display = "";
+  renderGapsChat();
   $("gapsbox").classList.add("open");
   $("gaparea").focus();
   closeMenu();
 }
 function viewBaseline(){
   const tree = cur(); if (!tree || !tree.baseline) return;
-  gapsTopic = null; gapsAssess = null;
+  gapsTopic = null; gapsAssess = null; gapsEx = []; gapsQ = "";
   gapsPrevFocus = document.activeElement;
   $("gapscope").textContent = "· " + oneLine(tree.root_topic, 60);
+  $("gapchat").innerHTML = "";
+  $("gaparea").style.display = "";
   $("gaparea").value = tree.baseline.text || ""; $("gaparea").disabled = true;
   $("gapresult").innerHTML = baselineCardsHtml(tree.baseline);
-  $("gapgo").style.display = "none";
+  $("gapgo").style.display = "none"; $("gapfinish").style.display = "none";
   $("gapmeta").textContent = "your starting point" +
     (tree.baseline.when ? ` · taken ${tree.baseline.when.slice(0, 10)}` : "");
   $("gapsbox").classList.add("open");
 }
 window.viewBaseline = viewBaseline;
-async function gapsFind(){
+async function gapsSend(finish){
   if (gapsBusy || !gapsTopic) return;
-  if (gapsAssess){ gapsStart(); return; }   // second press = start
-  const account = $("gaparea").value.trim().slice(0, 8000);
-  if (!account){ $("gaparea").focus(); return; }
+  if (gapsAssess){ gapsStart(); return; }   // after the read, the button starts
+  const a = $("gaparea").value.trim().slice(0, 2000);
+  if (!a && !finish){ $("gaparea").focus(); return; }
+  const ex = a ? [...gapsEx, {q: gapsQ, a}] : gapsEx.slice();
+  const mustFinish = finish || ex.length >= GAPS_MAX_Q;
   gapsBusy = true;
-  $("gapgo").disabled = true;
-  $("gapmeta").textContent = provName() + " is sizing you up…";
+  $("gapgo").disabled = $("gapfinish").disabled = true;
+  $("gapmeta").textContent = provName() +
+    (mustFinish ? " is mapping where you stand…" : " is weighing your answer…");
   try {
-    const r = await api("baseline", {topic: gapsTopic, account});
-    gapsAssess = {...r, text: account};
-    $("gapresult").innerHTML = baselineCardsHtml(gapsAssess);
-    $("gapgo").textContent = "start the investigation";
-    $("gapmeta").textContent = "fair read? rewrite your words to redo it — or start";
+    const r = await api("interview", {topic: gapsTopic, exchanges: ex, finish: !!finish});
+    gapsCost += r.cost || 0;
+    gapsEx = ex;
+    $("gaparea").value = "";
+    if (r.assessment){
+      gapsAssess = {...r.assessment, cost: gapsCost,
+                    text: ex.map(x => `tutor: ${x.q}\nyou: ${x.a}`).join("\n\n")};
+    } else if (r.question){
+      gapsQ = r.question;
+    }
+    renderGapsChat();
+    if (!gapsAssess) $("gaparea").focus();
   } catch (e){
-    $("gapmeta").textContent = oneLine(e.message, 140) + " — your words are still here; try again.";
+    $("gapmeta").textContent = oneLine(e.message, 140) + " — your answer is still here; try again.";
   } finally {
     gapsBusy = false;
-    $("gapgo").disabled = false;
+    $("gapgo").disabled = $("gapfinish").disabled = false;
   }
 }
 function gapsStart(){
@@ -2417,27 +2465,22 @@ function gapsStart(){
   enqueue(gapsThunk(topic, assess));
 }
 function closeGaps(){
-  if (gapsBusy) return;   // mid-call: the read is seconds away
+  if (gapsBusy) return;   // mid-call: the answer is seconds away
   $("gapsbox").classList.remove("open");
-  gapsTopic = null; gapsAssess = null;
-  $("gaparea").disabled = false; $("gapgo").style.display = "";
+  gapsTopic = null; gapsAssess = null; gapsEx = []; gapsQ = "";
+  $("gaparea").disabled = false; $("gaparea").style.display = "";
+  $("gapgo").style.display = "";
   if (gapsPrevFocus && gapsPrevFocus.focus && document.contains(gapsPrevFocus))
     gapsPrevFocus.focus();
   gapsPrevFocus = null;
 }
 window.closeGaps = closeGaps;
 $("gapsbtn").onclick = openGaps;
-$("gapgo").onclick = gapsFind;
+$("gapgo").onclick = () => gapsSend(false);
+$("gapfinish").onclick = () => gapsSend(true);
 $("gapclose").onclick = closeGaps;
-$("gaparea").addEventListener("input", () => {
-  if (gapsAssess){   // their words changed — the read is stale
-    gapsAssess = null;
-    $("gapgo").textContent = "find my gaps";
-    $("gapmeta").textContent = "your words changed — find the gaps again before starting";
-  }
-});
 $("gaparea").addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); gapsFind(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); gapsSend(false); }
 });
 $("gapsbox").addEventListener("click", (e) => { if (e.target === $("gapsbox")) closeGaps(); });
 
