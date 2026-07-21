@@ -5,6 +5,67 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 28 — explain it back grows into the full Feynman loop
+
+### What it is
+The session's brief: pick one feature and improve it relentlessly. The
+pick was **🗣 explain it back** — it *is* the app's purpose (understanding
+that sticks, in your own words) — and four rounds took it from a one-shot
+feedback box to a complete practice loop:
+
+1. **Verdicts and the retry loop.** Every reading now ends in an honest
+   verdict — **✓ clean** (nothing important missing), **≈ close** (the
+   one gap matters), **△ gappy** — with a consistency rule wired into the
+   prompt (if "missing" says complete, the verdict must be clean; judge
+   generously on wording, strictly on ideas). Feedback under a verdict
+   guides the loop: *aim at the gap — edit your words above and send
+   again.* Every attempt keeps its verdict; a trail of chips (△ 1 ≈ 2
+   ✓ 3) shows the explanation getting cleaner, tapping one revisits its
+   words and feedback, and the header button badges the best verdict
+   (🗣 explain ✓ · 3). The modal opens with an *empty* box on purpose —
+   fresh recall beats editing old words — but revisiting an attempt seeds
+   a refinement.
+2. **Spaced re-explanation.** A clean explanation comes due again on a
+   3d → 7d → ×2.5 ladder (the card ladder's shape); anything less is due
+   tomorrow. Entirely *derived* from the attempts' dates and verdicts —
+   no new storage, nothing to sync or migrate. Due conversations surface
+   as a **🗣 explain again · n due** nudge beside the review button (and
+   in ⌘K), which drops you straight into the due conversation's modal.
+   Re-explaining just before you'd forget is the spacing effect applied
+   to concepts, where the app previously spaced only terms.
+3. **Feedback that closes the loop.** **⤳ chase it** sends the tutor's
+   probing question through the existing ask-the-tutor path — the answer
+   lands in the conversation as your own turn, so the feedback's open
+   thread actually gets chased. The 🔊 (and the **s** key) reads the
+   feedback aloud through the existing karaoke machinery.
+4. **Visibility.** Both exports gain an **Explained back** section — the
+   latest attempt per conversation, verdict-tagged, with the gap that
+   mattered (Python `teach_map()`, orphan attempts skipped, covered by
+   the round-trip test). **📊 progress** gains an *explained back*
+   section: conversations explained (n/m), clean count, due another pass.
+
+### Why this feature
+- Generation + feedback + spacing + closure is the complete rehearsal
+  cycle learning science asks for, and every round lands on a different
+  leg: verdicts make feedback *actionable* (F25's cards were a read-once
+  artifact), the ladder makes explanations *recur* (the single strongest
+  intervention available), chase-it turns feedback into the next
+  learning step, and the exports/stats make the practice visible.
+- Every round rides existing machinery: the verdict is one JSON key, the
+  schedule is derived, chase-it is `askThunk`, the audio is `speakBlock`,
+  the stats tile helper and export patterns already existed.
+
+### Candidates rejected (this cycle)
+- **Auto-grading the schedule from verdicts into `entry.rev`** — teach
+  attempts are conversations, not glossary terms; forcing them into the
+  card scheduler would tangle two clean systems.
+- **Voice-dictated explanations** — still Chromium-only; parked with its
+  cousins.
+- **Diffing attempts** (highlight what changed between attempt 1 and 2)
+  — cute, but the verdict trail already tells the improvement story.
+
+---
+
 ## Feature 27 — the gaps interview: ask, listen, probe, then map
 
 ### What it is
