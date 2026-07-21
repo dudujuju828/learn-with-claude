@@ -5,6 +5,52 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 27 — the gaps interview: ask, listen, probe, then map
+
+### What it is
+Feature 26's one-shot "write down what you know" box grows into what a
+real tutor does: a **back-and-forth interview** (the session's brief).
+The opening question is fixed and free — *what do you already know about
+X, and where have you met it?* — and from your first answer the model
+takes over, one short question per turn, following what each answer
+reveals: testing a belief that sounds off, pushing on the edge of what
+you seem to know, sampling a load-bearing area you didn't mention.
+"No idea" is explicitly a good answer (the prompt forbids making you feel
+caught out, and forbids teaching mid-interview — that's the
+investigation's job). It stops the moment another answer wouldn't change
+the read — usually 3–5 questions, hard-capped at 6 server-side — or when
+you press **that's enough — map me**. The same solid/shaky/gaps map then
+appears and the investigation starts exactly as before; `tree.baseline`
+now keeps the whole transcript as its `text`, so 🧭 baseline replays the
+interview alongside the map.
+
+### Why this one (and why the redesign is right)
+- Elicitation beats recall-dumping: people don't volunteer what they
+  don't think to mention, and a single written account can't be probed.
+  Adaptive questioning is how diagnostic assessment actually works — each
+  question lands where the previous answer left uncertainty, which is
+  precisely what a static textarea cannot do.
+- The route is a clean generalisation, not a second system: `interview`
+  either returns the next `question` or the final `assessment` (same
+  shape Feature 26 defined, same `_clean_assessment` validation, same
+  `gaps` conversation kind downstream — thunk, resume, merge, and chip
+  all untouched). The transcript is rebuilt as proper multi-turn
+  messages, the way the learner route already replays its history.
+- Cost stays honest: the fixed opening question is free, each answer is
+  one visible model call, and the interview's total lands on the root
+  node like the old single call did.
+
+### Candidates rejected (this cycle)
+- **Keeping the one-shot box as a second path** — the interview subsumes
+  it: dump everything into answer one and the tutor simply concludes
+  early.
+- **Voice-answered interview** — the natural pairing for this app's
+  audience, but speech *recognition* is a new platform capability
+  (SpeechRecognition is Chromium-only and flaky offline); parked
+  alongside the audio review drill.
+
+---
+
 ## Feature 26 — 🧭 gaps: the investigation starts from what you already know
 
 ### What it is
