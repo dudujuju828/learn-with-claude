@@ -184,12 +184,21 @@ directly (a local `claude` login can't run on a server), so it needs an
   reshuffle), explains every answer, and records your scores; the 🔊 beside
   the question — or the **s** key — reads it and each choice aloud, then the
   explanation once you've answered. **🗣 explain it back** is
-  the Feynman step: explain a conversation in your own words, as if teaching
-  a friend, and the tutor reads it against what was actually covered and
-  answers with what's solid, the one gap that matters, and one question to
-  push deeper — feedback on the ideas, never the spelling. Attempts are kept
-  with the tree (they sync and travel in `.know.json`), so you can watch
-  your explanation improve between visits. Each tree also
+  the Feynman loop: explain a conversation in your own words, from memory,
+  as if teaching a friend, and the tutor reads it against what was actually
+  covered and answers with what's solid, the one gap that matters, one
+  question to push deeper — and an honest verdict (✓ clean / ≈ close /
+  △ gappy) — feedback on the ideas, never the spelling. Then the loop: aim
+  your next try at the gap and send again; every attempt is kept (synced,
+  travelling in `.know.json`), the verdict trail shows your explanation
+  getting cleaner, and **⤳ chase it** sends the tutor's probing question
+  into the conversation as your own turn. A clean explanation comes due
+  again on a spaced ladder (3d → 7d → longer), surfaced as a **🗣 explain
+  again** nudge beside the review button — re-explaining just before you'd
+  forget is the strongest rehearsal there is. The 🔊 (or **s**) reads the
+  feedback aloud, your latest explanation of each conversation lands in
+  both exports under *Explained back*, and **📊 progress** counts attempts,
+  clean explanations, and what's due another pass. Each tree also
   gets **📝 my notes** — a free-text space for your own synthesis of what you
   learned, which autosaves, syncs with the tree, and heads every export. You
   can also **ask the tutor yourself** under any conversation — your question
