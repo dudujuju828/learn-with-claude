@@ -112,13 +112,17 @@ directly (a local `claude` login can't run on a server), so it needs an
   the tree, tracking coverage, so you pick off the rest whenever — and
   **know it** marks a foundation you already understand as covered without
   spending a conversation on it. For a topic you half-know, **🧭 gaps**
-  turns Ausubel's rule into a button — say what you already know first, and
-  one model call maps what's solid, what's shaky, and what's missing, then
-  the investigation starts at the biggest gap: the learner opens at your
+  turns Ausubel's rule into a button — a short interview before the
+  digging: the tutor asks a few questions one at a time, following what
+  your answers reveal (probing a belief that sounds off, sampling what you
+  didn't mention; "no idea" is a perfectly good answer), and stops as soon
+  as it can place you — or when you say *that's enough — map me*. Then it
+  maps what's solid, what's shaky, and what's missing, and the
+  investigation starts at the biggest gap: the learner opens at your
   evident level, the tutor never re-explains what you have down and
-  straightens your shaky beliefs as they come up, and the baseline map
-  stays on the tree (reopen it from the conversation header) and syncs and
-  travels like everything else. On any tree, **→ next** in the conversation
+  straightens your shaky beliefs as they come up, and the map and
+  transcript stay on the tree (reopen them from the conversation header)
+  and sync and travel like everything else. On any tree, **→ next** in the conversation
   header hands one step to the tutor: it reviews everything covered so far
   and picks the single concept that best builds on it — a why/how/when
   angle rather than another "what is" — then runs that follow-up
