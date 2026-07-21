@@ -5,6 +5,51 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 25 — 🗣 explain it back: the Feynman step
+
+### What it is
+A **🗣 explain** button on any conversation with tutor answers (and
+*explain it back* in ⌘K): a modal where you explain what the conversation
+taught you in your own words, as if teaching a friend. One tutor call
+reads it against the conversation's digest (the ground truth) and answers
+with three cards — **✓ what's solid** (specific, echoing your phrasing),
+**△ the gap that matters** (the ONE most important missing or wrong
+thing, never a list), **? to chew on** (one probing question). Feedback
+is about ideas only; the prompt forbids mentioning spelling, grammar, or
+style — for a dyslexia-focused tool that's non-negotiable. Attempts live
+on `tree.teach` (unioned on merge like highlights, so attempts from two
+devices both survive), travel in `.know.json` via the extras round-trip,
+and reopening shows your last attempt so you can watch your explanation
+improve; the header button counts them.
+
+### Why this one
+- The deepest untapped learning principle in the app. Its core conceit is
+  watching a *simulated* learner learn; the human's own production
+  surfaces were free-form (notes — write-only, nobody reads them back) or
+  single-term (typed recall). Self-explanation with formative feedback —
+  the Feynman technique — is among the best-supported effects in learning
+  science, and it attacks the same self-deception Feature 20 did, one
+  level up: terms were covered, *concepts* weren't. Your explanation is
+  checked against what was actually covered, which is exactly where the
+  illusion of competence lives.
+- The Feature 2 objection ("auto-grading free text is unreliable")
+  doesn't apply: nothing is graded and nothing is scheduled — the call is
+  a feedback call, the thing a model is actually good at, anchored to the
+  digest.
+- Pattern-shaped: digest machinery existed, modal plumbing cloned from
+  notes, merge rule cloned from highlights, one new prompt + one route
+  (and the vercel.json rewrite the log warns about).
+
+### Candidates rejected (this cycle)
+- **Hands-free audio review drill** — parked a third time; still a full
+  design cycle of its own.
+- **Teach-back graded into review scheduling** — deliberately not: grading
+  free text is the known trap; feedback, not a grade.
+- **Explanations in exports** — the attempts travel in the file already;
+  rendering them in exports can follow if the surface earns its keep.
+
+---
+
 ## Feature 24 — → next: the tutor picks what to learn next, on any tree
 
 ### What it is
