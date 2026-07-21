@@ -26,6 +26,7 @@ from .personas import (
     NEXT_CONCEPT_SYSTEM,
     QUIZ_SYSTEM,
     SURVEY_SYSTEM,
+    TEACHBACK_SYSTEM,
     TUTOR_MODES,
     branch_learner_message,
     branch_tutor_context,
@@ -38,6 +39,7 @@ from .personas import (
     next_concept_message,
     quiz_message,
     survey_message,
+    teachback_message,
     tutor_system,
 )
 from .render import space_sentences
@@ -192,6 +194,30 @@ def handle_next_concept(body: dict, call_model) -> dict:
     return {"pick": pick, "cost": cost}
 
 
+def handle_teachback(body: dict, call_model) -> dict:
+    """The Feynman step: the learner explains a conversation back in their
+    own words; the tutor answers with what's solid, the one thing missing,
+    and one probing question. Feedback, not a grade — content only."""
+    explanation = (body.get("explanation") or "").strip()
+    if not explanation:
+        raise ApiError("missing 'explanation'")
+    message = teachback_message(
+        (body.get("topic") or "").strip()[:200],
+        (body.get("label") or "").strip()[:120],
+        (body.get("digest") or "").strip()[:24000],
+        explanation[:8000],
+    )
+    text, cost = call_model(TEACHBACK_SYSTEM, [{"role": "user", "content": message}], "tutor")
+    data = first_json_object(text)
+    fb = {}
+    if isinstance(data, dict):
+        for k in ("right", "missing", "question"):
+            fb[k] = space_sentences(str(data.get(k) or "").strip())[:1200]
+    if not (fb.get("right") or fb.get("missing")):
+        raise ApiError("the tutor returned no usable feedback — try again", 502)
+    return {**fb, "cost": cost}
+
+
 def handle_define(body: dict, call_model) -> dict:
     """One glossary definition, on the cheap model. Context is the exchange
     where the learner hit the term, so the definition matches its use there."""
@@ -320,6 +346,7 @@ def model_routes(call_model) -> dict:
         "learner": lambda body: handle_learner(body, call_model),
         "tutor": lambda body: handle_tutor(body, call_model),
         "next_concept": lambda body: handle_next_concept(body, call_model),
+        "teachback": lambda body: handle_teachback(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
         "survey": lambda body: handle_survey(body, call_model),

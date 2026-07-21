@@ -127,6 +127,45 @@ def test_message_builders():
     print("ok  message builders")
 
 
+def test_handle_teachback():
+    import json
+
+    from learn_with_claude.webapi import ApiError, handle_teachback
+
+    reply = {"right": "You nailed that the array index comes from the hash.",
+             "missing": "Collisions — two keys can land on the same slot.",
+             "question": "What should happen when they do?"}
+    seen = {}
+
+    def stub(system, messages, role, **kw):
+        seen["system"], seen["msg"], seen["role"] = system, messages[0]["content"], role
+        return json.dumps(reply), 0.02
+
+    r = handle_teachback({"topic": "hash tables", "label": "hash tables",
+                          "digest": "Q: what is it\nA: an array plus a hash function",
+                          "explanation": "you hash the key to get an index"}, stub)
+    assert seen["role"] == "tutor"
+    assert "ground truth" in seen["msg"] and "you hash the key" in seen["msg"]
+    assert "never" in seen["system"].lower()          # style is off-limits
+    assert r["cost"] == 0.02
+    assert r["right"].startswith("You nailed") and "Collisions" in r["missing"]
+    assert r["question"] == "What should happen when they do?"
+
+    # an empty explanation is a 400, unusable model output a 502
+    for bad, status in ((({"explanation": ""}), 400),):
+        try:
+            handle_teachback(bad, stub)
+            raise AssertionError("expected ApiError")
+        except ApiError as e:
+            assert e.status == status
+    try:
+        handle_teachback({"explanation": "x"}, lambda *a, **k: ("not json", 0.0))
+        raise AssertionError("expected ApiError")
+    except ApiError as e:
+        assert e.status == 502
+    print("ok  teachback handler")
+
+
 def test_handle_survey():
     import json
 

@@ -395,6 +395,42 @@ def next_concept_message(root_topic: str, covered: list, recap: str) -> str:
     )
 
 
+TEACHBACK_SYSTEM = """\
+You are a tutor listening to a learner explain a concept back in their own
+words — the Feynman step. You will be given the topic, a digest of the
+conversation they learned it from (treat it as the ground truth of what was
+covered), and their explanation.
+
+Give short, concrete feedback on the CONTENT of their explanation — never
+on spelling, grammar, or style (some learners are dyslexic; rough wording
+is irrelevant and must not be mentioned).
+
+RULES:
+- "right": what they genuinely got right — be specific, echo their own
+  phrasing where you can. Never invent praise; if nothing is right, say so
+  plainly and kindly.
+- "missing": the ONE most important thing that is missing, oversimplified,
+  or wrong, judged against the digest — not a list of everything. If the
+  explanation is genuinely complete and correct, say that here instead.
+- "question": ONE short probing question that would push their
+  understanding a step deeper — what a good tutor would ask next.
+- Plain, friendly language. 1-3 short sentences per field. Sentence case,
+  never ALL CAPS.
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"right": "...", "missing": "...", "question": "..."}"""
+
+
+def teachback_message(root_topic: str, label: str, digest: str, explanation: str) -> str:
+    return (
+        f'The learner has been investigating "{root_topic}" and is now explaining '
+        f'the conversation about "{label}" back in their own words.\n\n'
+        f"Digest of that conversation (the ground truth):\n{digest}\n\n"
+        f"The learner's explanation:\n\"\"\"\n{explanation}\n\"\"\"\n\n"
+        "Give your feedback and output the JSON object now."
+    )
+
+
 def followup_learner_message(root_topic: str, recap: str, concept: str, opening_question: str) -> str:
     """Opening message for the learner on a follow-up investigation of a `full`
     session: seeded with everything covered so far and the tutor-chosen concept."""
