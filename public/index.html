@@ -845,6 +845,38 @@
   .nodeinfo .nacts button.notes.has{border-color:color-mix(in srgb, var(--accent) 60%, var(--line))}
   .nodeinfo .nacts button.notes .ndot{color:var(--accent); font-size:.7em; vertical-align:.15em}
 
+  /* ---- explain it back (Feynman feedback) ---- */
+  #teachbox{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #teachbox.open{display:flex}
+  #teachbox .box{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1.1rem 1.3rem 1.1rem; width:min(38rem,94vw); max-height:88dvh;
+    display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.25);
+    overflow-y:auto;
+  }
+  #teachbox .nthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.7rem}
+  #teachbox #tbtitle{font-weight:600}
+  #teachbox #tbscope{flex:1; color:var(--muted); font-size:.82rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #teachbox #tbarea{
+    min-height:7rem; resize:vertical; width:100%; font-family:inherit;
+    font-size:1rem; line-height:1.7; padding:.7rem .8rem; color:var(--fg);
+    background:var(--bg); border:1px solid var(--line); border-radius:.7rem;
+    letter-spacing:inherit; word-spacing:inherit;
+  }
+  #teachbox .ntfoot{display:flex; align-items:center; gap:.7rem; margin-top:.7rem}
+  #teachbox #tbmeta{flex:1}
+  #teachbox .tbcard{
+    margin:.55rem 0 0; padding:.6rem .75rem; border:1px solid var(--line);
+    border-radius:.7rem; background:var(--bg); white-space:pre-wrap;
+  }
+  #teachbox .tbcard b{display:block; margin-bottom:.25rem; font-size:.82rem; color:var(--muted)}
+  #teachbox .tbwhen{margin:.6rem 0 0; font-size:.82rem; color:var(--muted)}
+
   /* ---- help panel ---- */
   #helppanel{
     display:none; position:fixed; top:calc(3.3rem + env(safe-area-inset-top));
@@ -987,7 +1019,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
-    #quizbox, #reviewbox, #statsbox, #hlbox, #notesbox, #tutoreditor, #overview, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #statsbox, #hlbox, #notesbox, #teachbox, #tutoreditor, #overview, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1095,6 +1127,11 @@
   context, and the answer lands in the conversation as your turn.
   <b>✕ forget</b> in the sidebar takes a term back out. <b>anki cards</b>
   downloads the defined terms as a file Anki imports directly.</p>
+  <p><b>🗣 explain it back</b> — the Feynman step. Explain a conversation in
+  your own words, as if teaching a friend, and the tutor reads it against
+  what was actually covered: what's solid, the one gap that matters, and one
+  question to push deeper. Feedback on the ideas only — never the spelling.
+  Attempts stay with the tree, so you can watch your explanation improve.</p>
   <p><b>🎓 quiz me</b> — a few multiple-choice questions written from what
   this tree actually covered (your examples, your terms, your near-misses).
   Questions are written once and kept with the tree; retakes just reshuffle.
@@ -1446,6 +1483,27 @@
       <span id="ntmeta" class="hint"></span>
       <button id="ntdone" class="primary">done</button>
     </div>
+  </div>
+</div>
+
+<div id="teachbox" role="dialog" aria-modal="true" aria-label="explain it back">
+  <div class="box">
+    <div class="nthead">
+      <span id="tbtitle">🗣 explain it back</span>
+      <span id="tbscope"></span>
+      <button id="tbclose" class="ghost" aria-label="close explain it back">✕</button>
+    </div>
+    <p class="hint" style="margin:0 0 .6rem">Explain what this conversation taught you, in
+      your own words, as if teaching a friend. The tutor reads it against what was actually
+      covered and says what's solid, what's missing, and what to chew on next. Rough wording
+      is fine — this is about the ideas, never the spelling.</p>
+    <textarea id="tbarea" aria-label="your explanation"
+      placeholder="The way I understand it…"></textarea>
+    <div class="ntfoot">
+      <span id="tbmeta" class="hint"></span>
+      <button id="tbsend" class="primary">get feedback</button>
+    </div>
+    <div id="tbfeedback" aria-live="polite"></div>
   </div>
 </div>
 
@@ -2159,6 +2217,96 @@ $("ntarea").addEventListener("input", updateNotesMeta);
 $("notesbox").addEventListener("click", (e) => { if (e.target === $("notesbox")) closeNotes(); });
 
 /* ------------------------------------------------------------------ */
+/* explain it back — the Feynman step. You explain the conversation in */
+/* your own words; the tutor reads it against the digest and answers   */
+/* with what's solid, the one thing missing, and one probing question. */
+/* Feedback, not a grade. Attempts live on tree.teach (unioned on      */
+/* merge, like highlights) so they sync and travel in .know.json.      */
+/* ------------------------------------------------------------------ */
+let teachPrevFocus = null, teachBusy = false, teachNodeId = null;
+function teachAttempts(tree, nodeId){
+  return (Array.isArray(tree.teach) ? tree.teach : []).filter(a => a.node === nodeId);
+}
+function teachFeedbackHtml(a, label){
+  const card = (name, text) => text
+    ? `<div class="tbcard"><b>${name}</b>${esc(text)}</div>` : "";
+  return (label ? `<p class="tbwhen">${esc(label)}</p>` : "") +
+         card("✓ what's solid", a.right) +
+         card("△ the gap that matters", a.missing) +
+         card("? to chew on", a.question);
+}
+function updateTeachMeta(){
+  if (teachBusy) return;
+  const words = $("tbarea").value.trim() ? $("tbarea").value.trim().split(/\s+/).length : 0;
+  $("tbmeta").textContent = words
+    ? `${words} word${words === 1 ? "" : "s"} · feedback is one model call`
+    : "saying it out loud counts too — but writing it is what gets checked";
+}
+function openTeach(){
+  const tree = cur(); if (!tree || running || currentNode == null) return;
+  const node = getNode(tree, currentNode);
+  if (!node || !node.turns.some(t => t.tutor)) return;
+  teachPrevFocus = document.activeElement;
+  teachNodeId = node.id;
+  $("tbscope").textContent = "· " + oneLine(node.label, 60);
+  $("tbarea").value = "";
+  const past = teachAttempts(tree, node.id);
+  $("tbfeedback").innerHTML = past.length
+    ? teachFeedbackHtml(past[past.length - 1],
+        `last time (attempt ${past.length}, ${(past[past.length - 1].when || "").slice(0, 10)}):`)
+    : "";
+  updateTeachMeta();
+  $("teachbox").classList.add("open");
+  $("tbarea").focus();
+}
+window.openTeach = openTeach;
+async function sendTeach(){
+  const tree = cur(); if (!tree || teachBusy || teachNodeId == null) return;
+  const node = getNode(tree, teachNodeId);
+  const v = $("tbarea").value.trim().slice(0, 8000);
+  if (!node || !v){ $("tbarea").focus(); return; }
+  teachBusy = true;
+  $("tbsend").disabled = true;
+  $("tbmeta").textContent = provName() + " is reading your explanation…";
+  try {
+    const r = await api("teachback", {
+      topic: tree.root_topic, label: node.label,
+      digest: conversationDigest(node.turns), explanation: v,
+    });
+    node.cost += r.cost;
+    const attempt = {node: node.id, when: new Date().toISOString(), text: v,
+                     right: r.right || "", missing: r.missing || "", question: r.question || ""};
+    tree.teach = Array.isArray(tree.teach) ? tree.teach : [];
+    tree.teach.push(attempt);
+    persistTree(tree);
+    $("tbfeedback").innerHTML = teachFeedbackHtml(attempt);
+    $("tbmeta").textContent = "kept with the tree — explain it again any time";
+  } catch (e){
+    $("tbmeta").textContent = oneLine(e.message, 140) + " — your words are still here; try again.";
+  } finally {
+    teachBusy = false;
+    $("tbsend").disabled = false;
+  }
+}
+function closeTeach(){
+  if (teachBusy) return;   // mid-call: the answer is seconds away
+  $("teachbox").classList.remove("open");
+  teachNodeId = null;
+  if (teachPrevFocus && teachPrevFocus.focus && document.contains(teachPrevFocus))
+    teachPrevFocus.focus();
+  teachPrevFocus = null;
+  renderConversation(true);   // refresh the attempt count on the button
+}
+window.closeTeach = closeTeach;
+$("tbsend").onclick = sendTeach;
+$("tbclose").onclick = closeTeach;
+$("tbarea").addEventListener("input", updateTeachMeta);
+$("tbarea").addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); sendTeach(); }
+});
+$("teachbox").addEventListener("click", (e) => { if (e.target === $("teachbox")) closeTeach(); });
+
+/* ------------------------------------------------------------------ */
 /* reading ruler + focus line — keyboard only, like the HTML export:   */
 /* arrow keys step one sentence-block at a time, the page scrolls so   */
 /* the current line stays centred (teleprompter), the mouse never      */
@@ -2468,6 +2616,18 @@ function mergeTrees(local, server){
     if (!hlSeen.has(k)){ hlSeen.add(k); outHl.push(h); }
   }
   if (outHl.length) out.highlights = outHl; else delete out.highlights;
+  // teach-back attempts: append-only — union by node|when so an attempt
+  // made on one device survives a merge with another's edits
+  const localTb = Array.isArray(local.teach) ? local.teach : [];
+  const outTb = Array.isArray(out.teach) ? out.teach.slice() : [];
+  const tbSeen = new Set(outTb.map(a => `${a.node}|${a.when}`));
+  for (const a of localTb){
+    const k = `${a.node}|${a.when}`;
+    if (!tbSeen.has(k)){ tbSeen.add(k); outTb.push(a); }
+  }
+  if (outTb.length)
+    out.teach = outTb.sort((x, y) => (x.when || "").localeCompare(y.when || ""));
+  else delete out.teach;
   if ((local.saved_at || "") > (server.saved_at || "")){
     if (local.quiz) out.quiz = structuredClone(local.quiz);
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
@@ -2868,6 +3028,12 @@ function renderConversation(keepScroll){
     acts.push(`<button class="notes${hasNote ? " has" : ""}" onclick="openNotes()"` +
               ` title="your own synthesis of this tree — it travels with the tree, syncs, and heads every export">` +
               `${ico("📝")}notes${hasNote ? ' <span class="ndot" aria-hidden="true">●</span>' : ""}</button>`);
+  }
+  if (!running && node.turns.some(t => t.tutor)){
+    const nTb = teachAttempts(tree, node.id).length;
+    acts.push(`<button onclick="openTeach()" title="explain this conversation in your own words —` +
+              ` the tutor says what's solid, what's missing, and asks one question to push deeper">` +
+              `${ico("🗣")}explain${nTb ? ` · ${nTb}` : ""}</button>`);
   }
   const totalTurns = Object.values(tree.nodes).reduce((s, n) => s + n.turns.length, 0);
   if (!running && totalTurns >= 2){
@@ -4868,6 +5034,8 @@ function paletteActions(){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     if (Object.values(tree.nodes).some(n => n.turns.some(t => t.tutor)))
       acts.push({icon: "→", label: "what's next?", sub: "the tutor picks the next best concept and investigates it", run(){ cmdNext(); }});
+    if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor))
+      acts.push({icon: "🗣", label: "explain it back", sub: "teach it in your own words — the tutor checks it", run(){ openTeach(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
     if (tree.survey && tree.survey.items && tree.survey.items.length)
       acts.push({icon: "🗺", label: "survey", sub: "the topic's foundations map", run(){ openSurvey(); }});
@@ -5663,6 +5831,7 @@ document.addEventListener("keydown", (e) => {
     }
     if ($("statsbox").classList.contains("open")){ closeStats(); return; }
     if ($("hlbox").classList.contains("open")){ closeHl(); return; }
+    if ($("teachbox").classList.contains("open")){ closeTeach(); return; }
     if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
