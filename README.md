@@ -110,7 +110,12 @@ directly (a local `claude` login can't run on a server), so it needs an
   tree, later ones carry the usual follow-up recap — and the map stays with
   the tree, tracking coverage, so you pick off the rest whenever — and
   **know it** marks a foundation you already understand as covered without
-  spending a conversation on it. Tutor
+  spending a conversation on it. On any tree, **→ next** in the conversation
+  header hands one step to the tutor: it reviews everything covered so far
+  and picks the single concept that best builds on it — a why/how/when
+  angle rather than another "what is" — then runs that follow-up
+  investigation, keeping its one-line *why* on the new conversation (the
+  same step `full` chains four of). Tutor
   answers arrive **marked up into
   parts**: the direct answer first, then each distinct aspect (the why, an
   example, a caveat…) as its own labelled fold-out card, so a long answer
