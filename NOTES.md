@@ -55,6 +55,43 @@ current conversation is done — the exact "what now?" moment.
 
 ---
 
+## Feature 23 — Read-aloud keeps the spoken word on screen
+
+### What it is
+While something long is being read aloud, the page now **follows the
+karaoke highlight**: when the spoken word drifts into the bottom fifth
+of the screen (or above the top), the conversation glides so the word
+sits comfortably in view again. The moment you scroll, page, or arrow
+anywhere yourself, following stops for the rest of that block — your
+hand on the wheel always wins. It only ever operates in the
+conversation (never inside modals), honours `prefers-reduced-motion`
+(instant hops instead of glides), and re-arms with each new block.
+
+### Why this one (and how the objection resolved)
+- Parked in Features 17, 18 and 21 with one stated reason: auto-scroll
+  "fights the user's own scrolling". The resolution is the rule every
+  dedicated reading tool uses — *user input cancels following*: wheel,
+  touch, or a scroll key hands control back instantly, per block. With
+  that rule the conflict disappears, and what remains is the payoff:
+  Feature 17's whole premise is eyes-and-ears on the same word, which
+  silently breaks the moment the word walks off-screen in any block
+  taller than the viewport — precisely the long blocks where a dyslexic
+  reader leans on read-aloud hardest.
+- Small surface: a hook where the word-paint Range is already computed,
+  one viewport check, two disable listeners, `stopSpeech` clears it.
+
+### Candidates rejected (this cycle)
+- **"Define it" on a loose thread** — dead on arrival at the
+  Feature 11-style existence check: every flagged term is *already*
+  auto-defined into the glossary the moment it appears; loose threads
+  are about unchased conversations, not missing cards.
+- **Hands-free audio review drill** (speak term → pause → speak answer)
+  — attractive for the audience but a real design cycle of its own
+  (timing, auto-advance, background-tab speech restrictions).
+- **PWA share target** — still Android-only in practice.
+
+---
+
 ## Feature 22 — The quiz speaks: hear the question, the choices, the why
 
 ### What it is
