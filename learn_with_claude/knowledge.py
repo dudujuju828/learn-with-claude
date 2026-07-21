@@ -76,6 +76,9 @@ class Node:
     cost: float = 0.0
     final_confidence: object = None
     learner_level: str = ""
+    # for a tutor-chosen follow-up: its one-sentence "why this is the best
+    # next step" — display metadata that must survive the web↔CLI round-trip
+    why: str = ""
 
     @property
     def is_root(self) -> bool:

@@ -72,6 +72,7 @@ def test_knowledge_round_trip():
                        "confidence": 40,
                        "parts": [{"label": "", "text": "a"}]}],
             "learner_level": "expert",
+            "why": "builds on the hashing just covered",
             "unknown_future_field": {"nested": True},   # must not crash
         }},
         "glossary": {"widget": {"term": "widget", "def": "A thing.", "node": 1, "turn": 1}},
@@ -84,6 +85,7 @@ def test_knowledge_round_trip():
     }
     kb = KnowledgeTree.from_dict(d)
     assert kb.nodes[1].learner_level == "expert"
+    assert kb.nodes[1].why == "builds on the hashing just covered"
     assert kb.glossary["widget"]["def"] == "A thing."
     assert kb.note.startswith("My takeaway.")
     assert [h["text"] for h in kb.highlights] == ["a", "orphaned passage"]
@@ -91,6 +93,7 @@ def test_knowledge_round_trip():
     assert out["glossary"]["widget"]["term"] == "widget"
     assert out["note"] == d["note"]                        # personal note round-trips
     assert out["nodes"]["1"]["turns"][0]["parts"][0]["text"] == "a"  # turn extras survive
+    assert out["nodes"]["1"]["why"] == "builds on the hashing just covered"
     # web-side fields survive a CLI round-trip instead of being stripped
     assert out["highlights"] == kb.highlights
     assert out["quiz"] == d["quiz"] and out["profile"] == "computer-science"

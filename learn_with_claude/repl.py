@@ -264,6 +264,7 @@ class Shell:
             learner_model=self.learner_model, tutor_model=self.tutor_model,
             learner_level=self.level,
         )
+        node.why = reason
         kb.save()
         self.r.ok(f"added node [{node.id}] '{concept}'  →  {kb.path}")
         self._print_tree()
