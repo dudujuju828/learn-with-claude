@@ -5,6 +5,56 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 24 — → next: the tutor picks what to learn next, on any tree
+
+### What it is
+A **→ next** button in the conversation header (and *what's next?* in ⌘K):
+one press has the tutor review everything the tree has covered and pick
+the ONE concept that best builds on it — preferring a why/how/when/what-if
+angle over another "what is" — then a follow-up investigation runs on it,
+seeded with the full recap so the learner continues instead of restarting.
+It is exactly the step `full` chains four of, now available on any tree at
+any moment: after a `new`, at the end of a `full` tour, on a half-covered
+survey tree. The tutor's one-sentence *why* is no longer thrown away: it
+is kept on the node (`why`), shown in the new conversation's crumb,
+carried by the Python `Node` so a CLI round-trip keeps it, and the CLI's
+own `full` sessions now store it too. The button turns primary when the
+current conversation is done — the exact "what now?" moment.
+
+### Why this one
+- The brief asked for the next-best feature grounded in learning
+  principles; this one operationalises three at once. **Building on prior
+  knowledge**: the pick must connect to what was covered (prompt-enforced,
+  recap-seeded — the follow-up learner starts warm, not from zero).
+  **Elaboration over accumulation**: the picker prompt forces a different
+  kind of question — why it works, when it fails, how it compares —
+  instead of stacking a third "what is" on the pile; recognition and
+  recall practice already exist (quiz, review), but nothing pushed
+  *deepening*. **Momentum in self-directed learning**: "what should I
+  learn next?" is where self-paced learners stall; a guided next step at
+  zero decision cost keeps the loop going, and the surfaced *why* is a
+  small metacognitive cue — you see the shape of the frontier, not just
+  the next stop.
+- Feature 11-style existence check first: the machinery existed
+  (`next_concept` endpoint, `followupThunk`) but was reachable **only** by
+  committing to a 4-investigation `full` run at creation time. Branch
+  needs you to pick the turn yourself, loose threads only chase flagged
+  words, survey only covers the mapped foundations — no surface asked the
+  tutor "where to, from here?" on a living tree.
+- Tiny surface: one header button + `cmdNext()` reusing `followupThunk`
+  verbatim, a `why` stash where the pick already landed, one dataclass
+  field for round-trip parity, palette/help/README lines.
+
+### Candidates rejected (this cycle)
+- **Hands-free audio review drill** — still a full design cycle of its own
+  (timing, auto-advance, background-tab speech limits); parked again.
+- **PWA share target** — still Android-only in practice.
+- **The why in exports** — it now travels in the file; rendering it in the
+  Markdown/HTML exports is a natural small follow-up once it proves its
+  keep on screen.
+
+---
+
 ## Feature 22 — The quiz speaks: hear the question, the choices, the why
 
 ### What it is
