@@ -5,6 +5,59 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 26 — 🧭 gaps: the investigation starts from what you already know
+
+### What it is
+A fourth start button beside new / full / survey: **gaps**. Type a topic,
+press it, and instead of launching cold you're asked what you already
+know — or think you know — about it (rough and honest beats polished).
+One model call sizes you up into three cards — **✓ solid** (won't be
+re-explained), **△ shaky** (beliefs that are off, echoed in your own
+wording so you recognise them), **○ the gaps** (the load-bearing things
+you didn't mention) — plus your evident learner level and the one concept
+the first investigation should target. Press again to start: the learner
+opens at your diagnosed level with the map in hand ("do NOT re-ask what
+you have solid; where you are shaky, check your belief against the
+tutor"), the tutor is told never to re-explain the solid and to correct
+the shaky explicitly when touched, and the whole thing aims at the
+biggest gap first. The map lives on `tree.baseline` (LWW-merged like
+survey, extras round-trip through the CLI, **🧭 baseline** in the header
+reopens it), a resumed root rebuilds the same gaps context, and editing
+your words after a read invalidates it — you re-run the sizing before
+starting.
+
+### Why this one
+- The brief asked for a new start-mode button that's genuinely meaningful.
+  The strongest learning principle with no surface anywhere in the app is
+  Ausubel's: "the most important single factor influencing learning is
+  what the learner already knows — ascertain this and teach accordingly."
+  Feature 12's log already conceded the flows assume you start from zero
+  ("the survey flow assumes you start from zero, but its own learner
+  picker admits you often don't") — know-it patched that for survey
+  *coverage*, but nothing ever ascertained what you know and taught
+  accordingly. Prior-knowledge activation, misconception elicitation
+  (straightening a wrong belief beats never surfacing it), diagnosed
+  rather than self-picked learner level, and a calibration moment (seeing
+  your own knowledge mapped) — one button, four principles.
+- Complements rather than overlaps: survey maps the *topic*, gaps maps
+  *you*; full tours forward, gaps starts honest. Teach-back (F25) is the
+  same muscle at the end of learning; this is it at the start.
+- Pattern-shaped everywhere: the modal is the teach-back plumbing (CSS
+  extended by comma), the thunk is rootThunk plus a stored map, the
+  seeding is a fourth `kind` beside root/branch/followup, the route is
+  one prompt + one handler (and the vercel.json rewrite the log warns
+  about).
+
+### Candidates rejected (this cycle)
+- **compare mode** (two topics side by side, analogical encoding) — real
+  principle, but "X vs Y" already works typed into `new`, and the input
+  shape (two fields) fights the one-topic row.
+- **case mode** (worked example first, then abstract) — closer to a tutor
+  style than a start mode; a custom tutor can already do it.
+- **Hands-free audio review drill** — parked a fourth time.
+
+---
+
 ## Feature 25 — 🗣 explain it back: the Feynman step
 
 ### What it is
