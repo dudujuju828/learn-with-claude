@@ -83,7 +83,8 @@ directly (a local `claude` login can't run on a server), so it needs an
   🔊 listen through a whole conversation — with your pick of the browser's
   voices and a 0.5–2× speed control, a ▶ sample button to audition them,
   and the word being spoken highlighted in the text as you listen,
-  karaoke-style),
+  karaoke-style — in a long block the page follows the spoken word, gliding
+  it back into view, until your own scrolling takes over),
   **search across every tree** (turns, glossary, and your own notes and
   highlights — a note hit opens the notes editor, a highlight hit jumps to
   the marked passage),
