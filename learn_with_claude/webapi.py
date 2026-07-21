@@ -21,15 +21,15 @@ import re
 
 from .knowledge import KnowledgeTree, conversation_digest
 from .personas import (
-    BASELINE_SYSTEM,
     GLOSSARY_SYSTEM,
+    INTERVIEW_FINISH,
+    INTERVIEW_SYSTEM,
     LEARNER_LEVELS,
     NEXT_CONCEPT_SYSTEM,
     QUIZ_SYSTEM,
     SURVEY_SYSTEM,
     TEACHBACK_SYSTEM,
     TUTOR_MODES,
-    baseline_message,
     branch_learner_message,
     branch_tutor_context,
     define_message,
@@ -39,6 +39,8 @@ from .personas import (
     followup_tutor_context,
     gaps_learner_message,
     gaps_tutor_context,
+    interview_budget_note,
+    interview_opening,
     learner_system,
     next_concept_message,
     quiz_message,
@@ -205,22 +207,10 @@ def handle_next_concept(body: dict, call_model) -> dict:
     return {"pick": pick, "cost": cost}
 
 
-def handle_baseline(body: dict, call_model) -> dict:
-    """Size the learner up before a gaps-mode investigation: what's solid,
-    what's shaky, what's missing, their evident level, and where the first
-    investigation should aim."""
-    topic = (body.get("topic") or "").strip()
-    account = (body.get("account") or "").strip()
-    if not topic:
-        raise ApiError("missing 'topic'")
-    if not account:
-        raise ApiError("missing 'account'")
-    message = baseline_message(topic[:200], account[:8000])
-    text, cost = call_model(BASELINE_SYSTEM, [{"role": "user", "content": message}], "tutor")
-    data = first_json_object(text)
-    if not isinstance(data, dict):
-        raise ApiError("the tutor returned no usable read — try again", 502)
+INTERVIEW_MAX_Q = 6
 
+
+def _clean_assessment(data: dict) -> dict:
     def items(key):
         raw = data.get(key)
         out = [str(x).strip()[:200] for x in (raw if isinstance(raw, list) else [])
@@ -237,8 +227,44 @@ def handle_baseline(body: dict, call_model) -> dict:
         "solid": items("solid"), "shaky": items("shaky"), "gaps": items("gaps"),
         "level": level, "focus": focus,
         "opening_question": str(data.get("opening_question") or "").strip()[:300],
-        "cost": cost,
     }
+
+
+def handle_interview(body: dict, call_model) -> dict:
+    """One step of the gaps interview: given the transcript so far, the tutor
+    either asks the next diagnostic question or concludes with the assessment
+    (what's solid / shaky / missing, evident level, and where to aim first)."""
+    topic = (body.get("topic") or "").strip()
+    if not topic:
+        raise ApiError("missing 'topic'")
+    exchanges = []
+    for ex in (body.get("exchanges") or [])[:INTERVIEW_MAX_Q + 2]:
+        if not isinstance(ex, dict):
+            continue
+        q = str(ex.get("q") or "").strip()[:400]
+        a = str(ex.get("a") or "").strip()[:2000]
+        if q and a:
+            exchanges.append({"q": q, "a": a})
+    finish = bool(body.get("finish")) or len(exchanges) >= INTERVIEW_MAX_Q
+    if finish and not exchanges:
+        raise ApiError("nothing to assess yet")
+    messages = [{"role": "user", "content": interview_opening(topic[:200])}]
+    for i, ex in enumerate(exchanges):
+        messages.append({"role": "assistant",
+                         "content": json.dumps({"question": ex["q"]}, ensure_ascii=False)})
+        content = f'The learner answers:\n"""\n{ex["a"]}\n"""'
+        if i == len(exchanges) - 1:
+            content += "\n\n" + (INTERVIEW_FINISH if bool(body.get("finish"))
+                                 else interview_budget_note(len(exchanges), INTERVIEW_MAX_Q))
+        messages.append({"role": "user", "content": content})
+    text, cost = call_model(INTERVIEW_SYSTEM, messages, "tutor")
+    data = first_json_object(text)
+    if isinstance(data, dict) and isinstance(data.get("assessment"), dict):
+        return {"assessment": _clean_assessment(data["assessment"]), "cost": cost}
+    question = data.get("question") if isinstance(data, dict) else None
+    if isinstance(question, str) and question.strip() and not finish:
+        return {"question": question.strip()[:400], "cost": cost}
+    raise ApiError("the tutor lost the thread of the interview — try again", 502)
 
 
 def handle_teachback(body: dict, call_model) -> dict:
@@ -393,7 +419,7 @@ def model_routes(call_model) -> dict:
         "learner": lambda body: handle_learner(body, call_model),
         "tutor": lambda body: handle_tutor(body, call_model),
         "next_concept": lambda body: handle_next_concept(body, call_model),
-        "baseline": lambda body: handle_baseline(body, call_model),
+        "interview": lambda body: handle_interview(body, call_model),
         "teachback": lambda body: handle_teachback(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),

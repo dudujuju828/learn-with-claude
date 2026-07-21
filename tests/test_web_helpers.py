@@ -127,43 +127,68 @@ def test_message_builders():
     print("ok  message builders")
 
 
-def test_handle_baseline():
+def test_handle_interview():
     import json
 
-    from learn_with_claude.webapi import ApiError, handle_baseline, learner_opening, tutor_extra_context
+    from learn_with_claude.webapi import ApiError, handle_interview, learner_opening, tutor_extra_context
 
-    reply = {"solid": ["hashing gives an index", "  ", "x" * 400],
-             "shaky": ["thinks collisions are rare"],
-             "gaps": ["load factor", "resizing", "g3", "g4", "g5", "g6", "g7"],
-             "level": "Practitioner", "focus": "collision handling",
-             "opening_question": "what actually happens when two keys collide?"}
+    assessment = {"solid": ["hashing gives an index", "  ", "x" * 400],
+                  "shaky": ["thinks collisions are rare"],
+                  "gaps": ["load factor", "resizing", "g3", "g4", "g5", "g6", "g7"],
+                  "level": "Practitioner", "focus": "collision handling",
+                  "opening_question": "what actually happens when two keys collide?"}
+    ex1 = [{"q": "what do you know about hash tables?",
+            "a": "you hash the key and collisions are rare"}]
     seen = {}
 
-    def stub(system, messages, role, **kw):
-        seen["system"], seen["msg"], seen["role"] = system, messages[0]["content"], role
-        return json.dumps(reply), 0.03
+    def asks(system, messages, role, **kw):
+        seen["system"], seen["messages"], seen["role"] = system, messages, role
+        return json.dumps({"question": "how rare, would you say?"}), 0.01
 
-    r = handle_baseline({"topic": "hash tables",
-                         "account": "I think you hash the key and collisions are rare"}, stub)
-    assert seen["role"] == "tutor" and "collisions are rare" in seen["msg"]
-    assert "never spelling" in seen["system"] or "never" in seen["system"].lower()
-    assert r["solid"][0] == "hashing gives an index" and len(r["solid"][1]) == 200
-    assert r["gaps"][:2] == ["load factor", "resizing"] and len(r["gaps"]) == 6  # clipped
-    assert r["level"] == "practitioner" and r["focus"] == "collision handling"
-    assert r["cost"] == 0.03
+    # mid-interview: the tutor asks the next question
+    r = handle_interview({"topic": "hash tables", "exchanges": ex1}, asks)
+    assert r["question"] == "how rare, would you say?" and r["cost"] == 0.01
+    assert seen["role"] == "tutor"
+    assert seen["messages"][1]["role"] == "assistant"          # transcript rebuilt
+    assert "collisions are rare" in seen["messages"][2]["content"]
+    assert "1 of at most 6" in seen["messages"][2]["content"]  # budget note
+
+    def concludes(system, messages, role, **kw):
+        seen["messages"] = messages
+        return json.dumps({"assessment": assessment}), 0.02
+
+    # the learner asked to finish: directive sent, assessment validated/clipped
+    r = handle_interview({"topic": "hash tables", "exchanges": ex1, "finish": True}, concludes)
+    assert "produce the assessment now" in seen["messages"][-1]["content"]
+    a = r["assessment"]
+    assert a["solid"][0] == "hashing gives an index" and len(a["solid"][1]) == 200
+    assert a["gaps"][:2] == ["load factor", "resizing"] and len(a["gaps"]) == 6  # clipped
+    assert a["level"] == "practitioner" and a["focus"] == "collision handling"
+
+    # budget spent (6 exchanges) forces conclusion even without finish
+    ex6 = [{"q": f"q{i}", "a": f"a{i}"} for i in range(6)]
+    handle_interview({"topic": "t", "exchanges": ex6}, concludes)
+    assert "budget is spent" in seen["messages"][-1]["content"]
+    # ...and a question back when one was demanded is a 502
+    try:
+        handle_interview({"topic": "t", "exchanges": ex6}, asks)
+        raise AssertionError("expected ApiError")
+    except ApiError as e:
+        assert e.status == 502
 
     # a level the app doesn't know falls back to student
-    assert handle_baseline({"topic": "t", "account": "a"},
-                           lambda *a, **k: (json.dumps({**reply, "level": "guru"}), 0.0)
-                           )["level"] == "student"
-    for bad in ({"topic": "", "account": "a"}, {"topic": "t", "account": ""}):
+    r = handle_interview({"topic": "t", "exchanges": ex1, "finish": True},
+                         lambda *a, **k: (json.dumps({"assessment": {**assessment, "level": "guru"}}), 0.0))
+    assert r["assessment"]["level"] == "student"
+    for bad, status in (({"topic": "", "exchanges": ex1}, 400),
+                        ({"topic": "t", "exchanges": [], "finish": True}, 400)):
         try:
-            handle_baseline(bad, stub)
+            handle_interview(bad, asks)
             raise AssertionError("expected ApiError")
         except ApiError as e:
-            assert e.status == 400
+            assert e.status == status
     try:
-        handle_baseline({"topic": "t", "account": "a"}, lambda *a, **k: ("no json", 0.0))
+        handle_interview({"topic": "t", "exchanges": ex1}, lambda *a, **k: ("no json", 0.0))
         raise AssertionError("expected ApiError")
     except ApiError as e:
         assert e.status == 502
@@ -176,7 +201,7 @@ def test_handle_baseline():
     assert "NOT starting" in lo and "collisions are rare" in lo and "collision handling" in lo
     tc = tutor_extra_context(body)
     assert "shaky" in tc and "Do NOT re-explain" in tc
-    print("ok  baseline handler + gaps kind")
+    print("ok  interview handler + gaps kind")
 
 
 def test_handle_teachback():

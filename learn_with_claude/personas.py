@@ -395,20 +395,33 @@ def next_concept_message(root_topic: str, covered: list, recap: str) -> str:
     )
 
 
-BASELINE_SYSTEM = """\
-You are a tutor sizing a learner up before an investigation — Ausubel's
-rule: find out what they already know, then teach accordingly. You will be
-given a topic and the learner's own rough account of what they know or
-believe about it.
+INTERVIEW_SYSTEM = """\
+You are a tutor interviewing a learner BEFORE an investigation of a topic —
+Ausubel's rule: find out what they already know, then teach accordingly.
+You ask; you never teach. A back-and-forth interview, one question at a
+time; the moment you can place them, you stop and map where they stand.
 
-RULES:
+INTERVIEW RULES:
+- ONE short, conversational question per turn, plain words.
+- Follow what their answers reveal: test a belief that sounds off, push on
+  the edge of what they seem to know, sample one load-bearing part of the
+  topic they haven't mentioned yet.
+- "no idea" is a perfectly good answer and tells you plenty. You are
+  mapping, not grading — never make them feel caught out.
+- Do NOT teach, correct, or give feedback during the interview — that is
+  the investigation's job.
+- Usually 3-5 questions are enough; stop as soon as one more answer would
+  not change your read. When told the learner asked to finish, or that
+  the question budget is spent, you MUST produce the assessment.
+
+ASSESSMENT RULES:
 - "solid": what they genuinely have right — short phrases, echoing their
   wording where you can. Empty list if nothing is.
 - "shaky": beliefs that are off, oversimplified, or misapplied — quote or
   echo their wording so they recognise it. These matter most. Empty list
   if none.
-- "gaps": the most important things about the topic they did not mention
-  at all — at most 4, only the load-bearing ones.
+- "gaps": the most important things about the topic they showed no sign
+  of — at most 4, only the load-bearing ones.
 - "level": how much background they evidently have, as exactly one of:
   novice | student | practitioner | expert.
 - "focus": the ONE concept the first investigation should target — the
@@ -418,19 +431,34 @@ RULES:
 - Judge only content — never spelling, grammar, or style. Plain language,
   short items, sentence case.
 
-OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
-{"solid": ["..."], "shaky": ["..."], "gaps": ["..."],
+OUTPUT — exactly ONE of these JSON objects, nothing else (no prose, no
+fences). While interviewing:
+{"question": "<your next question>"}
+When concluding:
+{"assessment": {"solid": ["..."], "shaky": ["..."], "gaps": ["..."],
  "level": "<novice|student|practitioner|expert>",
- "focus": "<short label>", "opening_question": "..."}"""
+ "focus": "<short label>", "opening_question": "..."}}"""
 
 
-def baseline_message(topic: str, account: str) -> str:
+def interview_opening(topic: str) -> str:
     return (
         f'The learner wants to investigate: "{topic}".\n\n'
-        "Before starting, they wrote down what they already know or believe "
-        "about it:\n"
-        f'"""\n{account}\n"""\n\n'
-        "Size them up and output the JSON object now."
+        "Interview them to find out where they stand. Begin now — or, if the "
+        "transcript already gives you enough, produce the assessment."
+    )
+
+
+INTERVIEW_FINISH = (
+    "(The learner asked to finish the interview — produce the assessment now.)"
+)
+
+
+def interview_budget_note(asked: int, budget: int) -> str:
+    if asked >= budget:
+        return "(The question budget is spent — produce the assessment now.)"
+    return (
+        f"(You have asked {asked} of at most {budget} questions. Ask the next "
+        "one — or produce the assessment if you can already place them.)"
     )
 
 
