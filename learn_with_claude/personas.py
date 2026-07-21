@@ -395,6 +395,76 @@ def next_concept_message(root_topic: str, covered: list, recap: str) -> str:
     )
 
 
+BASELINE_SYSTEM = """\
+You are a tutor sizing a learner up before an investigation — Ausubel's
+rule: find out what they already know, then teach accordingly. You will be
+given a topic and the learner's own rough account of what they know or
+believe about it.
+
+RULES:
+- "solid": what they genuinely have right — short phrases, echoing their
+  wording where you can. Empty list if nothing is.
+- "shaky": beliefs that are off, oversimplified, or misapplied — quote or
+  echo their wording so they recognise it. These matter most. Empty list
+  if none.
+- "gaps": the most important things about the topic they did not mention
+  at all — at most 4, only the load-bearing ones.
+- "level": how much background they evidently have, as exactly one of:
+  novice | student | practitioner | expert.
+- "focus": the ONE concept the first investigation should target — the
+  biggest gap, or the most consequential shaky belief.
+- "opening_question": one natural, curious question a learner at that
+  level would ask to open that investigation.
+- Judge only content — never spelling, grammar, or style. Plain language,
+  short items, sentence case.
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"solid": ["..."], "shaky": ["..."], "gaps": ["..."],
+ "level": "<novice|student|practitioner|expert>",
+ "focus": "<short label>", "opening_question": "..."}"""
+
+
+def baseline_message(topic: str, account: str) -> str:
+    return (
+        f'The learner wants to investigate: "{topic}".\n\n'
+        "Before starting, they wrote down what they already know or believe "
+        "about it:\n"
+        f'"""\n{account}\n"""\n\n'
+        "Size them up and output the JSON object now."
+    )
+
+
+def gaps_learner_message(topic: str, baseline: str, focus: str, opening_question: str) -> str:
+    """Opening message for a gaps-mode investigation: the learner starts from
+    an honest map of what they already know, aimed at the biggest gap."""
+    focus_clause = f'The first thing worth chasing is: "{focus}".\n' if focus else ""
+    question_clause = (
+        f'What made you curious is this question: "{opening_question}"\n\n' if opening_question else ""
+    )
+    return (
+        f'You have decided to learn about: "{topic}" — but you are NOT starting '
+        "from zero. Here is an honest map of where you stand:\n"
+        f"{baseline}\n\n"
+        f"{focus_clause}"
+        f"{question_clause}"
+        "Investigate your way — one scoped step at a time. Do NOT re-ask what "
+        "you already have solid; build on it. Where you are shaky, check your "
+        "belief against the tutor instead of assuming it.\n\n"
+        "Produce your FIRST turn now." + CONTRACT_REMINDER
+    )
+
+
+def gaps_tutor_context(baseline: str) -> str:
+    """Extra tutor system context for a gaps-mode investigation."""
+    return (
+        "CONTEXT — before starting, the learner told you where they stand:\n"
+        f"{baseline}\n"
+        "Do NOT re-explain what they already have solid. When an answer "
+        "touches one of their shaky beliefs, correct it explicitly — name "
+        "what they had wrong and why. Pitch everything at their level."
+    )
+
+
 TEACHBACK_SYSTEM = """\
 You are a tutor listening to a learner explain a concept back in their own
 words — the Feynman step. You will be given the topic, a digest of the

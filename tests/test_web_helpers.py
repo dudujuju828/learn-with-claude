@@ -127,6 +127,58 @@ def test_message_builders():
     print("ok  message builders")
 
 
+def test_handle_baseline():
+    import json
+
+    from learn_with_claude.webapi import ApiError, handle_baseline, learner_opening, tutor_extra_context
+
+    reply = {"solid": ["hashing gives an index", "  ", "x" * 400],
+             "shaky": ["thinks collisions are rare"],
+             "gaps": ["load factor", "resizing", "g3", "g4", "g5", "g6", "g7"],
+             "level": "Practitioner", "focus": "collision handling",
+             "opening_question": "what actually happens when two keys collide?"}
+    seen = {}
+
+    def stub(system, messages, role, **kw):
+        seen["system"], seen["msg"], seen["role"] = system, messages[0]["content"], role
+        return json.dumps(reply), 0.03
+
+    r = handle_baseline({"topic": "hash tables",
+                         "account": "I think you hash the key and collisions are rare"}, stub)
+    assert seen["role"] == "tutor" and "collisions are rare" in seen["msg"]
+    assert "never spelling" in seen["system"] or "never" in seen["system"].lower()
+    assert r["solid"][0] == "hashing gives an index" and len(r["solid"][1]) == 200
+    assert r["gaps"][:2] == ["load factor", "resizing"] and len(r["gaps"]) == 6  # clipped
+    assert r["level"] == "practitioner" and r["focus"] == "collision handling"
+    assert r["cost"] == 0.03
+
+    # a level the app doesn't know falls back to student
+    assert handle_baseline({"topic": "t", "account": "a"},
+                           lambda *a, **k: (json.dumps({**reply, "level": "guru"}), 0.0)
+                           )["level"] == "student"
+    for bad in ({"topic": "", "account": "a"}, {"topic": "t", "account": ""}):
+        try:
+            handle_baseline(bad, stub)
+            raise AssertionError("expected ApiError")
+        except ApiError as e:
+            assert e.status == 400
+    try:
+        handle_baseline({"topic": "t", "account": "a"}, lambda *a, **k: ("no json", 0.0))
+        raise AssertionError("expected ApiError")
+    except ApiError as e:
+        assert e.status == 502
+
+    # the gaps kind seeds both personas with the baseline map
+    body = {"kind": "gaps", "topic": "hash tables",
+            "baseline": "solid: hashing\nshaky: collisions are rare",
+            "focus": "collision handling", "opening_question": "what happens on a collision?"}
+    lo = learner_opening(body)
+    assert "NOT starting" in lo and "collisions are rare" in lo and "collision handling" in lo
+    tc = tutor_extra_context(body)
+    assert "shaky" in tc and "Do NOT re-explain" in tc
+    print("ok  baseline handler + gaps kind")
+
+
 def test_handle_teachback():
     import json
 

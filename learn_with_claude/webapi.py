@@ -21,6 +21,7 @@ import re
 
 from .knowledge import KnowledgeTree, conversation_digest
 from .personas import (
+    BASELINE_SYSTEM,
     GLOSSARY_SYSTEM,
     LEARNER_LEVELS,
     NEXT_CONCEPT_SYSTEM,
@@ -28,6 +29,7 @@ from .personas import (
     SURVEY_SYSTEM,
     TEACHBACK_SYSTEM,
     TUTOR_MODES,
+    baseline_message,
     branch_learner_message,
     branch_tutor_context,
     define_message,
@@ -35,6 +37,8 @@ from .personas import (
     first_learner_message,
     followup_learner_message,
     followup_tutor_context,
+    gaps_learner_message,
+    gaps_tutor_context,
     learner_system,
     next_concept_message,
     quiz_message,
@@ -67,6 +71,11 @@ def learner_opening(body: dict) -> str:
             body["topic"], body.get("recap", ""),
             body.get("concept", ""), body.get("opening_question", ""),
         )
+    if kind == "gaps":
+        return gaps_learner_message(
+            body["topic"], body.get("baseline", ""),
+            body.get("focus", ""), body.get("opening_question", ""),
+        )
     return first_learner_message(body["topic"])
 
 
@@ -76,6 +85,8 @@ def tutor_extra_context(body: dict) -> str:
         return branch_tutor_context(body.get("digest", ""), body.get("branch_a", ""))
     if kind == "followup":
         return followup_tutor_context(body.get("recap", ""), body.get("concept", ""))
+    if kind == "gaps":
+        return gaps_tutor_context(body.get("baseline", ""))
     return ""
 
 
@@ -192,6 +203,42 @@ def handle_next_concept(body: dict, call_model) -> dict:
     if not isinstance(pick, dict) or not str(pick.get("concept") or "").strip():
         pick = None
     return {"pick": pick, "cost": cost}
+
+
+def handle_baseline(body: dict, call_model) -> dict:
+    """Size the learner up before a gaps-mode investigation: what's solid,
+    what's shaky, what's missing, their evident level, and where the first
+    investigation should aim."""
+    topic = (body.get("topic") or "").strip()
+    account = (body.get("account") or "").strip()
+    if not topic:
+        raise ApiError("missing 'topic'")
+    if not account:
+        raise ApiError("missing 'account'")
+    message = baseline_message(topic[:200], account[:8000])
+    text, cost = call_model(BASELINE_SYSTEM, [{"role": "user", "content": message}], "tutor")
+    data = first_json_object(text)
+    if not isinstance(data, dict):
+        raise ApiError("the tutor returned no usable read — try again", 502)
+
+    def items(key):
+        raw = data.get(key)
+        out = [str(x).strip()[:200] for x in (raw if isinstance(raw, list) else [])
+               if str(x).strip()]
+        return out[:6]
+
+    level = str(data.get("level") or "").strip().lower()
+    if level not in LEARNER_LEVELS:
+        level = "student"
+    focus = str(data.get("focus") or "").strip()[:80]
+    if not focus:
+        raise ApiError("the tutor returned no usable read — try again", 502)
+    return {
+        "solid": items("solid"), "shaky": items("shaky"), "gaps": items("gaps"),
+        "level": level, "focus": focus,
+        "opening_question": str(data.get("opening_question") or "").strip()[:300],
+        "cost": cost,
+    }
 
 
 def handle_teachback(body: dict, call_model) -> dict:
@@ -346,6 +393,7 @@ def model_routes(call_model) -> dict:
         "learner": lambda body: handle_learner(body, call_model),
         "tutor": lambda body: handle_tutor(body, call_model),
         "next_concept": lambda body: handle_next_concept(body, call_model),
+        "baseline": lambda body: handle_baseline(body, call_model),
         "teachback": lambda body: handle_teachback(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
