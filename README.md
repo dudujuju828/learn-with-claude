@@ -172,7 +172,13 @@ directly (a local `claude` login can't run on a server), so it needs an
   actually covered (one model call, kept with the tree — retakes just
   reshuffle), explains every answer, and records your scores; the 🔊 beside
   the question — or the **s** key — reads it and each choice aloud, then the
-  explanation once you've answered. Each tree also
+  explanation once you've answered. **🗣 explain it back** is
+  the Feynman step: explain a conversation in your own words, as if teaching
+  a friend, and the tutor reads it against what was actually covered and
+  answers with what's solid, the one gap that matters, and one question to
+  push deeper — feedback on the ideas, never the spelling. Attempts are kept
+  with the tree (they sync and travel in `.know.json`), so you can watch
+  your explanation improve between visits. Each tree also
   gets **📝 my notes** — a free-text space for your own synthesis of what you
   learned, which autosaves, syncs with the tree, and heads every export. You
   can also **ask the tutor yourself** under any conversation — your question
