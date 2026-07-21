@@ -2800,7 +2800,9 @@ function renderConversation(keepScroll){
     h += `<div class="crumb">branched from ` +
          `<span class="cl" tabindex="0" role="button" onclick="jumpToTerm(${node.parent_id},${node.branch_from_turn})"` +
          ` title="show that answer">[${node.parent_id}] turn ${node.branch_from_turn}</span>` +
-         (node.focus ? ` · focus: ${esc(node.focus)}` : "") + `</div>`;
+         (node.focus ? ` · focus: ${esc(node.focus)}` : "") +
+         (node.why ? ` · <span title="why the tutor picked this next">why: ${esc(node.why)}</span>` : "") +
+         `</div>`;
   }
   // the path is only worth a line once there are ancestors — on the root
   // it would just repeat the title
@@ -2819,6 +2821,9 @@ function renderConversation(keepScroll){
   const acts = [];
   if (!running && canContinue(node))
     acts.push(`<button class="primary" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">${ico("▶")}continue</button>`);
+  if (!running && Object.values(tree.nodes).some(n => n.turns.some(t => t.tutor)))
+    acts.push(`<button${canContinue(node) ? "" : ' class="primary"'} onclick="cmdNext()"` +
+              ` title="the tutor reviews what this tree covered and picks the next best concept to build on it — one more investigation">${ico("→")}next</button>`);
   if (!running && node.turns.length){
     acts.push(`<button onclick="listenNode()" title="read the whole conversation aloud — Esc stops">${ico("🔊")}listen</button>`);
     acts.push(`<button onclick="copyLink(this)" title="copy a link straight to this conversation">${ico("🔗")}link</button>`);
@@ -4826,6 +4831,8 @@ function paletteActions(){
   }
   if (tree && !running){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
+    if (Object.values(tree.nodes).some(n => n.turns.some(t => t.tutor)))
+      acts.push({icon: "→", label: "what's next?", sub: "the tutor picks the next best concept and investigates it", run(){ cmdNext(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
     if (tree.survey && tree.survey.items && tree.survey.items.length)
       acts.push({icon: "🗺", label: "survey", sub: "the topic's foundations map", run(){ openSurvey(); }});
@@ -5244,8 +5251,10 @@ function followupThunk(label=""){
 
       const concept = oneLine(String(r.pick.concept), 60);
       const question = oneLine(String(r.pick.opening_question || ""), 200);
+      const reason = oneLine(String(r.pick.reason || ""), 200);
       const prev = getNode(tree, order[order.length - 1]);
       node = makeNode(tree, concept, prev.id, prev.turns.length || 1, "");
+      if (reason) node.why = reason;
       node.cost += r.cost;
       ctx = {kind: "followup", topic: tree.root_topic, recap, concept, opening_question: question};
       currentNode = node.id;
@@ -5370,6 +5379,13 @@ function cmdFull(topic){
           followupThunk("investigation 3 of 4"),
           followupThunk("investigation 4 of 4"));
 }
+/* one `full` step on demand: the tutor reviews what this tree covered and
+   picks the next best concept to build on it, then investigates it */
+function cmdNext(){
+  if (!cur() || running) return;
+  enqueue(followupThunk());
+}
+window.cmdNext = cmdNext;
 
 function startBranchUI(nodeId, turn, btn){
   const row = btn.parentElement;
