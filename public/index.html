@@ -922,6 +922,9 @@
   }
   #teachbox .ntfoot, #gapsbox .ntfoot{display:flex; align-items:center; gap:.7rem; margin-top:.7rem}
   #teachbox #tbmeta, #gapsbox #gapmeta{flex:1}
+  /* feedback sits ABOVE the textarea (right where the next answer goes),
+     so it needs space below it instead of the old above-the-box gap */
+  #teachbox #tbfeedback:not(:empty){margin-bottom:.9rem}
   #teachbox .tbcard, #gapsbox .tbcard{
     margin:.55rem 0 0; padding:.6rem .75rem; border:1px solid var(--line);
     border-radius:.7rem; background:var(--bg); white-space:pre-wrap;
@@ -1227,11 +1230,15 @@
   gap that matters, one question to push deeper — and an honest verdict:
   <b>✓ clean</b>, <b>≈ close</b>, or <b>△ gappy</b>. Ideas only, never the
   spelling. If it isn't clean, the box turns into answering that one
-  question — not re-explaining everything — and the tutor keeps pushing on
-  the SAME nuance across replies, crediting what you've already resolved,
-  until it either clicks (clean) or you stop; every reply is kept, the
-  trail of verdicts shows the thread narrowing in, and tapping an old
-  attempt brings its words back. <b>⤳ chase it</b> sends the tutor's
+  question — shown right above the box, no scrolling to find it — instead
+  of re-explaining everything, and <b>Enter</b> sends a short answer
+  straight away (Shift+Enter for a line break; a fresh explanation still
+  uses Ctrl/Cmd+Enter, since that box is a paragraph, not a one-liner).
+  The tutor keeps pushing on the SAME nuance across replies, crediting
+  what you've already resolved, until it either clicks (clean) or you
+  stop; every reply is kept, the trail of verdicts shows the thread
+  narrowing in, and tapping an old attempt brings its words back.
+  <b>⤳ chase it</b> sends the tutor's
   probing question into the conversation as your own turn instead, if
   you'd rather have it answered there; the <b>🔊</b> (or <b>s</b>) reads the
   feedback aloud. A <b>clean</b> explanation comes due again later —
@@ -1700,17 +1707,17 @@
       <span id="tbscope"></span>
       <button id="tbclose" class="ghost" aria-label="close explain it back">✕</button>
     </div>
-    <p class="hint" style="margin:0 0 .6rem">Explain what this conversation taught you, in
+    <p class="hint" id="tbintro" style="margin:0 0 .6rem">Explain what this conversation taught you, in
       your own words, as if teaching a friend. The tutor reads it against what was actually
       covered and says what's solid, what's missing, and what to chew on next. Rough wording
       is fine — this is about the ideas, never the spelling.</p>
+    <div id="tbfeedback" aria-live="polite"></div>
     <textarea id="tbarea" aria-label="your explanation"
       placeholder="The way I understand it…"></textarea>
     <div class="ntfoot">
       <span id="tbmeta" class="hint"></span>
       <button id="tbsend" class="primary">get feedback</button>
     </div>
-    <div id="tbfeedback" aria-live="polite"></div>
   </div>
 </div>
 
@@ -2649,7 +2656,7 @@ function updateTeachMeta(){
   const continuing = isContinuingThread(cur(), teachNodeId);
   const words = $("tbarea").value.trim() ? $("tbarea").value.trim().split(/\s+/).length : 0;
   $("tbmeta").textContent = words
-    ? `${words} word${words === 1 ? "" : "s"} · feedback is one model call`
+    ? `${words} word${words === 1 ? "" : "s"} · ${continuing ? "Enter sends" : "Ctrl+Enter sends"}`
     : continuing
       ? "answer the question above — chase that one nuance, not the whole thing again"
       : "explain it fresh, from memory — that's the rehearsal that counts";
@@ -2667,6 +2674,7 @@ function openTeach(){
   const continuing = isContinuingThread(tree, node.id);
   $("tbarea").placeholder = continuing ? "Take on the question above…" : "The way I understand it…";
   $("tbsend").textContent = continuing ? "answer" : "get feedback";
+  $("tbintro").style.display = past.length ? "none" : "";   // the feedback above is context enough
   renderTeach(past, past[past.length - 1] || null,
     past.length ? `last time (attempt ${past.length}, ${(past[past.length - 1].when || "").slice(0, 10)}):` : "");
   updateTeachMeta();
@@ -2699,6 +2707,7 @@ async function sendTeach(){
     const past = teachAttempts(tree, node.id);
     teachShown = past.length - 1;
     renderTeach(past, attempt);
+    $("tbintro").style.display = "none";   // the feedback above is context enough now
     const continuing = attempt.verdict !== "clean" && !!attempt.question;
     $("tbarea").value = "";   // the next round answers fresh — it's not an edit
     $("tbarea").placeholder = continuing ? "Take on the question above…" : "The way I understand it…";
@@ -2732,7 +2741,14 @@ $("tbsend").onclick = sendTeach;
 $("tbclose").onclick = closeTeach;
 $("tbarea").addEventListener("input", updateTeachMeta);
 $("tbarea").addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); sendTeach(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){ e.preventDefault(); sendTeach(); return; }
+  // answering a specific follow-up question is a short reply, not a
+  // paragraph — plain Enter sends it, like a chat box (Shift+Enter still
+  // breaks a line, for the rare answer that needs one). A fresh full
+  // explanation keeps Enter as a newline; only Ctrl/Cmd+Enter sends that.
+  if (e.key === "Enter" && !e.shiftKey && isContinuingThread(cur(), teachNodeId)){
+    e.preventDefault(); sendTeach();
+  }
 });
 $("teachbox").addEventListener("click", (e) => { if (e.target === $("teachbox")) closeTeach(); });
 
