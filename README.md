@@ -161,7 +161,12 @@ directly (a local `claude` login can't run on a server), so it needs an
   profile in one place — cards due, conversations due another
   explanation, loose threads from every tree (not just the open one),
   survey maps with uncovered ground — each a tap from doing it, so the
-  session starts with a list instead of a wander. **anki
+  session starts with a list instead of a wander. **📜 study sheet**
+  compiles the whole profile into one revision document: each tree's
+  notes, your best explanation of each conversation (verdict included),
+  the passages you highlighted, and every defined term merged into a
+  single alphabetical glossary — the sheet you'd revise from before an
+  exam, saved through the same share-sheet path as every export. **anki
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term into
   an in-app flashcard (recall → flip → grade yourself again / good / easy,
