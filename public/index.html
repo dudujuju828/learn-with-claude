@@ -357,6 +357,7 @@
   #searchresults .hit .where{color:var(--muted); font-size:.78rem}
   #searchresults .hit mark{background:var(--termbg); color:var(--term); border-radius:.2rem}
   #searchresults .none{color:var(--muted); font-size:.84rem; padding:.2rem .5rem}
+  #searchresults .fuzhint{color:var(--muted); font-size:.78rem; padding:.1rem .5rem .3rem}
 
   /* ---- conversation ---- */
   .empty{color:var(--muted); margin:3rem auto 0; max-width:33rem}
@@ -1233,6 +1234,12 @@
   the ones you don't care about), and survey maps with uncovered ground.
   Tap anything to jump straight to it. The button appears in the words
   tab whenever something's waiting.</p>
+  <p><b>search</b> — the find tab looks through every tree: the
+  conversations, the glossary, your highlights and your notes. Spelling
+  is forgiven: if nothing matches exactly, close spellings count — one
+  typo or a swapped pair of letters per word, in any word order — and
+  the results say so. The glossary filter and Ctrl+K forgive the same
+  way.</p>
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
@@ -3671,7 +3678,45 @@ function snippetHtml(text, i, qlen){
          esc(text.slice(i + qlen, end)) +
          (end < text.length ? "…" : "");
 }
-function searchHits(q, cap){
+/* spelling forgiveness for search — the same slack the ⌨ type checker
+   gives a typed answer: nothing under 4 letters, one edit to 7, two
+   from 8 (an adjacent swap already counts as one in editDist). */
+function typoSlack(len){ return len >= 8 ? 2 : len >= 4 ? 1 : 0; }
+/* a word of `text` within typo distance of `qw` → {i, len}, or null.
+   Both arguments lowercase; length gap is a cheap pre-filter. */
+function fuzzyWord(text, qw){
+  const slack = typoSlack(qw.length);
+  if (!slack) return null;   // short query words stay exact-only
+  const re = /[a-z0-9][a-z0-9'’-]*/g;
+  let m;
+  while ((m = re.exec(text))){
+    if (Math.abs(m[0].length - qw.length) > slack) continue;
+    if (editDist(m[0], qw) <= slack) return {i: m.index, len: m[0].length};
+  }
+  return null;
+}
+/* the fallback matcher: every query word must land in the text — as a
+   substring, or as a word within typo distance — and word order stops
+   mattering. Returns the earliest landing to mark in the snippet. */
+function fuzzyFind(lc, q){
+  const words = q.split(/\s+/).filter(w => w.length >= 2);
+  if (!words.length) return null;
+  let first = null;
+  for (const qw of words){
+    const i = lc.indexOf(qw);
+    const hit = i >= 0 ? {i, len: qw.length} : fuzzyWord(lc, qw);
+    if (!hit) return null;
+    if (!first || hit.i < first.i) first = hit;
+  }
+  return first;
+}
+function findHit(text, q, fuzzy){
+  const lc = text.toLowerCase();
+  const i = lc.indexOf(q);
+  if (i >= 0) return {i, len: q.length};
+  return fuzzy ? fuzzyFind(lc, q) : null;
+}
+function searchHits(q, cap, fuzzy){
   const hits = [];
   outer:
   for (const tree of Object.values(store)){
@@ -3681,10 +3726,10 @@ function searchHits(q, cap){
         for (const field of ["action", "tutor", "thinking", "new_term"]){
           // fence markers are noise in a one-line snippet
           const text = (t[field] || "").replace(/```[^\n]*/g, "").trim();
-          const i = text.toLowerCase().indexOf(q);
-          if (i >= 0){
+          const hit = findHit(text, q, fuzzy);
+          if (hit){
             hits.push({tree, nodeId: node.id, turn: t.turn, where: `[${node.id}] turn ${t.turn}`,
-                       html: snippetHtml(text, i, q.length)});
+                       html: snippetHtml(text, hit.i, hit.len)});
             break;
           }
         }
@@ -3699,11 +3744,11 @@ function searchHits(q, cap){
       for (const e of Object.values(tree.glossary || {})){
         if (!e || !e.term) continue;
         const text = e.term + " — " + (e.def || "");
-        const i = text.toLowerCase().indexOf(q);
-        if (i < 0) continue;
+        const hit = findHit(text, q, fuzzy);
+        if (!hit) continue;
         hits.push({tree, nodeId: Number.isInteger(e.node) ? e.node : tree.root_id,
                    turn: e.turn || 1, where: "glossary",
-                   html: snippetHtml(text, i, q.length)});
+                   html: snippetHtml(text, hit.i, hit.len)});
         if (hits.length >= cap) break glossHits;
       }
     }
@@ -3714,11 +3759,11 @@ function searchHits(q, cap){
     for (const tree of Object.values(store)){
       for (const h of highlightsOf(tree)){
         const text = h.text || "";
-        const i = text.toLowerCase().indexOf(q);
-        if (i < 0) continue;
+        const hit = findHit(text, q, fuzzy);
+        if (!hit) continue;
         hits.push({tree, nodeId: Number.isInteger(h.node) ? h.node : tree.root_id,
                    turn: h.turn || 1, where: "highlight",
-                   html: snippetHtml(text, i, q.length)});
+                   html: snippetHtml(text, hit.i, hit.len)});
         if (hits.length >= cap) break hlHits;
       }
     }
@@ -3726,10 +3771,10 @@ function searchHits(q, cap){
   if (hits.length < cap){
     for (const tree of Object.values(store)){
       const text = (tree.note || "").replace(/\s+/g, " ").trim();
-      const i = text.toLowerCase().indexOf(q);
-      if (i < 0) continue;
+      const hit = findHit(text, q, fuzzy);
+      if (!hit) continue;
       hits.push({tree, kind: "note", where: "my notes",
-                 html: snippetHtml(text, i, q.length)});
+                 html: snippetHtml(text, hit.i, hit.len)});
       if (hits.length >= cap) break;
     }
   }
@@ -3739,9 +3784,17 @@ function runSearch(){
   const q = $("searchbox").value.trim().toLowerCase();
   const box = $("searchresults");
   if (q.length < 2){ box.innerHTML = ""; return; }
-  const hits = searchHits(q, 25);
+  // exact first; only an empty result earns the typo-forgiving pass —
+  // a misspelled technical term is the normal case here, not the edge
+  let hits = searchHits(q, 25);
+  let fuzzed = false;
+  if (!hits.length){
+    hits = searchHits(q, 25, true);
+    fuzzed = hits.length > 0;
+  }
   box.innerHTML = hits.length
-    ? hits.map((h, i) =>
+    ? (fuzzed ? `<div class="fuzhint">nothing spelled quite like that — close matches:</div>` : "") +
+      hits.map((h, i) =>
         `<div class="hit" tabindex="0" role="button" data-hit="${i}">` +
         `<div class="where">${esc(oneLine(h.tree.root_topic, 30))} · ${esc(h.where)}</div>` +
         `${h.html}</div>`).join("")
@@ -3905,8 +3958,13 @@ function renderTerms(){
   const filterBox = $("glossfilter");
   filterBox.style.display = items.length > 8 ? "" : "none";
   const q = filterBox.value.trim().toLowerCase();
-  const shown = q ? items.filter(i => i.key.includes(q) ||
+  let shown = q ? items.filter(i => i.key.includes(q) ||
     (entry(i) && (entry(i).def || "").toLowerCase().includes(q))) : items;
+  // an empty filter result gets the typo-forgiving pass — misspelling
+  // the exact term you're hunting is this tool's normal case
+  if (q && !shown.length)
+    shown = items.filter(i => fuzzyFind(i.key, q) ||
+      (entry(i) && fuzzyFind((entry(i).def || "").toLowerCase(), q)));
   const extra = shown.length - 60;
   $("terms").innerHTML = shown.slice(0, 60).map(i => {
     const e = entry(i);
@@ -4513,8 +4571,7 @@ function typedVerdict(guess, term){
   const g = normTerm(guess), t = normTerm(term);
   if (!g) return null;   // nothing typed — a plain flip, no verdict
   if (g === t) return "ok";
-  const slack = t.length >= 8 ? 2 : t.length >= 4 ? 1 : 0;
-  return editDist(g, t) <= slack ? "close" : "miss";
+  return editDist(g, t) <= typoSlack(t.length) ? "close" : "miss";
 }
 
 let review = null;        // {queue, i, done, again, revealed, typed, verdict}
@@ -5753,7 +5810,9 @@ function paletteBuild(q){
         run(){ selectNode(id); }});
     }
     if (ql){
-      for (const i of glossaryItems(tree).filter(i => i.key.includes(ql)).slice(0, 8)){
+      let gits = glossaryItems(tree).filter(i => i.key.includes(ql));
+      if (!gits.length) gits = glossaryItems(tree).filter(i => fuzzyFind(i.key, ql));
+      for (const i of gits.slice(0, 8)){
         const e = glossaryOf(tree)[i.key];
         push("glossary", {icon: "🔍", label: i.term,
           sub: e && e.def ? oneLine(e.def, 60) : "no definition yet",
@@ -5762,7 +5821,9 @@ function paletteBuild(q){
     }
   }
   if (ql.length >= 2){
-    for (const h of searchHits(ql, 8)){
+    let chits = searchHits(ql, 8);
+    if (!chits.length) chits = searchHits(ql, 8, true);   // forgive the spelling
+    for (const h of chits){
       push("in conversations", {icon: "❞", label: oneLine(h.tree.root_topic, 30) + " · " + h.where,
         subHtml: h.html,
         run(){ openSearchHit(h.tree.id, h.nodeId, h.turn); }});
