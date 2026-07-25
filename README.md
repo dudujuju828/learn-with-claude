@@ -144,22 +144,30 @@ directly (a local `claude` login can't run on a server), so it needs an
   parts**: the direct answer first, then each distinct aspect (the why, an
   example, a caveat…) as its own labelled fold-out card, so a long answer
   reads one idea at a time. Every term the learner hits lands in a
-  **glossary with real definitions** — written the moment the term appears
-  (a cheap haiku call in parallel with the tutor), stored inside the tree so
-  they sync, export, and travel in `.know.json`; defined terms get a dotted
-  underline wherever they appear in answers (tap for the definition in a
-  popover), the sidebar glossary unfolds each term with a jump back to where
-  it came up (and an *✎ edit* to fix any auto-written definition by hand —
-  the correction rides the sync and wins the merge), old trees backfill with
-  one *define missing* click, and your
-  own unknowns count too: **select a word or two in any answer** and a
-  floating chip offers *✎ define* — the term joins the glossary with the
-  same machinery (underlines, flashcards, export; *✕ forget* removes it
-  again) — or *⛏ dig*, for when a definition isn't enough: the tutor is
+  **glossary**, listed the moment it appears but undefined until you
+  actually ask for it — nothing gets carded automatically. The sidebar
+  glossary unfolds each term with a jump back to where it came up, an
+  *✎ define it* per term (or *define N missing* for the whole tree at
+  once, handy for backfilling old trees) on the cheap model, an *✎ edit*
+  to fix any definition by hand (the correction rides the sync and wins
+  the merge), and defined terms get a dotted underline wherever they
+  appear in answers (tap for the definition in a popover). Your own
+  unknowns count too, and here you get more say than a plain definition:
+  **select a word or two — or a longer passage — in any answer** and a
+  floating chip offers *✎ define* (the same one-click plain definition,
+  joining the glossary with the usual machinery: underlines, flashcards,
+  export, *✕ forget* to remove it again) or the newer ***+ flashcard***,
+  which folds out four angles — *definition*, *purpose*, *example*, *how
+  it works* — the model drafts whichever one you pick, and the draft
+  lands in an editable box with *add* / *cancel* so you can tweak the
+  wording before anything is actually saved; a term can carry more than
+  one reasoned card, each tagged with a small badge in the words tab, the
+  review deck, and the anki/study-sheet exports. Or *⛏ dig*, for when a
+  definition isn't enough: the tutor is
   asked what that thing actually **is** in this context, and the answer
   lands in the conversation as your own turn (🧑), where you can read it,
-  define terms inside it, or branch from it. Select a longer stretch and the
-  same chip offers **★ highlight** — a highlighter over the tutor's words
+  define terms inside it, or branch from it. The same chip also offers
+  **★ highlight** — a highlighter over the tutor's words
   that stays put across reloads and devices (tap a mark to lift it), travels
   in `.know.json`, and shows up in both exports — the Markdown quotes each
   marked passage under its turn, the HTML reading page bands it in

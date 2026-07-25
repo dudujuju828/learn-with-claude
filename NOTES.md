@@ -5,6 +5,79 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 36 — flashcards become a deliberate act, with a reason
+
+*(user-requested, not picked from the autonomous candidate list — logged
+here anyway since it's the running record of what changed and why.)*
+
+### What it is
+Previously every term the simulated learner flagged as unfamiliar
+(`new_term`) silently became a flashcard the instant it appeared —
+`autoDefine()` fired a definition call for it with zero input from the
+reader, on top of the same thing happening again if you manually hit
+**✎ define**. Now nothing gets carded automatically: `new_term` still
+lists a term in the words tab (undefined, same as any term whose "define
+it" you haven't clicked yet), but the only way a card gets its content is
+a deliberate act. **✎ define** is unchanged — still the instant one-click
+plain-definition fast path. Selecting text now also offers **+ flashcard**
+(for both short, term-like selections AND longer passages, unlike define/
+dig which stay short-only): it folds out four categories — definition /
+purpose / example / how it works — the model drafts whichever angle you
+pick, and the draft lands in an editable box with **add** / **cancel**.
+Nothing is saved until you hit add, so you can tweak the wording first.
+A term can now carry more than one reasoned card (its plain definition
+*and* a purpose card, say) — the words tab, review deck, and anki/study-
+sheet exports all show a small badge for any card whose reason isn't a
+plain definition.
+
+### Design notes
+- **Killed the automatic path, not just added a new one.** The actual
+  ask was "give control to the user" — leaving `autoDefine()` firing on
+  every turn and bolting a picker on top would still have flooded the
+  glossary with unwanted cards. Deleted the call site and the now-dead
+  function outright; `glossaryItems()` already derives the words-tab
+  listing straight from `turn.new_term`, independent of `tree.glossary`,
+  so undefined terms keep showing up with a manual "define it" — no
+  regression there, just no more silent card creation.
+- **Compound glossary keys, no new top-level data structure.** A
+  "definition" card keeps the classic bare `term.toLowerCase()` glossary
+  key (every existing consumer — underlines, anki, study sheet, CLI
+  markdown/HTML export, sync merge — keeps working untouched, and old
+  trees need no migration: a missing `reason` field just reads as
+  "definition"). Any other reason files under `term::reason` instead, so
+  it can't collide with the term's plain definition. `glossaryItems()`
+  turned out to already support this for free — its "entries whose turn
+  was pruned" pass iterates every raw key in `tree.glossary`, not just
+  ones derived from `new_term`, so a compound key was never filtered out.
+  Confirmed this rather than assumed it, by reading the function before
+  writing the popover.
+- **Backend prompt is reason-parameterised, not four separate prompts.**
+  `GLOSSARY_SYSTEM` now describes answering "whichever angle you're
+  given"; `GLOSSARY_REASONS` in `personas.py` holds the one-line
+  instruction per angle, and `define_message()` takes an optional
+  `reason` (default `"definition"`, so the CLI's own callers and the
+  existing test fixture didn't need touching). `handle_define()` falls
+  back to `"definition"` for a missing or unrecognised reason — the API
+  boundary doesn't trust the client's string.
+- **In-text popover (tap a dotted-underlined word) deliberately left
+  single-reason.** `showGloss()` looks up the bare key only, so it still
+  shows just the plain definition wherever one exists — reasoned cards
+  surface in the words tab and review deck instead. Extending the
+  in-text popover to cycle through multiple reasons for the same word
+  felt like scope beyond what was asked for; flagged here in case that's
+  wanted later.
+- Verified with a 19-assertion headless browser run driving the real UI
+  (Chromium DOM, stubbed `/api/define`): selection chip shows the new
+  button and its category fold-out; the reason actually reaches the
+  backend request; the generated draft is editable and the *edited* text
+  (not the model's first draft) is what gets saved; the compound key
+  lands correctly; the bare-term key is confirmed to NOT exist afterward
+  (no auto-card leaked in); the words tab and review card both show the
+  reason badge; and `+ flashcard` stays offered on a long passage while
+  define/dig correctly disappear.
+
+---
+
 ## Feature 35 — 🗣 explain it back keeps probing after the first round
 
 *(user-requested, not picked from the autonomous candidate list — logged
