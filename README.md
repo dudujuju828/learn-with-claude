@@ -162,9 +162,16 @@ directly (a local `claude` login can't run on a server), so it needs an
   chosen voice; a **⌨ type** toggle turns the deck around into typed
   recall — the definition asks, you type the term, and the check is
   forgiving: case, punctuation, and one typo or swapped pair of letters
-  read as *close*, not wrong, and the final grade stays yours; and **↩**
+  read as *close*, not wrong, and the final grade stays yours; **↩**
   — the **u** key — takes back a fat-fingered grade, restoring the
-  card's schedule exactly),
+  card's schedule exactly; and **🎧 drill** — the **d** key — runs the
+  deck hands-free, out loud: the term is spoken, a recall pause follows
+  — you set its length, and a thin bar fills as it runs — then the
+  answer, and after a beat the card is marked *good* and the next one
+  starts, the screen held awake throughout. Press 1–3 at any moment to
+  grade a card yourself instead — a mis-heard card deserves *again* —
+  and the session summary owns up to every grade the drill gave
+  itself),
   scheduled out on a spaced-repetition ladder (1d → 3d → ×2.5) so each card
   comes back just before you'd forget it; the schedule lives on the glossary
   entry, so it syncs across devices and travels in `.know.json`. The due
