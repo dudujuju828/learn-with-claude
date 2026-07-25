@@ -5,6 +5,53 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 30 — 📅 today: the docket
+
+### What it is
+A **📅 today · n** button in the words tab (and *today* in ⌘K),
+appearing whenever something is waiting: one modal listing everything
+*actionable* across the active profile — **🔁 review** (cards due, with
+a note when the 🎧 drill will run them), **🗣 explain again** (each due
+conversation listed by name, not just a count), **⛏ loose threads**
+grouped by tree — from *every* tree, not just the open one — each chip
+chasing straight into the branch UI with the term prefilled, each ✕
+dismissing it (the same `tree.dismissed` store, now writable
+cross-tree), and **🗺 uncovered ground** (survey maps with unexplored
+foundations, one tap from the map). Empty docket → the button hides;
+opened empty via ⌘K → "all clear". Esc, backdrop, focus trap, print
+hide — the highlights-hub skeleton throughout.
+
+### Why this one
+- The audit found the app's nudges scattered *and scoped
+  inconsistently*: review and explain-again are profile-wide buttons,
+  but loose threads and survey coverage were only visible for the
+  currently-open tree — the cross-tree frontier was invisible. A
+  half-covered survey in a tree you haven't opened this week simply
+  never spoke up. The docket is the missing profile-level answer to
+  "what should I do right now?" — the same decision-cost argument that
+  justified → next (Feature 24) at tree level, applied to the daily
+  session: open the app, open today, work the list.
+- Pure aggregation over existing data — `dueCards`, `teachDueList`,
+  `looseThreads`, `surveyCovered` all existed; zero model cost, no new
+  storage, no sync changes (the one write, cross-tree dismissal, rides
+  the existing `dismissThread` with an optional treeId).
+- Verified with a 17-assertion headless run over two seeded trees:
+  counts, all four jump actions (deck, teach modal, survey map, branch
+  UI with the term prefilled), cross-tree dismissal persisting to the
+  right tree, and the Esc chain.
+
+### Candidates rejected (this cycle)
+- **Onboarding demo tree** — a bundled pre-grown tree for the empty
+  state; real for a new user, but the example-topics row already
+  seeds the cold start, and this app's user is past it.
+- **Cross-tree glossary linking** (a term defined in tree A underlined
+  in tree B) — real idea, but it blurs the "each tree is a portable
+  file" boundary and the payoff is unclear.
+- **Stale-tree resurfacing** ("you haven't touched X in 14 days") —
+  guilt-trip noise; the docket lists work that's actually *due*.
+
+---
+
 ## Feature 29 — 🎧 hands-free drill: the review deck runs itself, out loud
 
 ### What it is
