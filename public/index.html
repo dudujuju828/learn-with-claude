@@ -745,21 +745,22 @@
   .rcard .rwait i.go{transform:scaleX(1)}
 
   /* ---- progress dashboard (read-only stats over review + quizzes),
-          and the ★ highlights hub which shares its skeleton ---- */
-  #statsbox, #hlbox, #docketbox{
+          the ★ highlights hub, and ❓ question bank, which share its
+          skeleton ---- */
+  #statsbox, #hlbox, #docketbox, #qbankbox{
     display:none; position:fixed; inset:0; z-index:95;
     background:color-mix(in srgb, var(--bg) 76%, transparent);
     align-items:center; justify-content:center; padding:1rem;
   }
-  #statsbox.open, #hlbox.open, #docketbox.open{display:flex}
-  #statsbox .box, #hlbox .box, #docketbox .box{
+  #statsbox.open, #hlbox.open, #docketbox.open, #qbankbox.open{display:flex}
+  #statsbox .box, #hlbox .box, #docketbox .box, #qbankbox .box{
     background:var(--card); border:1px solid var(--line); border-radius:1rem;
     padding:1.1rem 1.3rem 1.3rem; width:min(34rem,94vw); max-height:88dvh;
     overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
   }
-  #statsbox .sthead, #hlbox .sthead, #docketbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
-  #statsbox #stattitle, #hlbox #hltitle, #docketbox #dktitle{font-weight:600}
-  #statsbox #statscope, #hlbox #hlscope, #docketbox #dkscope{flex:1; color:var(--muted); font-size:.82rem;
+  #statsbox .sthead, #hlbox .sthead, #docketbox .sthead, #qbankbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
+  #statsbox #stattitle, #hlbox #hltitle, #docketbox #dktitle, #qbankbox #qbtitle{font-weight:600}
+  #statsbox #statscope, #hlbox #hlscope, #docketbox #dkscope, #qbankbox #qbscope{flex:1; color:var(--muted); font-size:.82rem;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #hlbox .hltree, #docketbox .hltree{font-weight:600; margin:1rem 0 .4rem}
   #hlbox .hltree:first-child, #docketbox .hltree:first-child{margin-top:0}
@@ -774,8 +775,24 @@
   /* the docket's per-tree thread groups and its all-clear state */
   #docketbox .dktree{color:var(--muted); font-size:.8rem; margin:.5rem 0 .2rem}
   #docketbox .dkthreads{margin:.35rem 0 .1rem}
-  #docketbox .dkempty{text-align:center; padding:1.6rem 0 1rem; color:var(--muted)}
-  #docketbox .dkempty .big{font-size:1.7rem; margin-bottom:.5rem}
+  #docketbox .dkempty, #qbankbox .dkempty{text-align:center; padding:1.6rem 0 1rem; color:var(--muted)}
+  #docketbox .dkempty .big, #qbankbox .dkempty .big{font-size:1.7rem; margin-bottom:.5rem}
+  /* question bank rows — a card per banked question: the text (tap to
+     jump to where it came from), where it was raised, and its actions */
+  #qbankbox .qrow{
+    border:1px solid var(--line); border-radius:.6rem; background:var(--bg);
+    padding:.55rem .7rem; margin:.45rem 0;
+  }
+  #qbankbox .qrow.done{opacity:.72}
+  #qbankbox .qtext{font-size:.95em; cursor:pointer}
+  #qbankbox .qtext:hover{color:var(--term)}
+  #qbankbox .qrow.done .qtext{text-decoration:line-through; text-decoration-color:var(--muted)}
+  #qbankbox .qwhere{color:var(--muted); font-size:.76rem; margin-top:.3rem}
+  #qbankbox .qacts{display:flex; gap:.4rem; margin-top:.5rem}
+  #qbankbox .qacts button{font-size:.82rem; padding:.28rem .6rem}
+  #qbankbox .qbdone{margin-top:1rem}
+  #qbankbox .qbdone summary{cursor:pointer; color:var(--muted); font-size:.85rem}
+  #qbankbox .qbdone[open] summary{margin-bottom:.3rem}
   #statsbox .st-tiles{
     display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin-bottom:1.1rem;
   }
@@ -1014,6 +1031,23 @@
   }
   #selchip button:hover{background:var(--termbg)}
 
+  /* question bank capture bar — press q while reading. Floats above the
+     content (no dimming, no scroll jump) so jotting a question doesn't
+     break your reading flow. */
+  #qcap{
+    position:fixed; left:50%; bottom:1.1rem; transform:translateX(-50%); z-index:80;
+    width:min(28rem,94vw); background:var(--card); border:1px solid var(--term);
+    border-radius:1rem; box-shadow:0 10px 34px rgba(0,0,0,.22); padding:.7rem .8rem;
+  }
+  #qcap[hidden]{display:none}
+  #qcap .qcaphead{color:var(--muted); font-size:.8rem; margin-bottom:.4rem}
+  #qcap .qcaprow{display:flex; gap:.5rem}
+  #qcap .qcaprow input{flex:1}
+  #qcap .qcapok{display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; font-size:.92rem}
+  @media (max-width:900px){
+    #qcap{bottom:calc(3.8rem + env(safe-area-inset-bottom))}
+  }
+
   /* glossary popover */
   #gpop{
     position:fixed; z-index:85; background:var(--card); border:1px solid var(--term);
@@ -1060,8 +1094,8 @@
 
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
-    #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
-    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #gapsbox, #tutoreditor, #overview, .who .copy{display:none !important}
+    #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette, #qcap,
+    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #gapsbox, #tutoreditor, #overview, #qbankbox, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1265,6 +1299,16 @@
   <p><b>ask the tutor yourself</b> — the box under any conversation sends your
   own question with the same context. It's recorded as your turn (🧑), and the
   simulated learner never sees it.</p>
+  <p><b>❓ question bank</b> — press <b>q</b> while reading to jot down a
+  question without losing your place: no dialog, no scrolling away, just a
+  small bar to type it into. It's saved against the passage you were reading,
+  not asked right away, so a stray thought doesn't interrupt the run. The
+  <b>❓ questions</b> button in the conversation header opens the bank for
+  that tree — <b>investigate</b> any one on its own, or <b>run all</b> to
+  queue every pending question in one pass, exactly like "full" queues its
+  follow-ups. Either way it's the same single question straight to the
+  tutor as asking yourself, just saved for later; answered ones fold under
+  a disclosure with a jump back to what they became.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
   another device or the CLI — the file format is identical. On a phone or
   tablet, saving opens the <b>share sheet</b> (AirDrop, Save to Files, Drive…)
@@ -1282,6 +1326,7 @@
     <tr><td><kbd>/</kbd></td><td>jump to the topic box</td></tr>
     <tr><td><kbd>?</kbd></td><td>open this help</td></tr>
     <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>hop to the next / previous turn</td></tr>
+    <tr><td><kbd>q</kbd></td><td>jot a question for the question bank</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>step the reading ruler / focus line (when on)</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>stop speech · close panels · turn the ruler off</td></tr>
   </table>
@@ -1634,6 +1679,17 @@
   </div>
 </div>
 
+<div id="qbankbox" role="dialog" aria-modal="true" aria-label="question bank">
+  <div class="box">
+    <div class="sthead">
+      <span id="qbtitle">❓ question bank</span>
+      <span id="qbscope"></span>
+      <button id="qbclose" class="ghost" aria-label="close question bank">✕</button>
+    </div>
+    <div id="qbbody"></div>
+  </div>
+</div>
+
 <div id="teachbox" role="dialog" aria-modal="true" aria-label="explain it back">
   <div class="box">
     <div class="nthead">
@@ -1690,6 +1746,8 @@
   <button id="seldig"></button>
   <button id="selhi"></button>
 </div>
+
+<div id="qcap" role="dialog" aria-label="capture a question" hidden></div>
 
 <div id="hopper">
   <button id="hopup" aria-label="previous turn">▲</button>
@@ -3088,6 +3146,19 @@ function mergeTrees(local, server){
     if (!hlSeen.has(k)){ hlSeen.add(k); outHl.push(h); }
   }
   if (outHl.length) out.highlights = outHl; else delete out.highlights;
+  // banked questions: union by id (a device-local id, so no collisions);
+  // "answered" is a one-way flip — once either side has answered a
+  // question, that sticks, so a device that hasn't caught up to the
+  // answer doesn't resurrect it as pending
+  const localQ = Array.isArray(local.questions) ? local.questions : [];
+  const outQ = Array.isArray(out.questions) ? out.questions.slice() : [];
+  const qById = new Map(outQ.map(q => [q.id, q]));
+  for (const lq of localQ){
+    const sq = qById.get(lq.id);
+    if (!sq){ const clone = structuredClone(lq); outQ.push(clone); qById.set(lq.id, clone); continue; }
+    if (lq.answered && !sq.answered){ sq.answered = true; sq.answerTurn = lq.answerTurn; }
+  }
+  if (outQ.length) out.questions = outQ; else delete out.questions;
   // teach-back attempts: append-only — union by node|when so an attempt
   // made on one device survives a merge with another's edits
   const localTb = Array.isArray(local.teach) ? local.teach : [];
@@ -3506,6 +3577,11 @@ function renderConversation(keepScroll){
       acts.push(`<button class="notes has" onclick="openSrcbox()"` +
                 ` title="the passage this tree is grounded in — every conversation anchors to it">` +
                 `${ico("📚")}source <span class="ndot" aria-hidden="true">●</span></button>`);
+    const qPending = pendingQuestions(tree).length;
+    if (qPending || questionsOf(tree).length)
+      acts.push(`<button class="notes${qPending ? " has" : ""}" onclick="openQBank()"` +
+                ` title="questions you jotted while reading this tree — press q to add another">` +
+                `${ico("❓")}questions${qPending ? ` <span class="ndot" aria-hidden="true">●</span> · ${qPending}` : ""}</button>`);
   }
   if (!running && node.turns.some(t => t.tutor)){
     const tb = teachAttempts(tree, node.id);
@@ -5638,6 +5714,198 @@ function jumpToTerm(nodeId, turn){
   closeMenu();
 }
 
+/* ------------------------------------------------------------------ */
+/* ❓ question bank — while reading, press q to jot a question that     */
+/* occurs to you instead of losing the thread of what you're doing.    */
+/* Stored on tree.questions ({id, node, turn, text, added, answered,    */
+/* answerTurn}), so it syncs and travels with the tree like highlights. */
+/* Investigating one (alone, or all at once) rides the same "ask the   */
+/* tutor directly" path as 🧑 ask / ⛏ dig — a single real model call,   */
+/* not a whole new investigation — so batching them is just queueing   */
+/* more than one of the same thunk, exactly like "full" queues four.   */
+/* ------------------------------------------------------------------ */
+function questionsOf(tree){
+  return Array.isArray(tree.questions) ? tree.questions : [];
+}
+function pendingQuestions(tree){
+  return questionsOf(tree).filter(q => !q.answered && getNode(tree, q.node));
+}
+function answeredQuestions(tree){
+  return questionsOf(tree).filter(q => q.answered && getNode(tree, q.node));
+}
+function addQuestion(nodeId, turn, text){
+  const tree = cur();
+  if (!tree || nodeId == null) return null;
+  const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 500);
+  if (t.length < 3) return null;
+  const qs = questionsOf(tree).slice();
+  if (qs.length >= 200) return null;   // a sane ceiling per tree
+  const q = {id: randHex(8), node: nodeId, turn: turn ?? null, text: t, added: nowIso()};
+  qs.push(q);
+  tree.questions = qs;
+  persistTree(tree);
+  return q;
+}
+function removeQuestion(qid){
+  const tree = cur(); if (!tree) return;
+  const qs = questionsOf(tree).slice();
+  const i = qs.findIndex(q => q.id === qid);
+  if (i < 0) return;
+  qs.splice(i, 1);
+  if (qs.length) tree.questions = qs; else delete tree.questions;
+  persistTree(tree);
+}
+window.removeQuestion = removeQuestion;
+
+/* the capture bar: press q while reading a conversation to jot a
+   question without leaving the page — no modal dimming, no scroll
+   jump. Ties to whichever turn sits at the top of the viewport, the
+   same lookup stepTurn uses, so "where" is always the passage you
+   were actually looking at when the question occurred to you. */
+function guessReadingTurn(){
+  const turns = [...document.querySelectorAll("#conv .turn:not(.pending)")];
+  if (!turns.length) return null;
+  const y = window.scrollY + 90;
+  let i = turns.findIndex(t => t.offsetTop + t.offsetHeight > y);
+  if (i < 0) i = turns.length - 1;
+  return +turns[i].dataset.turn;
+}
+let qcapPrevFocus = null, qcapTimer = null;
+function qcapFormHtml(turn){
+  return `<div class="qcaphead">your question — turn ${turn}</div>` +
+    `<div class="qcaprow">` +
+    `<input id="qcapinput" type="text" maxlength="500" placeholder="what are you wondering?"` +
+    ` aria-label="your question" enterkeyhint="done" autocomplete="off">` +
+    `<button id="qcapsave" class="primary" aria-label="save to question bank">save</button>` +
+    `<button id="qcapcancel" class="ghost" aria-label="cancel">✕</button></div>`;
+}
+function wireQcapForm(){
+  $("qcapsave").onclick = saveQCap;
+  $("qcapcancel").onclick = closeQCap;
+  const inp = $("qcapinput");
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter"){ e.preventDefault(); saveQCap(); }
+    else if (e.key === "Escape"){ e.stopPropagation(); closeQCap(); }
+  });
+  inp.focus();
+}
+function openQCap(){
+  const tree = cur(); if (!tree || currentNode == null) return;
+  const node = getNode(tree, currentNode);
+  if (!node || !node.turns.some(t => t.tutor)) return;
+  clearTimeout(qcapTimer);
+  const turn = guessReadingTurn() || node.turns[node.turns.length - 1].turn;
+  $("qcap").dataset.turn = turn;
+  $("qcap").innerHTML = qcapFormHtml(turn);
+  qcapPrevFocus = document.activeElement;
+  $("qcap").hidden = false;
+  wireQcapForm();
+}
+window.openQCap = openQCap;
+function closeQCap(){
+  clearTimeout(qcapTimer);
+  $("qcap").hidden = true;
+  if (qcapPrevFocus && qcapPrevFocus.focus && document.contains(qcapPrevFocus)) qcapPrevFocus.focus();
+  qcapPrevFocus = null;
+}
+window.closeQCap = closeQCap;
+function saveQCap(){
+  const turn = +($("qcap").dataset.turn || 0) || null;
+  const q = addQuestion(currentNode, turn, $("qcapinput") ? $("qcapinput").value : "");
+  if (!q){ closeQCap(); return; }
+  renderConversation(true);   // the header's ❓ questions count just changed
+  const n = pendingQuestions(cur()).length;
+  $("qcap").innerHTML = `<div class="qcapok">${ico("✓")}saved to the question bank` +
+    (n > 1 ? ` · ${n} pending` : "") + ` — <span class="cl" tabindex="0" role="button"` +
+    ` onclick="closeQCap();openQBank()">open it</span></div>`;
+  qcapTimer = setTimeout(closeQCap, 2400);
+}
+
+/* the hub: every question banked on this tree, pending first —
+   investigate one, discard it, or run every pending question in one
+   queued pass (exactly like "full" queues four follow-ups). Answered
+   ones fold under a disclosure with a jump back to the Q&A they became. */
+function qrowHtml(q, done){
+  const tree = cur();
+  const node = getNode(tree, q.node);
+  const jumpTurn = done ? (q.answerTurn ?? q.turn ?? 1) : (q.turn ?? 1);
+  return `<div class="qrow${done ? " done" : ""}">` +
+    `<div class="qtext cl" tabindex="0" role="button" data-act="jump"` +
+    ` data-node="${q.node}" data-turn="${jumpTurn}"` +
+    ` title="jump to this in the conversation">${esc(oneLine(q.text, 160))}</div>` +
+    `<div class="qwhere">${node ? esc(oneLine(node.label, 40)) : "…"}` +
+    `${q.turn ? " · turn " + q.turn : ""}${done ? " · answered" : ""}</div>` +
+    `<div class="qacts">` +
+    (done
+      ? `<button data-act="clear" data-q="${esc(q.id)}" class="ghost">${ico("✕")}clear</button>`
+      : `<button data-act="go" data-q="${esc(q.id)}" class="primary" ${running ? "disabled" : ""}>${ico("▶")}investigate</button>` +
+        `<button data-act="discard" data-q="${esc(q.id)}" class="ghost">${ico("✕")}discard</button>`) +
+    `</div></div>`;
+}
+function wireQBankBody(){
+  $("qbbody").querySelectorAll("[data-act]").forEach(el => {
+    el.onclick = () => {
+      const act = el.dataset.act;
+      if (act === "jump"){ closeQBank(); jumpToTerm(+el.dataset.node, +el.dataset.turn); return; }
+      if (act === "discard" || act === "clear"){ removeQuestion(el.dataset.q); renderQBank(); return; }
+      if (act === "go"){
+        if (running) return;
+        const tree = cur(); if (!tree) return;
+        enqueue(bankInvestigateThunk(tree.id, el.dataset.q));
+        renderQBank();
+      }
+    };
+    if (el.getAttribute("role") === "button")
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " "){ e.preventDefault(); el.click(); }
+      });
+  });
+  const runAll = $("qbrunall");
+  if (runAll) runAll.onclick = () => { runAllQuestions(); renderQBank(); };
+}
+function renderQBank(){
+  if (!$("qbankbox").classList.contains("open")) return;
+  const tree = cur();
+  const pend = tree ? pendingQuestions(tree) : [];
+  const done = tree ? answeredQuestions(tree) : [];
+  $("qbscope").textContent = tree ? "· " + oneLine(tree.root_topic, 34) : "";
+  if (!pend.length && !done.length){
+    $("qbbody").innerHTML =
+      `<div class="dkempty"><div class="big">❓</div>` +
+      `<p>nothing banked yet — press <b>q</b> while reading to jot down a question ` +
+      `instead of losing the thread. Investigate it on the spot, or save up a few ` +
+      `and run them together.</p></div>`;
+    return;
+  }
+  let h = "";
+  if (pend.length > 1)
+    h += `<button class="primary" id="qbrunall" style="width:100%;margin-bottom:.7rem" ${running ? "disabled" : ""}>` +
+         `${ico("▶")}run all ${pend.length} now</button>`;
+  h += pend.map(q => qrowHtml(q, false)).join("");
+  if (done.length){
+    h += `<details class="qbdone"${pend.length ? "" : " open"}><summary>${ico("✓")}answered · ${done.length}</summary>` +
+         done.map(q => qrowHtml(q, true)).join("") + `</details>`;
+  }
+  $("qbbody").innerHTML = h;
+  wireQBankBody();
+}
+let qbPrevFocus = null;
+function openQBank(){
+  qbPrevFocus = document.activeElement;
+  $("qbankbox").classList.add("open");
+  renderQBank();
+  $("qbclose").focus();
+}
+window.openQBank = openQBank;
+function closeQBank(){
+  $("qbankbox").classList.remove("open");
+  if (qbPrevFocus && qbPrevFocus.focus && document.contains(qbPrevFocus)) qbPrevFocus.focus();
+  qbPrevFocus = null;
+}
+window.closeQBank = closeQBank;
+$("qbclose").onclick = closeQBank;
+$("qbankbox").addEventListener("click", (e) => { if (e.target === $("qbankbox")) closeQBank(); });
+
 /* select words in a conversation -> a floating chip offers two moves.
    "define" puts the term in the glossary — the same cheap model call as
    the automatic definitions, same everything after: dotted underlines,
@@ -5874,6 +6142,13 @@ function paletteActions(){
       acts.push({icon: "🗺", label: "survey", sub: "the topic's foundations map", run(){ openSurvey(); }});
     acts.push({icon: "📝", label: "my notes", sub: tree.note && tree.note.trim() ? "your synthesis of this tree" : "jot your own synthesis", run(){ openNotes(); }});
     if (tree.source) acts.push({icon: "📚", label: "source", sub: "the passage this tree is grounded in", run(){ openSrcbox(); }});
+    if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor))
+      acts.push({icon: "❓", label: "jot a question", sub: "press q anytime while reading", run(){ openQCap(); }});
+    if (questionsOf(tree).length){
+      const nq = pendingQuestions(tree).length;
+      acts.push({icon: "❓", label: "question bank",
+        sub: nq ? `${nq} question${nq === 1 ? "" : "s"} waiting` : "all answered", run(){ openQBank(); }});
+    }
     acts.push({icon: "🔊", label: "listen", sub: "read this conversation aloud", run(){ listenNode(); }});
     acts.push({icon: "💾", label: "save .know.json", sub: "", run(){ $("exportjson").click(); }});
     acts.push({icon: "📄", label: "export markdown", sub: "", run(){ $("exportmd").click(); }});
@@ -6030,6 +6305,7 @@ function renderAll(keepScroll){
   renderHeader(); renderMap(); renderLoose(); renderTreeList(); renderTerms();
   renderConversation(keepScroll);
   if ($("surveybox").classList.contains("open")) renderSurvey();
+  renderQBank();   // keep an open bank honest as investigations complete
   updateHash();
 }
 
@@ -6449,6 +6725,52 @@ function askTutor(){
 $("askbtn").onclick = askTutor;
 $("askinput").addEventListener("keydown", (e) => { if (e.key === "Enter") askTutor(); });
 
+/* a banked question, investigated: the exact same "ask the tutor
+   directly" path as askThunk above, just sourced from tree.questions
+   instead of the ask box, and marking the bank entry answered once the
+   tutor replies. "run all" is just enqueueing one of these per pending
+   question — the queue (already sequential) does the rest. */
+function bankInvestigateThunk(treeId, qid){
+  let rec = null;
+  return async () => {
+    runLabel = "";
+    const tree = store[treeId];
+    const q = tree && questionsOf(tree).find(x => x.id === qid);
+    if (!tree || !q || q.answered) return;
+    const node = getNode(tree, q.node);
+    if (!node) return;
+    activeRun = {treeId, nodeId: node.id};
+    if (!rec){
+      rec = {turn: node.turns.length + 1, thinking: "", new_term: "",
+             action: q.text, confidence: null, done: false, tutor: "", user: true};
+      node.turns.push(rec);
+      saveStore(); renderAll();
+    }
+    if (!rec.tutor){
+      activity = {nodeId: node.id, kind: "tutor"};
+      setStatus(provName() + " is answering a banked question…"); renderAll();
+      const before = node.turns.slice(0, node.turns.indexOf(rec));
+      const T = await api("tutor", {...rebuildCtx(tree, node),
+                                    ...(tree.source ? {source: tree.source} : {}),
+                                    turns: before, action: q.text, ...tutorParams()});
+      node.cost += T.cost;
+      rec.tutor = T.tutor;
+      if (T.parts) rec.parts = T.parts;
+      saveStore();
+    }
+    q.answered = true; q.answerTurn = rec.turn;
+    saveStore();
+    activity = null;
+    renderAll(true);
+  };
+}
+function runAllQuestions(){
+  const tree = cur(); if (!tree || running) return;
+  const thunks = pendingQuestions(tree).map(q => bankInvestigateThunk(tree.id, q.id));
+  if (thunks.length) enqueue(...thunks);
+}
+window.runAllQuestions = runAllQuestions;
+
 function cmdNew(topic, source){ enqueue(rootThunk(topic, "", source)); }
 function cmdFull(topic, source){
   enqueue(rootThunk(topic, "investigation 1 of 4", source),
@@ -6785,10 +7107,12 @@ document.addEventListener("keydown", (e) => {
     if ($("teachbox").classList.contains("open")){ closeTeach(); return; }
     if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
     if ($("srcbox").classList.contains("open")){ closeSrcbox(); return; }
+    if ($("qbankbox").classList.contains("open")){ closeQBank(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
     if (!$("selchip").hidden){ hideSelchip(); return; }
+    if (!$("qcap").hidden){ closeQCap(); return; }
     stopSpeech(); closePanel(true); closeMenu();
     if (rulerActive()){ prefs.ruler = false; prefs.focus = false; applyPrefs(); }
     return;
@@ -6875,12 +7199,24 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     stepTurn(e.key === "j" ? 1 : -1);
   }
+  /* q: jot a question for the bank without losing your place in the
+     reading — only once there's something to read and no other panel
+     is already claiming the keyboard */
+  if (e.key === "q" && !typing && $("qcap").hidden &&
+      !e.ctrlKey && !e.metaKey && !e.altKey){
+    const tree = cur();
+    const node = tree && currentNode != null ? getNode(tree, currentNode) : null;
+    if (node && node.turns.some(t => t.tutor)){
+      e.preventDefault();
+      openQCap();
+    }
+  }
 });
 
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "docketbox", "notesbox", "srcbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "docketbox", "notesbox", "srcbox", "qbankbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(
