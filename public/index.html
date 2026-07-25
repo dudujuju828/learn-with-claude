@@ -745,31 +745,36 @@
 
   /* ---- progress dashboard (read-only stats over review + quizzes),
           and the ★ highlights hub which shares its skeleton ---- */
-  #statsbox, #hlbox{
+  #statsbox, #hlbox, #docketbox{
     display:none; position:fixed; inset:0; z-index:95;
     background:color-mix(in srgb, var(--bg) 76%, transparent);
     align-items:center; justify-content:center; padding:1rem;
   }
-  #statsbox.open, #hlbox.open{display:flex}
-  #statsbox .box, #hlbox .box{
+  #statsbox.open, #hlbox.open, #docketbox.open{display:flex}
+  #statsbox .box, #hlbox .box, #docketbox .box{
     background:var(--card); border:1px solid var(--line); border-radius:1rem;
     padding:1.1rem 1.3rem 1.3rem; width:min(34rem,94vw); max-height:88dvh;
     overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
   }
-  #statsbox .sthead, #hlbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
-  #statsbox #stattitle, #hlbox #hltitle{font-weight:600}
-  #statsbox #statscope, #hlbox #hlscope{flex:1; color:var(--muted); font-size:.82rem;
+  #statsbox .sthead, #hlbox .sthead, #docketbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
+  #statsbox #stattitle, #hlbox #hltitle, #docketbox #dktitle{font-weight:600}
+  #statsbox #statscope, #hlbox #hlscope, #docketbox #dkscope{flex:1; color:var(--muted); font-size:.82rem;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  #hlbox .hltree{font-weight:600; margin:1rem 0 .4rem}
-  #hlbox .hltree:first-child{margin-top:0}
-  #hlbox .hlrow{
+  #hlbox .hltree, #docketbox .hltree{font-weight:600; margin:1rem 0 .4rem}
+  #hlbox .hltree:first-child, #docketbox .hltree:first-child{margin-top:0}
+  #hlbox .hlrow, #docketbox .hlrow{
     display:block; width:100%; text-align:left; font-family:inherit; font-size:.95em;
     background:var(--bg); border:1px solid var(--line); border-radius:.6rem;
     padding:.5rem .7rem; margin:.35rem 0; cursor:pointer; color:var(--fg);
   }
-  #hlbox .hlrow:hover{border-color:var(--term)}
+  #hlbox .hlrow:hover, #docketbox .hlrow:hover{border-color:var(--term)}
   #hlbox .hlrow mark{background:var(--termbg); color:inherit; border-radius:.25rem; padding:.02rem .15rem}
-  #hlbox .hlrow .where{color:var(--muted); font-size:.76rem; margin-top:.25rem}
+  #hlbox .hlrow .where, #docketbox .hlrow .where{color:var(--muted); font-size:.76rem; margin-top:.25rem}
+  /* the docket's per-tree thread groups and its all-clear state */
+  #docketbox .dktree{color:var(--muted); font-size:.8rem; margin:.5rem 0 .2rem}
+  #docketbox .dkthreads{margin:.35rem 0 .1rem}
+  #docketbox .dkempty{text-align:center; padding:1.6rem 0 1rem; color:var(--muted)}
+  #docketbox .dkempty .big{font-size:1.7rem; margin-bottom:.5rem}
   #statsbox .st-tiles{
     display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin-bottom:1.1rem;
   }
@@ -964,20 +969,20 @@
   .gref:hover{color:var(--term)}
 
   /* loose threads — terms flagged but never chased, under the tree map */
-  #loose{display:flex; flex-wrap:wrap; gap:.35rem}
-  #loose .thread{
+  #loose, #docketbox .dkthreads{display:flex; flex-wrap:wrap; gap:.35rem}
+  #loose .thread, #docketbox .thread{
     font-size:.82rem; padding:.25rem .65rem; border-radius:1rem;
     color:var(--term); border-color:color-mix(in srgb, var(--term) 40%, var(--line));
   }
-  #loose .thread:hover:not(:disabled){background:var(--termbg)}
-  #loose .thpair{display:inline-flex}
-  #loose .thpair .thread{border-radius:1rem 0 0 1rem}
-  #loose .thx{
+  #loose .thread:hover:not(:disabled), #docketbox .thread:hover:not(:disabled){background:var(--termbg)}
+  #loose .thpair, #docketbox .thpair{display:inline-flex}
+  #loose .thpair .thread, #docketbox .thpair .thread{border-radius:1rem 0 0 1rem}
+  #loose .thx, #docketbox .thx{
     font-size:.82rem; padding:.25rem .5rem; border-radius:0 1rem 1rem 0;
     margin-left:-1px; color:var(--muted);
     border-color:color-mix(in srgb, var(--term) 40%, var(--line));
   }
-  #loose .thx:hover:not(:disabled){background:var(--termbg); color:var(--term)}
+  #loose .thx:hover:not(:disabled), #docketbox .thx:hover:not(:disabled){background:var(--termbg); color:var(--term)}
   #loose .threstore{align-self:center; cursor:pointer}
   #loose .threstore:hover{color:var(--term)}
 
@@ -1044,7 +1049,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
-    #quizbox, #reviewbox, #statsbox, #hlbox, #notesbox, #teachbox, #gapsbox, #tutoreditor, #overview, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #teachbox, #gapsbox, #tutoreditor, #overview, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1222,6 +1227,12 @@
   (tap a mark to lift it). The <b>★ highlights</b> button in the words tab
   collects every marked passage across the profile's trees — tap one to
   jump back to it in context.</p>
+  <p><b>📅 today</b> — one place for everything waiting across the active
+  profile: cards due, conversations due another explanation, loose
+  threads from <i>every</i> tree (not just the open one — chase one, or ✕
+  the ones you don't care about), and survey maps with uncovered ground.
+  Tap anything to jump straight to it. The button appears in the words
+  tab whenever something's waiting.</p>
   <p><b>custom tutors</b> (the ✎ next to the style picker) let you write your
   own: name it, describe how it should answer, and it syncs to your other
   devices. The base rules always stay in force.</p>
@@ -1356,6 +1367,10 @@
     </section>
 
     <section data-side="gloss">
+      <div id="docketwrap" style="display:none">
+        <div class="btnrow"><button id="docketbtn"
+          title="everything waiting across this profile — cards, explanations, threads, survey pieces"></button></div>
+      </div>
       <div id="revwrap" style="display:none">
         <h2>review</h2>
         <div class="btnrow"><button id="revbtn" class="primary"></button></div>
@@ -1532,6 +1547,17 @@
       <button id="hlclose" class="ghost" aria-label="close highlights">✕</button>
     </div>
     <div id="hlbody"></div>
+  </div>
+</div>
+
+<div id="docketbox" role="dialog" aria-modal="true" aria-label="today">
+  <div class="box">
+    <div class="sthead">
+      <span id="dktitle">📅 today</span>
+      <span id="dkscope"></span>
+      <button id="dkclose" class="ghost" aria-label="close today">✕</button>
+    </div>
+    <div id="dkbody"></div>
   </div>
 </div>
 
@@ -3518,8 +3544,10 @@ function renderLoose(){
     ? `<span class="cl hint threstore" tabindex="0" role="button" onclick="restoreThreads()"` +
       ` title="bring the dismissed threads back">↩ ${dismissed} dismissed</span>` : "");
 }
-function dismissThread(term){
-  const tree = cur(); if (!tree) return;
+function dismissThread(term, treeId){
+  // no treeId: the loose-threads list under the map (current tree).
+  // with one: the 📅 docket dismissing a thread in any profile tree.
+  const tree = treeId ? store[treeId] : cur(); if (!tree) return;
   const lc = String(term || "").toLowerCase().trim();
   if (!lc) return;
   const ds = dismissedOf(tree).slice();
@@ -4852,6 +4880,7 @@ $("revundo").onclick = undoGrade;
 /* the sidebar row: how many cards are waiting, or when the next one is */
 function updateRevRow(){
   updateProgRow();
+  updateDocketRow();
   // the explain-again nudge: conversations whose explanation is due a pass
   {
     const tdue = teachDueList();
@@ -5026,6 +5055,134 @@ window.closeHl = closeHl;
 $("hlclose").onclick = closeHl;
 $("hlbtn").onclick = () => openHl();
 $("hlbox").addEventListener("click", (e) => { if (e.target === $("hlbox")) closeHl(); });
+
+/* ------------------------------------------------------------------ */
+/* 📅 today — the docket: everything actionable across the active     */
+/* profile in one place. Cards due, explanations due, loose threads   */
+/* from every tree (not just the open one), and survey maps with      */
+/* uncovered ground. Pure aggregation over existing data with jump    */
+/* actions — the "what should I do right now?" answer at profile      */
+/* level, the way → next answers it at tree level.                    */
+/* ------------------------------------------------------------------ */
+function docketData(){
+  const stamp = (t) => t.saved_at || t.created || "";
+  const trees = profileTrees().sort((a, b) => stamp(b).localeCompare(stamp(a)));
+  const threads = [];
+  for (const t of trees)
+    for (const th of looseThreads(t))
+      threads.push({treeId: t.id, topic: t.root_topic, ...th});
+  const surveys = [];
+  for (const t of trees){
+    if (!(t.survey && t.survey.items && t.survey.items.length)) continue;
+    const total = surveyNames(t.survey.items).length;
+    const covered = surveyCovered(t, t.survey.items);
+    if (covered < total)
+      surveys.push({treeId: t.id, topic: t.root_topic, covered, total});
+  }
+  return {cards: dueCards().length, teach: teachDueList(), threads, surveys};
+}
+function docketCount(d){
+  return d.cards + d.teach.length + d.threads.length +
+         d.surveys.reduce((s, x) => s + (x.total - x.covered), 0);
+}
+let dkPrevFocus = null;
+function renderDocket(){
+  if (!$("docketbox").classList.contains("open")) return;
+  const d = docketData();
+  $("dkscope").textContent = activeProfile() ? "· " + activeProfile() : "· all trees";
+  if (!docketCount(d)){
+    $("dkbody").innerHTML =
+      `<div class="dkempty"><div class="big">🌤</div>` +
+      `<p>all clear — nothing is waiting. start something new, or just read.</p></div>`;
+    return;
+  }
+  let h = "";
+  if (d.cards){
+    h += `<div class="hltree">${ico("🔁")}review</div>` +
+      `<button class="hlrow" data-act="review">${d.cards} card${d.cards === 1 ? "" : "s"} due` +
+      `<div class="where">${prefs.drill && canSpeak()
+        ? "the 🎧 drill will run them out loud" : "recall · flip · grade"}</div></button>`;
+  }
+  if (d.teach.length){
+    h += `<div class="hltree">${ico("🗣")}explain again</div>` +
+      d.teach.slice(0, 6).map(x =>
+        `<button class="hlrow" data-act="teach" data-tree="${esc(x.treeId)}" data-node="${x.nodeId}"` +
+        ` title="re-explain this conversation in your own words">` +
+        `${esc(oneLine(x.label, 60))}` +
+        `<div class="where">a clean explanation fades too — say it fresh</div></button>`).join("") +
+      (d.teach.length > 6 ? `<div class="where">+${d.teach.length - 6} more due</div>` : "");
+  }
+  if (d.threads.length){
+    h += `<div class="hltree">${ico("⛏")}loose threads</div>`;
+    const byTree = new Map();
+    for (const th of d.threads){
+      if (!byTree.has(th.treeId)) byTree.set(th.treeId, []);
+      byTree.get(th.treeId).push(th);
+    }
+    let groups = 0;
+    for (const [tid, ths] of byTree){
+      if (++groups > 4){ h += `<div class="dktree">…and more in other trees</div>`; break; }
+      h += `<div class="dktree">${ico("🌳")}${esc(oneLine(ths[0].topic, 44))}</div>` +
+        `<div class="dkthreads">` + ths.slice(0, 4).map(th =>
+          `<span class="thpair"><button class="thread" data-act="chase" data-tree="${esc(tid)}"` +
+          ` data-node="${th.nodeId}" data-turn="${th.turn}" data-term="${esc(th.term)}"` +
+          ` title="jump there and branch into “${esc(th.term)}”">${esc(oneLine(th.term, 26))}</button>` +
+          `<button class="thx" data-act="dismiss" data-tree="${esc(tid)}" data-term="${esc(th.term)}"` +
+          ` title="dismiss — not interested" aria-label="dismiss ${esc(th.term)}">✕</button></span>`).join("") +
+        (ths.length > 4 ? `<span class="hint" style="align-self:center">+${ths.length - 4} more</span>` : "") +
+        `</div>`;
+    }
+  }
+  if (d.surveys.length){
+    h += `<div class="hltree">${ico("🗺")}uncovered ground</div>` +
+      d.surveys.slice(0, 6).map(x =>
+        `<button class="hlrow" data-act="survey" data-tree="${esc(x.treeId)}"` +
+        ` title="open the map and pick the next piece">` +
+        `${esc(oneLine(x.topic, 56))} · ${x.covered}/${x.total} covered` +
+        `<div class="where">the survey map still has unexplored foundations</div></button>`).join("");
+  }
+  $("dkbody").innerHTML = h;
+  $("dkbody").querySelectorAll("[data-act]").forEach(b => {
+    b.onclick = () => {
+      const act = b.dataset.act, tid = b.dataset.tree;
+      if (act === "dismiss"){
+        dismissThread(b.dataset.term, tid);
+        renderDocket(); updateRevRow();
+        return;
+      }
+      if (act === "review"){ closeDocket(); openReview(); return; }
+      if (running) return;   // navigation would yank the conversation mid-run
+      closeDocket();
+      if (currentId !== tid) openTree(tid);
+      if (act === "teach"){ selectNode(+b.dataset.node); openTeach(); }
+      else if (act === "chase") chaseThread(+b.dataset.node, +b.dataset.turn, b.dataset.term);
+      else if (act === "survey") openSurvey();
+    };
+  });
+}
+function openDocket(){
+  dkPrevFocus = document.activeElement;
+  $("docketbox").classList.add("open");
+  renderDocket();
+  $("dkclose").focus();
+}
+window.openDocket = openDocket;
+function closeDocket(){
+  $("docketbox").classList.remove("open");
+  if (dkPrevFocus && dkPrevFocus.focus && document.contains(dkPrevFocus))
+    dkPrevFocus.focus();
+  dkPrevFocus = null;
+}
+window.closeDocket = closeDocket;
+$("dkclose").onclick = closeDocket;
+$("docketbtn").onclick = () => openDocket();
+$("docketbox").addEventListener("click", (e) => { if (e.target === $("docketbox")) closeDocket(); });
+function updateDocketRow(){
+  const n = docketCount(docketData());
+  $("docketwrap").style.display = n ? "" : "none";
+  if (n) $("docketbtn").innerHTML = `${ico("📅")}today · ${n}`;
+  renderDocket();   // keep an open docket honest after grading or dismissing
+}
 
 function tile(n, label, cls){
   return `<div class="st-tile"><div class="n${cls ? " " + cls : ""}">${n}</div>` +
@@ -5538,6 +5695,12 @@ function paletteActions(){
     const tdue = teachDueList().length;
     if (tdue) acts.push({icon: "🗣", label: "explain again",
       sub: `${tdue} conversation${tdue === 1 ? "" : "s"} due another pass`, run(){ openTeachDue(); }});
+  }
+  {
+    const dk = docketCount(docketData());
+    if (dk) acts.push({icon: "📅", label: "today",
+      sub: `${dk} thing${dk === 1 ? "" : "s"} waiting — cards, explanations, threads, survey`,
+      run(){ openDocket(); }});
   }
   if (progHasData()) acts.push({icon: "📊", label: "progress",
     sub: "recall strength · forecast · streak · quizzes", run(){ openStats(); }});
@@ -6376,6 +6539,7 @@ document.addEventListener("keydown", (e) => {
     }
     if ($("statsbox").classList.contains("open")){ closeStats(); return; }
     if ($("hlbox").classList.contains("open")){ closeHl(); return; }
+    if ($("docketbox").classList.contains("open")){ closeDocket(); return; }
     if ($("gapsbox").classList.contains("open")){ closeGaps(); return; }
     if ($("teachbox").classList.contains("open")){ closeTeach(); return; }
     if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
@@ -6474,7 +6638,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "notesbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "docketbox", "notesbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(
