@@ -184,7 +184,7 @@ def split_tutor_parts(text: str) -> list:
     return out
 
 
-def handle_tutor(body: dict, call_model) -> dict:
+def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict:
     action = (body.get("action") or "").strip()
     if not action:
         raise ApiError("missing 'action'")
@@ -196,7 +196,8 @@ def handle_tutor(body: dict, call_model) -> dict:
         custom = None
     elif len(custom) > 4000:
         custom = custom[:4000]
-    system = tutor_system(diagrams=False, mode=mode, custom_style=custom, segments=True)
+    system = tutor_system(diagrams=False, mode=mode, custom_style=custom, segments=True,
+                          grounding=grounding)
     extra = tutor_extra_context(body)
     if extra:
         system += f"\n\n{extra}"
@@ -466,11 +467,19 @@ def handle_digest(body: dict) -> dict:
     return {"digest": conversation_digest(body.get("turns", []), body.get("upto"))}
 
 
-def model_routes(call_model) -> dict:
-    """The POST route table every backend serves, bound to its transport."""
+def model_routes(call_model, tutor_grounding=None) -> dict:
+    """The POST route table every backend serves, bound to its transport.
+
+    `tutor_grounding` is local-mode-only: a string, a zero-arg callable
+    returning one (evaluated fresh per request, since local settings can
+    change while the server runs), or None. api/index.py (hosted) never
+    passes it, so handle_tutor there always gets grounding=None."""
+    def _grounding() -> "str | None":
+        return tutor_grounding() if callable(tutor_grounding) else tutor_grounding
+
     return {
         "learner": lambda body: handle_learner(body, call_model),
-        "tutor": lambda body: handle_tutor(body, call_model),
+        "tutor": lambda body: handle_tutor(body, call_model, grounding=_grounding()),
         "next_concept": lambda body: handle_next_concept(body, call_model),
         "interview": lambda body: handle_interview(body, call_model),
         "teachback": lambda body: handle_teachback(body, call_model),

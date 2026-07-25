@@ -11,7 +11,9 @@ with three differences:
   * trees persist as .know.json files in the CLI's knowledge directory
     ($LEARN_DIR or ~/.learn-with-claude/knowledge), so the shell and the web
     app grow the same collection;
-  * custom tutors live next to them in tutors.json.
+  * custom tutors live next to them in tutors.json, and the model/effort/
+    project-directory/MCP-server settings (local_settings.py) in
+    local_settings.json.
 
 Binds 127.0.0.1 only.
 """
@@ -28,7 +30,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import copilot_backend
+from . import copilot_backend, local_settings
 from .knowledge import FORMAT, slug
 from .personas import LEARNER_LEVELS, TUTOR_MODES
 from .webapi import ApiError, model_routes
@@ -49,21 +51,46 @@ STATIC_TYPES = {
 _TREE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _TUTOR_ID = re.compile(r"^[a-z0-9-]{1,32}$")
 
-ROUTES = model_routes(copilot_backend.call_model)
+ROUTES = model_routes(copilot_backend.call_model, tutor_grounding=copilot_backend.grounding_text)
 
 
 def handle_config() -> dict:
-    models = {r: m or "auto" for r, m in copilot_backend.ROLE_MODELS.items()}
     return {
-        "learner_model": models["learner"],
-        "tutor_model": models["tutor"],
-        "effort": copilot_backend.EFFORT or "default",
+        "learner_model": copilot_backend.effective_model("learner") or "auto",
+        "tutor_model": copilot_backend.effective_model("tutor") or "auto",
+        "effort": copilot_backend.effective_effort() or "default",
         "max_turns": MAX_TURNS,
         "modes": list(TUTOR_MODES),
         "levels": list(LEARNER_LEVELS),
         "local": True,
         "provider": "copilot",
     }
+
+
+# --------------------------------------------------------------------------- #
+# local settings — models, effort, project dir, MCP servers (Confluence etc.)
+# --------------------------------------------------------------------------- #
+class LocalSettingsEndpoint:
+    """Thin HTTP-shaped wrapper around a LocalSettingsStore: GET returns the
+    saved settings plus the built-in presets (Confluence, so far); POST
+    validates strictly, persists, and immediately reconfigures
+    copilot_backend so the next model call already sees the change — no
+    server restart."""
+
+    def __init__(self, store: local_settings.LocalSettingsStore) -> None:
+        self.store = store
+
+    def get(self) -> dict:
+        doc = self.store.load()
+        return {**doc, "presets": {"confluence": local_settings.CONFLUENCE_PRESET}}
+
+    def put(self, body: dict) -> dict:
+        try:
+            clean = self.store.save(body if isinstance(body, dict) else {})
+        except ValueError as exc:
+            raise ApiError(str(exc)) from exc
+        copilot_backend.configure(clean)
+        return {**clean, "presets": {"confluence": local_settings.CONFLUENCE_PRESET}}
 
 
 # --------------------------------------------------------------------------- #
@@ -280,7 +307,7 @@ class TutorStore:
 # --------------------------------------------------------------------------- #
 # http
 # --------------------------------------------------------------------------- #
-def make_handler(trees: TreeStore, tutors: TutorStore):
+def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEndpoint):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -350,6 +377,8 @@ def make_handler(trees: TreeStore, tutors: TutorStore):
                             self._send_json(200, {"tree": doc})
                 elif path == "/api/tutors":
                     self._send_json(200, {"doc": tutors.get()})
+                elif path == "/api/local_settings":
+                    self._send_json(200, settings.get())
                 elif path.startswith("/api/"):
                     self._send_json(404, {"error": "no such route"})
                 else:
@@ -375,6 +404,8 @@ def make_handler(trees: TreeStore, tutors: TutorStore):
                 elif path == "/api/tutors":
                     tutors.put(body.get("doc"))
                     self._send_json(200, {"ok": True})
+                elif path == "/api/local_settings":
+                    self._send_json(200, settings.put(body))
                 elif path in ("/api/login", "/api/logout"):
                     self._send_json(200, {"ok": True})  # no auth on localhost
                 elif path.startswith("/api/"):
@@ -424,7 +455,10 @@ def serve(port: int = 8577, knowledge_dir: "str | None" = None,
 
     trees = TreeStore(root)
     tutors = TutorStore(root.parent / "tutors.json")
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(trees, tutors))
+    settings_store = local_settings.LocalSettingsStore(root.parent / "local_settings.json")
+    copilot_backend.configure(settings_store.load())
+    settings = LocalSettingsEndpoint(settings_store)
+    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(trees, tutors, settings))
     url = f"http://localhost:{port}/"
     print(f"learn-with-claude local web · {version}")
     print(f"  trees: {root}")

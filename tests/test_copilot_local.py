@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from learn_with_claude import copilot_backend  # noqa: E402
+from learn_with_claude import copilot_backend, local_settings  # noqa: E402
 from learn_with_claude.copilot_backend import _parse_stream, compose_prompt  # noqa: E402
 from learn_with_claude.localweb import TreeStore, TutorStore  # noqa: E402
 from learn_with_claude.webapi import ApiError  # noqa: E402
@@ -95,6 +95,112 @@ def test_overflow_prompt():
         assert "view tool" in prompt and len(prompt) < 500   # bootstrap, not the payload
         assert "--available-tools=view" in argv and "--add-dir" in argv
     print("ok  oversized prompt travels via temp file")
+
+
+def test_local_settings_sanitize():
+    # lenient (load) path: garbage is silently dropped, never raises
+    d = local_settings.sanitize({
+        "effort": "wat", "models": "nope",
+        "mcp_servers": [{"name": "BAD NAME"}, {"name": "ok", "transport": "stdio"}],
+    })
+    assert d["effort"] == "" and d["models"] == {"learner": "", "tutor": "", "glossary": ""}
+    assert d["mcp_servers"] == []   # bad name dropped; "ok" has no command -> dropped too
+
+    with tempfile.TemporaryDirectory() as td:
+        d2 = local_settings.sanitize({"code_dir": td, "models": {"tutor": "gpt-5.4"}})
+        assert d2["code_dir"] == str(Path(td).resolve())
+        assert d2["models"]["tutor"] == "gpt-5.4"
+    assert local_settings.sanitize({"code_dir": "C:/not/a/real/path/xyz"})["code_dir"] == ""
+
+    # strict (save) path: raises with a message fit to show the person who typed it
+    for bad, needle in [
+        ({"effort": "extreme"}, "effort"),
+        ({"code_dir": "C:/definitely/not/a/real/path/xyz"}, "not a directory"),
+        ({"mcp_servers": [{"name": "Bad Name"}]}, "lowercase"),
+        ({"mcp_servers": [{"name": "srv", "transport": "http"}]}, "url"),
+        ({"mcp_servers": [{"name": "srv", "transport": "stdio"}]}, "command"),
+        ({"mcp_servers": [{"name": "srv", "transport": "http", "url": "https://a"},
+                          {"name": "srv", "transport": "http", "url": "https://b"}]}, "duplicate"),
+        ({"mcp_servers": [{"name": f"s{i}", "transport": "http", "url": "https://x"}
+                          for i in range(local_settings.MAX_SERVERS + 1)]}, "at most"),
+    ]:
+        try:
+            local_settings.sanitize(bad, strict=True)
+            assert False, f"must reject {bad!r}"
+        except ValueError as e:
+            assert needle in str(e), f"{needle!r} not in {e}"
+
+    # a valid stdio server and the Confluence preset both round-trip
+    good = local_settings.sanitize({"mcp_servers": [
+        {"name": "files", "transport": "stdio", "command": "npx",
+         "args": ["-y", "thing"], "enabled": True, "note": "x"},
+        {**local_settings.CONFLUENCE_PRESET, "enabled": True},
+    ]}, strict=True)
+    assert [s["name"] for s in good["mcp_servers"]] == ["files", "confluence"]
+    assert good["mcp_servers"][0]["args"] == ["-y", "thing"]
+    assert good["mcp_servers"][1]["url"] == local_settings.CONFLUENCE_PRESET["url"]
+    print("ok  local_settings.sanitize (lenient load vs strict save)")
+
+
+def test_local_settings_store():
+    with tempfile.TemporaryDirectory() as d:
+        store = local_settings.LocalSettingsStore(Path(d) / "local_settings.json")
+        assert store.load() == local_settings.default()   # no file yet
+        saved = store.save({"effort": "high", "models": {"tutor": "gpt-5.4"}})
+        assert saved["effort"] == "high"
+        assert store.load() == saved                       # round-trips from disk
+        try:
+            store.save({"effort": "extreme"})
+            assert False, "bad effort must raise"
+        except ValueError:
+            pass
+        assert store.load() == saved                        # rejected save didn't touch the file
+
+        # a corrupted file on disk degrades to defaults, never crashes the server
+        store.path.write_text("not json", encoding="utf-8")
+        assert store.load() == local_settings.default()
+    print("ok  local settings store (round-trip, rejected save, corrupt file)")
+
+
+def test_copilot_backend_overrides():
+    original = copilot_backend._snapshot()
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            settings = local_settings.sanitize({
+                "models": {"tutor": "gpt-5.4"}, "effort": "high", "code_dir": d,
+                "mcp_servers": [
+                    {**local_settings.CONFLUENCE_PRESET, "enabled": True},
+                    {"name": "sidelined", "transport": "http", "url": "https://x", "enabled": False},
+                ],
+            }, strict=True)
+            copilot_backend.configure(settings)
+
+            assert copilot_backend.effective_model("tutor") == "gpt-5.4"
+            # an untouched role still falls back to the env-derived default
+            assert copilot_backend.effective_model("learner") == copilot_backend.ROLE_MODELS["learner"]
+            assert copilot_backend.effective_effort() == "high"
+
+            flags, cwd = copilot_backend._role_flags("tutor")
+            assert "--available-tools=view,grep,glob,confluence" in flags
+            assert "--allow-tool=confluence" in flags
+            assert "--allow-tool=sidelined" not in flags   # disabled server excluded entirely
+            assert "--add-dir" in flags and d in flags
+            i = flags.index("--additional-mcp-config")
+            cfg = json.loads(flags[i + 1])
+            assert list(cfg["mcpServers"]) == ["confluence"]
+            assert cfg["mcpServers"]["confluence"]["url"] == local_settings.CONFLUENCE_PRESET["url"]
+
+            grounding = copilot_backend.grounding_text()
+            assert d in grounding and "confluence" in grounding and "sidelined" not in grounding
+
+            # learner/glossary stay tool-free regardless of any of this
+            assert copilot_backend._role_flags("learner") == (["--available-tools=none"], None)
+    finally:
+        copilot_backend.configure(original)
+    # settings reset -> the untouched-default flags are exactly what they were before
+    argv, _ = stub_call(tempfile.mkdtemp(), "sys", [{"role": "user", "content": "q"}], "tutor")
+    assert "--available-tools=view,grep,glob" in argv and "--additional-mcp-config" not in argv
+    print("ok  copilot_backend settings overlay (models, effort, code_dir, mcp servers)")
 
 
 def test_tree_store():
@@ -186,6 +292,9 @@ if __name__ == "__main__":
     test_parse_stream()
     test_tool_policy()
     test_overflow_prompt()
+    test_local_settings_sanitize()
+    test_local_settings_store()
+    test_copilot_backend_overrides()
     test_tree_store()
     test_tree_store_revs()
     test_tutor_store()

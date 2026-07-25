@@ -17,6 +17,7 @@ from learn_with_claude.personas import (  # noqa: E402
     LEARNER_SYSTEM,
     define_message,
     learner_system,
+    local_grounding_system,
     quiz_message,
     tutor_system,
 )
@@ -41,6 +42,61 @@ def test_tutor_system_segments():
     seg = tutor_system(diagrams=False, segments=True)
     assert "MARKUP" in seg and "[watch out]" in seg
     print("ok  tutor segments flag")
+
+
+def test_tutor_grounding():
+    # hosted (no grounding passed): byte-identical to before local grounding
+    # existed — the whole safety property the feature depends on.
+    base = tutor_system(diagrams=False)
+    assert tutor_system(diagrams=False, grounding=None) == base
+    assert "LOCAL TOOLS" not in base
+    assert "do not use any tools or the filesystem" in base
+
+    g = local_grounding_system("/some/proj", ["confluence — the wiki"])
+    assert "/some/proj" in g and "confluence — the wiki" in g
+    assert local_grounding_system(None) == local_grounding_system(None, [])
+    assert '"' not in local_grounding_system(None)   # no dangling code_dir clause
+
+    local = tutor_system(diagrams=False, grounding=g)
+    assert "LOCAL TOOLS" in local and "/some/proj" in local
+    assert "do not use any tools" not in local   # grounding replaces, not appends
+    # the diagrams flag is irrelevant once grounding is supplied
+    assert tutor_system(diagrams=True, grounding=g) == local
+    print("ok  tutor grounding (hosted default byte-identical, local block swaps in)")
+
+
+def test_handle_tutor_grounding():
+    from learn_with_claude.webapi import handle_tutor, model_routes
+
+    seen = {}
+
+    def stub(system, messages, role, **kw):
+        seen["system"] = system
+        return "Direct answer.", 0.01
+
+    handle_tutor({"action": "q"}, stub, grounding="LOCAL TOOLS marker")
+    assert "LOCAL TOOLS marker" in seen["system"]
+
+    # model_routes accepts a zero-arg callable, re-evaluated every request —
+    # local settings (code_dir, mcp servers) can change while the server runs
+    calls = {"n": 0}
+
+    def live_grounding():
+        calls["n"] += 1
+        return f"call-{calls['n']}"
+
+    local_routes = model_routes(stub, tutor_grounding=live_grounding)
+    local_routes["tutor"]({"action": "q"})
+    assert "call-1" in seen["system"]
+    local_routes["tutor"]({"action": "q"})
+    assert "call-2" in seen["system"] and calls["n"] == 2
+
+    # api/index.py (hosted) never passes tutor_grounding — stays untouched
+    hosted_routes = model_routes(stub)
+    hosted_routes["tutor"]({"action": "q"})
+    assert "call-" not in seen["system"]
+    assert "do not use any tools or the filesystem" in seen["system"]
+    print("ok  handle_tutor / model_routes grounding wiring (local live, hosted untouched)")
 
 
 def test_split_tutor_parts():
@@ -389,6 +445,8 @@ def test_source_threading():
 if __name__ == "__main__":
     test_learner_levels()
     test_tutor_system_segments()
+    test_tutor_grounding()
+    test_handle_tutor_grounding()
     test_split_tutor_parts()
     test_knowledge_round_trip()
     test_message_builders()

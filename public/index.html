@@ -69,7 +69,7 @@
      scrollbar (welcome → conversation, or turns arriving during a run) */
   html{font-size:var(--fs); scrollbar-gutter:stable; -webkit-text-size-adjust:100%}
   /* scrolling inside panels, sheets, and lists never chain-scrolls the page */
-  aside, #aapanel, #helppanel, #plist, #quizbox .box, #osvg, #tutoreditor .box{
+  aside, #aapanel, #helppanel, #plist, #quizbox .box, #osvg, #tutoreditor .box, #localsettings .box{
     overscroll-behavior:contain}
   body{
     margin:0; background:var(--bg); color:var(--fg);
@@ -527,6 +527,37 @@
     padding:.5rem .65rem; resize:vertical; line-height:1.5;
   }
   #tutoreditor .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
+
+  /* ---- local settings (Copilot CLI transport only) ---- */
+  #localsettings{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:color-mix(in srgb, var(--bg) 72%, transparent);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #localsettings.open{display:flex}
+  #localsettings .box{
+    background:var(--card); border:1px solid var(--line); border-radius:1rem;
+    padding:1.4rem 1.5rem; width:min(34rem,94vw); max-height:92dvh; overflow:auto;
+    box-shadow:0 10px 40px rgba(0,0,0,.25);
+  }
+  #localsettings h3{font-size:1rem; font-weight:600; margin:0 0 .4rem}
+  #localsettings label{display:block; font-size:.8rem; color:var(--muted); margin:.7rem 0 .25rem}
+  #localsettings textarea{
+    width:100%; font-family:inherit; font-size:.85rem; color:var(--fg);
+    background:var(--bg); border:1px solid var(--line); border-radius:.55rem;
+    padding:.4rem .6rem; resize:vertical; line-height:1.45;
+  }
+  #localsettings code{font-size:.85em; background:var(--bg); border-radius:.3rem; padding:.05rem .3rem}
+  #localsettings .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
+  #localsettings .err{color:var(--danger); font-size:.85rem; margin:.5rem 0 0}
+  #localsettings .err:empty{display:none}
+  .mcprow{
+    border:1px solid var(--line); border-radius:.7rem; padding:.55rem .6rem;
+    margin-bottom:.5rem; background:var(--bg);
+  }
+  .mcprow .newrow{margin-bottom:.35rem}
+  .mcprow input[type=text]{margin-bottom:0}
+  .mcprow select{width:auto}
 
   /* ---- tree overview ---- */
   #overview{
@@ -1210,6 +1241,7 @@
   <button id="palbtn" class="ghost" title="jump anywhere — Ctrl+K" aria-label="jump anywhere">⌘K</button>
   <button id="helpbtn" title="help" aria-label="help" aria-haspopup="dialog" aria-expanded="false">?</button>
   <button id="aabtn" title="reading settings" aria-label="reading settings" aria-haspopup="dialog" aria-expanded="false">Aa</button>
+  <button id="localsettingsbtn" class="ghost" style="display:none" title="local settings — models, effort, project directory, MCP servers" aria-label="local settings" aria-haspopup="dialog">⚙</button>
   <button id="logoutbtn" class="ghost">log out</button>
 </header>
 
@@ -1602,6 +1634,61 @@
       <span style="flex:1"></span>
       <button id="tutorcancel">cancel</button>
       <button id="tutorsave" class="primary">save</button>
+    </div>
+  </div>
+</div>
+
+<div id="localsettings" role="dialog" aria-modal="true" aria-label="local settings">
+  <div class="box">
+    <h3>local settings</h3>
+    <p class="hint" style="margin-top:0">only affects this machine — saved into
+    <code>local_settings.json</code> next to your knowledge folder, and takes effect
+    on the next tutor reply, no restart needed.</p>
+
+    <label for="lstutormodel">models <span style="font-weight:400; color:var(--muted)">(blank = auto)</span></label>
+    <div class="newrow">
+      <input id="lstutormodel" type="text" placeholder="tutor · auto" style="flex:1">
+      <input id="lslearnermodel" type="text" placeholder="learner · auto" style="flex:1">
+      <input id="lsglossarymodel" type="text" placeholder="flashcards · auto" style="flex:1">
+    </div>
+
+    <label for="lseffort">reasoning effort</label>
+    <select id="lseffort">
+      <option value="">default (auto)</option>
+      <option value="none">none</option>
+      <option value="minimal">minimal</option>
+      <option value="low">low</option>
+      <option value="medium">medium</option>
+      <option value="high">high</option>
+      <option value="xhigh">xhigh</option>
+      <option value="max">max</option>
+    </select>
+    <p class="hint">a pinned model that doesn't support the chosen effort will just
+    ignore it — the CLI's own behaviour, not this app's.</p>
+
+    <label for="lscodedir">project directory the tutor may look in</label>
+    <input id="lscodedir" type="text" placeholder="e.g. C:\work\our-internal-repo (leave blank for none)">
+    <p class="hint">an absolute path on THIS machine — your team's repo, a docs
+    checkout, anything relevant. Read-only; the tutor checks it when a question
+    sounds like it's about your own code or notes, not for general questions.</p>
+
+    <label>MCP tools the tutor can call before answering</label>
+    <div id="mcprows"></div>
+    <div class="btnrow" style="margin-top:.4rem">
+      <button type="button" id="lsaddconfluence">＋ add confluence</button>
+      <button type="button" id="lsaddmcp" class="ghost">＋ add a custom MCP server</button>
+    </div>
+    <p class="hint">confluence uses Atlassian's own remote MCP server — no token to
+    type in here; the first question that needs it opens a browser tab for you to
+    sign in, handled entirely by the Copilot CLI. A custom server's box is the raw
+    JSON <code>copilot mcp add</code> would take: <code>{"command","args","env"}</code>
+    for a local (stdio) tool, or <code>{"url","headers"}</code> for a remote one.</p>
+
+    <div class="err" id="lserror" role="alert" style="min-height:1.1em"></div>
+    <div class="foot">
+      <span style="flex:1"></span>
+      <button id="lscancel">cancel</button>
+      <button id="lssave" class="primary">save</button>
     </div>
   </div>
 </div>
@@ -2302,6 +2389,119 @@ function deleteTutor(){
   if (prefs.tmode === "custom:" + editingTutorId){ prefs.tmode = "balanced"; savePrefs(); }
   closeTutorEditor();
   persistTutors();
+}
+
+/* ------------------------------------------------------------------ */
+/* local settings — models, effort, project dir, MCP servers            */
+/* (Copilot CLI transport only: CONFIG.local gates the button that opens */
+/* this, but the routes simply don't exist against the hosted backend)  */
+/* ------------------------------------------------------------------ */
+let localSettingsDoc = {models: {}, effort: "", code_dir: "", mcp_servers: [], presets: {}};
+
+function mcpConfigText(s){
+  return s.transport === "stdio"
+    ? JSON.stringify({command: s.command || "", args: s.args || [], env: s.env || {}}, null, 2)
+    : JSON.stringify({url: s.url || "", headers: s.headers || {}}, null, 2);
+}
+function mcpRowHtml(s){
+  const transport = (s.transport === "http" || s.transport === "sse") ? s.transport : "stdio";
+  const opt = (v, label) => `<option value="${v}"${transport === v ? " selected" : ""}>${label}</option>`;
+  return `<div class="mcprow">
+    <div class="newrow">
+      <input type="text" class="mcpname" placeholder="name" value="${esc(s.name || "")}" style="flex:1" maxlength="32">
+      <select class="mcptransport">
+        ${opt("stdio", "stdio · local")}${opt("http", "http · remote")}${opt("sse", "sse · remote")}
+      </select>
+      <label style="display:flex; align-items:center; gap:.3rem; font-size:.82rem; white-space:nowrap">
+        <input type="checkbox" class="mcpenabled" ${s.enabled ? "checked" : ""}> on
+      </label>
+      <button type="button" class="ghost mcpremove" title="remove this server" aria-label="remove this server">✕</button>
+    </div>
+    <input type="text" class="mcpnote" placeholder="what it's for, shown to the tutor" value="${esc(s.note || "")}" style="margin-bottom:.35rem">
+    <textarea class="mcpconfig" rows="2" spellcheck="false">${esc(mcpConfigText(s))}</textarea>
+  </div>`;
+}
+function collectMcpServers(){
+  return [...document.querySelectorAll("#mcprows .mcprow")].map(row => {
+    const name = row.querySelector(".mcpname").value.trim().toLowerCase();
+    const transport = row.querySelector(".mcptransport").value;
+    const enabled = row.querySelector(".mcpenabled").checked;
+    const note = row.querySelector(".mcpnote").value.trim();
+    const raw = row.querySelector(".mcpconfig").value.trim();
+    let cfg = {};
+    if (raw){
+      try { cfg = JSON.parse(raw); }
+      catch { throw new Error(`"${name || "(unnamed server)"}" — config isn't valid JSON`); }
+    }
+    return {name, transport, enabled, note, ...cfg};
+  }).filter(s => s.name);   // a row left with no name is just dropped, not an error
+}
+async function openLocalSettings(){
+  $("localsettings").classList.add("open");
+  $("lserror").textContent = "";
+  try {
+    const r = await fetch("/api/local_settings");
+    if (r.ok) localSettingsDoc = await r.json();
+  } catch {}
+  const d = localSettingsDoc;
+  $("lstutormodel").value = d.models?.tutor || "";
+  $("lslearnermodel").value = d.models?.learner || "";
+  $("lsglossarymodel").value = d.models?.glossary || "";
+  $("lseffort").value = d.effort || "";
+  $("lscodedir").value = d.code_dir || "";
+  $("mcprows").innerHTML = (d.mcp_servers || []).map(mcpRowHtml).join("");
+  setTimeout(() => $("lstutormodel").focus(), 50);
+}
+function closeLocalSettings(){ $("localsettings").classList.remove("open"); }
+async function saveLocalSettings(){
+  const err = $("lserror");
+  err.textContent = "";
+  let servers;
+  try { servers = collectMcpServers(); }
+  catch (e){ err.textContent = e.message; return; }
+  const doc = {
+    models: {
+      tutor: $("lstutormodel").value.trim(),
+      learner: $("lslearnermodel").value.trim(),
+      glossary: $("lsglossarymodel").value.trim(),
+    },
+    effort: $("lseffort").value,
+    code_dir: $("lscodedir").value.trim(),
+    mcp_servers: servers,
+  };
+  const btn = $("lssave");
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/local_settings", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(doc),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "save failed");
+    localSettingsDoc = data;
+    closeLocalSettings();
+  } catch (e){ err.textContent = e.message; }
+  finally { btn.disabled = false; }
+}
+function wireLocalSettings(){
+  $("localsettingsbtn").onclick = openLocalSettings;
+  $("lscancel").onclick = closeLocalSettings;
+  $("lssave").onclick = saveLocalSettings;
+  $("localsettings").addEventListener("click", (e) => {
+    if (e.target === $("localsettings")) closeLocalSettings();
+  });
+  $("mcprows").addEventListener("click", (e) => {
+    if (e.target.classList.contains("mcpremove")) e.target.closest(".mcprow").remove();
+  });
+  $("lsaddmcp").onclick = () => {
+    $("mcprows").insertAdjacentHTML("beforeend", mcpRowHtml(
+      {name: "", transport: "stdio", enabled: true, note: ""}));
+  };
+  $("lsaddconfluence").onclick = () => {
+    const preset = localSettingsDoc.presets?.confluence;
+    if (!preset) return;
+    $("mcprows").insertAdjacentHTML("beforeend", mcpRowHtml({...preset, enabled: false}));
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -7604,6 +7804,7 @@ async function boot(){
     // localhost server: nothing to log out of, costs are copilot requests
     $("logoutbtn").style.display = "none";
     $("treecost").title = "model calls on this tree (copilot premium requests)";
+    $("localsettingsbtn").style.display = "";
   }
   hideLogin();
   // deep link first, else reopen the most recent local tree; the server sync
@@ -7625,6 +7826,7 @@ async function boot(){
 buildPanel();
 buildModeSelect();
 buildLevelSelect();
+wireLocalSettings();
 applyPrefs();
 renderAll(true);
 boot();

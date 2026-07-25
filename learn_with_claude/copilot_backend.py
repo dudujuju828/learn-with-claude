@@ -12,11 +12,17 @@ that would blow the Windows command-line length limit are written to a temp
 file instead, which the model is told to read with the ``view`` tool.
 
 Per-role tool policy (the whole point of the local mode — the tutor may
-ground itself in files on this machine):
+ground itself in files on this machine, and in whatever MCP servers the
+operator turns on — see local_settings.py):
 
   tutor              view + grep + glob, any path, read-only — never shell,
-                     never write, never web
+                     never write, never web — plus any enabled MCP server
+                     (e.g. Confluence) and an optional shared project dir
   everyone else      no tools at all
+
+Models and effort read the env vars below as a fallback; the settings UI
+(local_settings.py, /api/local_settings) overrides them live, without a
+restart, via configure()/effective_model()/effective_effort().
 
 Env:
   LEARN_COPILOT_EXE      explicit path to the copilot executable/launcher
@@ -35,8 +41,10 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
+from . import local_settings, personas
 from .webapi import ApiError
 
 # Unlike the API backends this defaults to unset: the CLI's default model
@@ -52,6 +60,60 @@ ROLE_MODELS = {
 }
 
 READ_TOOLS = ["view", "grep", "glob"]
+
+# Live settings overlay, set by localweb.serve() at startup from
+# local_settings.json and again whenever the settings UI saves changes — the
+# env vars above stay the fallback layer under it. A plain dict + lock is
+# enough: one process, and every read takes a snapshot instead of holding
+# the lock across a whole request.
+_settings_lock = threading.Lock()
+_settings = local_settings.default()
+
+
+def configure(settings: dict) -> None:
+    """Install a new live settings overlay. `settings` must already be
+    sanitized (local_settings.sanitize/LocalSettingsStore.load do that)."""
+    global _settings
+    with _settings_lock:
+        _settings = settings
+
+
+def _snapshot() -> dict:
+    with _settings_lock:
+        return _settings
+
+
+def effective_model(role: str) -> str:
+    """The model actually used for `role`: a live override, else the
+    LEARN_COPILOT_*_MODEL env var, else "" (the CLI's own "auto")."""
+    return _snapshot()["models"].get(role, "") or ROLE_MODELS.get(role, "")
+
+
+def effective_effort() -> str:
+    return _snapshot()["effort"] or EFFORT
+
+
+def grounding_text() -> str:
+    """The tutor's local-grounding system-prompt block for the CURRENT
+    settings. Called fresh per request (never cached) since code_dir and the
+    MCP server list can change while the server keeps running."""
+    settings = _snapshot()
+    notes = [f'{s["name"]} — {s["note"]}' if s.get("note") else s["name"]
+             for s in settings["mcp_servers"] if s.get("enabled")]
+    return personas.local_grounding_system(settings["code_dir"] or None, notes)
+
+
+def _mcp_server_config(s: dict) -> dict:
+    """One entry of the `--additional-mcp-config` {"mcpServers": {...}} map,
+    in the shape `copilot mcp add`/~/.copilot/mcp-config.json itself uses."""
+    if s["transport"] == "stdio":
+        return {"type": "stdio", "command": s["command"],
+                "args": s.get("args", []), "env": s.get("env", {})}
+    entry = {"type": s["transport"], "url": s["url"]}
+    if s.get("headers"):
+        entry["headers"] = s["headers"]
+    return entry
+
 
 # Windows CreateProcess caps the whole command line at ~32K chars; beyond this
 # the prompt travels via a temp file the model reads with `view` instead.
@@ -139,8 +201,16 @@ def compose_prompt(system: str, messages: list) -> str:
 def _role_flags(role: str) -> tuple[list[str], "str | None"]:
     """(extra argv, working directory) for one persona's tool surface."""
     if role == "tutor":
-        flags = ["--available-tools=" + ",".join(READ_TOOLS), "--allow-all-paths"]
-        flags += [f"--allow-tool={t}" for t in READ_TOOLS]
+        settings = _snapshot()
+        servers = [s for s in settings["mcp_servers"] if s.get("enabled")]
+        tools = READ_TOOLS + [s["name"] for s in servers]
+        flags = ["--available-tools=" + ",".join(tools), "--allow-all-paths"]
+        flags += [f"--allow-tool={t}" for t in tools]
+        if servers:
+            mcp_config = {"mcpServers": {s["name"]: _mcp_server_config(s) for s in servers}}
+            flags += ["--additional-mcp-config", json.dumps(mcp_config)]
+        if settings["code_dir"]:
+            flags += ["--add-dir", settings["code_dir"]]
         # local grounding starts from the user's home, not this repo
         return flags, str(Path.home())
     # "none" is not a tool name, so the intersection is an empty toolset
@@ -153,7 +223,7 @@ def call_model(
 ) -> tuple[str, float]:
     prompt = compose_prompt(system, messages)
     flags, cwd = _role_flags(role)
-    model = ROLE_MODELS.get(role, "")
+    model = effective_model(role)
     tmp_holder = None
 
     if len(prompt) > ARGV_PROMPT_LIMIT:
@@ -176,7 +246,7 @@ def call_model(
     if model:
         cmd += ["--model", model]
     # "none" (the glossary's fast path) means: just don't ask for reasoning
-    eff = effort if effort is not None else EFFORT
+    eff = effort if effort is not None else effective_effort()
     if eff and eff != "none":
         cmd += ["--effort", eff]
 

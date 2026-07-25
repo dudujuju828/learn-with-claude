@@ -235,13 +235,51 @@ directed edges.
 - Never draw the same thing twice; never announce that you are "about to" draw."""
 
 
+# Local-mode only (the Copilot CLI transport, `learn --web`): the tutor's
+# Copilot session actually gets read-only tools (view/grep/glob, and whatever
+# MCP servers the operator turned on) and this is the only place that tells it
+# so — copilot_backend.grounding_text() builds this from the live settings and
+# webapi.handle_tutor threads it in; the hosted Anthropic backend never passes
+# a `grounding` value, so it keeps getting TUTOR_NO_TOOLS exactly as before.
+def local_grounding_system(code_dir: "str | None", mcp_notes: "list[str] | None" = None) -> str:
+    lines = [
+        "LOCAL TOOLS — this session runs on the learner's own machine through "
+        "the GitHub Copilot CLI, so you have read-only tools: view, grep, glob.",
+        "- Use them BEFORE answering when the question is about specifics you "
+        "can't otherwise know — this learner's own code, notes, or an internal "
+        "system of theirs. A quick look beats a guess.",
+        "- Don't bother for ordinary questions about the subject itself — "
+        "answer those from what you already know; tools are for grounding in "
+        "THIS learner's particular material, not a substitute for knowing things.",
+    ]
+    if code_dir:
+        lines.append(
+            f'- A project directory has been shared with you for this: "{code_dir}". '
+            "Check it first for anything that sounds like it's about the learner's "
+            "own codebase or notes."
+        )
+    if mcp_notes:
+        lines.append("- You also have these tools:")
+        lines.extend(f"  - {note}" for note in mcp_notes)
+    lines.append(
+        "- Never mention tool names, file paths, or that you 'looked something "
+        "up' — answer as if you already knew it. If a lookup finds nothing "
+        "relevant, answer from general knowledge instead and don't mention the "
+        "attempt."
+    )
+    return "\n".join(lines)
+
+
 def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str | None" = None,
-                 segments: bool = False) -> str:
+                 segments: bool = False, grounding: "str | None" = None) -> str:
     """The tutor's full system prompt: base rules, a style addendum (a built-in
     TUTOR_MODES entry, or the caller's own custom style text, which wins), and
     the tool clause. The base rules — answer what was asked, no menu endings,
     dyslexia-friendly layout — always apply. `segments` adds the web reading
-    UI's part-markup contract (the CLI renders plain text, so it stays off)."""
+    UI's part-markup contract (the CLI renders plain text, so it stays off).
+    `grounding` (local Copilot mode only) replaces the diagrams/no-tools
+    clause with local_grounding_system()'s text; omitted, behaviour is
+    unchanged from before local grounding existed."""
     if custom_style and custom_style.strip():
         style = "STYLE — CUSTOM (defined by the learner's operator):\n" + custom_style.strip()
     else:
@@ -251,7 +289,10 @@ def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str |
         parts.append(style)
     if segments:
         parts.append(TUTOR_SEGMENTS)
-    parts.append(TUTOR_DIAGRAM_SYSTEM if diagrams else TUTOR_NO_TOOLS)
+    if grounding:
+        parts.append(grounding)
+    else:
+        parts.append(TUTOR_DIAGRAM_SYSTEM if diagrams else TUTOR_NO_TOOLS)
     return "\n\n".join(parts)
 
 
