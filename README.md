@@ -218,11 +218,15 @@ directly (a local `claude` login can't run on a server), so it needs an
   question to push deeper — and an honest verdict (✓ clean / ≈ close /
   △ gappy) — feedback on the ideas, never the spelling. If it isn't clean,
   the tutor keeps probing: the box turns into answering that one question
-  instead of re-explaining everything, and each reply is judged against
-  the whole thread so far, not from zero — crediting what's now resolved,
-  narrowing in on whatever nuance is still missing, until it clicks (clean)
-  or you stop. Every reply is kept (synced, travelling in `.know.json`),
-  the verdict trail shows the thread narrowing, and **⤳ chase it** sends
+  (shown right above it, and **Enter** sends the reply — no scrolling, no
+  reaching for the mouse) instead of re-explaining everything, and each
+  reply is judged against the whole thread so far, not from zero —
+  crediting what's now resolved, narrowing in on whatever nuance is still
+  missing, until it clicks (clean) or you stop. That whole thread stays
+  visible above the box as you go — what you said, what it asked next —
+  so what the tutor is weighing is never hidden. Every reply is kept
+  (synced, travelling in `.know.json`), the verdict trail shows the
+  thread narrowing, and **⤳ chase it** sends
   the tutor's probing question into the conversation as your own turn
   instead, if you'd rather have it answered there. A clean explanation comes due
   again on a spaced ladder (3d → 7d → longer), surfaced as a **🗣 explain
