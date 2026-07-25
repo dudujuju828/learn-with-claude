@@ -236,21 +236,27 @@ directed edges.
 
 
 # Local-mode only (the Copilot CLI transport, `learn --web`): the tutor's
-# Copilot session actually gets read-only tools (view/grep/glob, and whatever
-# MCP servers the operator turned on) and this is the only place that tells it
-# so — copilot_backend.grounding_text() builds this from the live settings and
-# webapi.handle_tutor threads it in; the hosted Anthropic backend never passes
-# a `grounding` value, so it keeps getting TUTOR_NO_TOOLS exactly as before.
+# Copilot session actually gets read-only tools (view/grep/glob, skills, and
+# whatever MCP servers the operator turned on) and this is the only place
+# that tells it so — copilot_backend.grounding_text() builds this from the
+# live settings and webapi.handle_tutor threads it in; the hosted Anthropic
+# backend never passes a `grounding` value, so it keeps getting
+# TUTOR_NO_TOOLS exactly as before.
 def local_grounding_system(code_dir: "str | None", mcp_notes: "list[str] | None" = None) -> str:
     lines = [
         "LOCAL TOOLS — this session runs on the learner's own machine through "
-        "the GitHub Copilot CLI, so you have read-only tools: view, grep, glob.",
+        "the GitHub Copilot CLI, so you have read-only tools: view, grep, glob, "
+        "and your configured skills. You never have shell, write, or web access.",
         "- Use them BEFORE answering when the question is about specifics you "
         "can't otherwise know — this learner's own code, notes, or an internal "
         "system of theirs. A quick look beats a guess.",
         "- Don't bother for ordinary questions about the subject itself — "
         "answer those from what you already know; tools are for grounding in "
         "THIS learner's particular material, not a substitute for knowing things.",
+        "- A skill is fair game whenever it's plainly the right tool for the "
+        "question, exactly as it would be in a normal session — but you're "
+        "answering a question here, not carrying out a task, so don't reach "
+        "for one that changes anything outside this conversation.",
     ]
     if code_dir:
         lines.append(

@@ -12,13 +12,24 @@ that would blow the Windows command-line length limit are written to a temp
 file instead, which the model is told to read with the ``view`` tool.
 
 Per-role tool policy (the whole point of the local mode — the tutor may
-ground itself in files on this machine, and in whatever MCP servers the
-operator turns on — see local_settings.py):
+ground itself in files, skills, and MCP servers already set up on this
+machine — see local_settings.py):
 
-  tutor              view + grep + glob, any path, read-only — never shell,
-                     never write, never web — plus any enabled MCP server
-                     (e.g. Confluence) and an optional shared project dir
-  everyone else      no tools at all
+  tutor              view + grep + glob + skill, any path, read-only —
+                     never shell, never write, never browse the web —
+                     plus whatever of the operator's own already-registered
+                     MCP servers (Confluence, say) are turned on, their own
+                     AGENTS.md/custom instructions, and an optional shared
+                     project directory
+  everyone else      no tools, no custom instructions — the learner and
+                     glossary personas must stay uncontaminated roleplay,
+                     not pick up the operator's own coding instructions
+
+MCP servers are never *defined* here — they're read from (and, for the
+one-click Confluence button, written to) the Copilot CLI's own
+~/.copilot/mcp-config.json via `copilot mcp list`/`mcp add`, the same config
+an interactive `copilot` session on this machine already uses. This app only
+remembers which ones the tutor is allowed to reach for (local_settings.py).
 
 Models and effort read the env vars below as a fallback; the settings UI
 (local_settings.py, /api/local_settings) overrides them live, without a
@@ -103,16 +114,61 @@ def grounding_text() -> str:
     return personas.local_grounding_system(settings["code_dir"] or None, notes)
 
 
-def _mcp_server_config(s: dict) -> dict:
-    """One entry of the `--additional-mcp-config` {"mcpServers": {...}} map,
-    in the shape `copilot mcp add`/~/.copilot/mcp-config.json itself uses."""
-    if s["transport"] == "stdio":
-        return {"type": "stdio", "command": s["command"],
-                "args": s.get("args", []), "env": s.get("env", {})}
-    entry = {"type": s["transport"], "url": s["url"]}
-    if s.get("headers"):
-        entry["headers"] = s["headers"]
-    return entry
+def _enabled_server_names() -> list:
+    return [s["name"] for s in _snapshot()["mcp_servers"] if s.get("enabled")]
+
+
+def list_global_mcp_servers() -> list:
+    """Every MCP server this Copilot CLI installation already knows about —
+    from ~/.copilot/mcp-config.json (source "user"), a workspace .mcp.json,
+    or a plugin — as [{"name", "type", "source", ...}]. This is what the
+    settings panel's checklist renders; nothing here is ever written by this
+    app except through add_global_mcp_server(). Empty list (never raises) if
+    the CLI can't answer — a fresh install with nothing configured yet, or
+    verify_copilot() never having run, both look the same to the panel: no
+    servers to turn on."""
+    try:
+        proc = subprocess.run(
+            COPILOT_CMD + ["mcp", "list", "--json"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=30, stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if proc.returncode != 0:
+        return []
+    try:
+        servers = json.loads(proc.stdout or "{}").get("mcpServers") or {}
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(servers, dict):
+        return []
+    return [{"name": name, **(cfg if isinstance(cfg, dict) else {})}
+            for name, cfg in servers.items()]
+
+
+def add_global_mcp_server(name: str, *, transport: str, url: str,
+                          headers: "dict | None" = None) -> None:
+    """`copilot mcp add` for a remote (http/sse) server — used by the
+    settings panel's one-click Confluence button. Writes to the user's own
+    ~/.copilot/mcp-config.json, same as if they'd typed the command
+    themselves; this app never manages a second, competing definition of it.
+    (Only remote servers so far — nothing in this app registers a local
+    stdio server on someone's behalf.)"""
+    cmd = COPILOT_CMD + ["mcp", "add", "--transport", transport]
+    for k, v in (headers or {}).items():
+        cmd += ["--header", f"{k}: {v}"]
+    cmd += [name, url]
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=30, stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ApiError(f"could not run the Copilot CLI: {exc}", 500)
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()[:300]
+        raise ApiError(f'"copilot mcp add" failed: {detail}', 502)
 
 
 # Windows CreateProcess caps the whole command line at ~32K chars; beyond this
@@ -127,7 +183,6 @@ _FLAGS_COMMON = [
     "--no-color",
     "--log-level", "none",
     "--no-auto-update",
-    "--no-custom-instructions",  # keep AGENTS.md etc. out of the personas
     "--disable-builtin-mcps",    # no GitHub MCP server — no GitHub API traffic
     "--no-remote-export",        # sessions stay on this machine
     "--no-ask-user",
@@ -201,20 +256,21 @@ def compose_prompt(system: str, messages: list) -> str:
 def _role_flags(role: str) -> tuple[list[str], "str | None"]:
     """(extra argv, working directory) for one persona's tool surface."""
     if role == "tutor":
-        settings = _snapshot()
-        servers = [s for s in settings["mcp_servers"] if s.get("enabled")]
-        tools = READ_TOOLS + [s["name"] for s in servers]
+        tools = READ_TOOLS + ["skill"] + _enabled_server_names()
         flags = ["--available-tools=" + ",".join(tools), "--allow-all-paths"]
         flags += [f"--allow-tool={t}" for t in tools]
-        if servers:
-            mcp_config = {"mcpServers": {s["name"]: _mcp_server_config(s) for s in servers}}
-            flags += ["--additional-mcp-config", json.dumps(mcp_config)]
-        if settings["code_dir"]:
-            flags += ["--add-dir", settings["code_dir"]]
-        # local grounding starts from the user's home, not this repo
+        code_dir = _snapshot()["code_dir"]
+        if code_dir:
+            flags += ["--add-dir", code_dir]
+        # local grounding starts from the user's home, not this repo. Custom
+        # instructions (AGENTS.md etc.) stay ON for the tutor deliberately —
+        # this is the one role meant to answer like the operator's own
+        # Copilot setup would, not a fixed persona.
         return flags, str(Path.home())
-    # "none" is not a tool name, so the intersection is an empty toolset
-    return ["--available-tools=none"], None
+    # "none" is not a tool name, so the intersection is an empty toolset;
+    # the learner/glossary personas must never pick up the operator's own
+    # coding instructions — they're a fixed roleplay, not a coding assistant.
+    return ["--available-tools=none", "--no-custom-instructions"], None
 
 
 def call_model(
@@ -239,7 +295,7 @@ def call_model(
         )
         if role != "tutor":
             flags = ["--available-tools=view", "--allow-tool=view",
-                     "--add-dir", tmp_holder.name]
+                     "--add-dir", tmp_holder.name, "--no-custom-instructions"]
             cwd = tmp_holder.name
 
     cmd = COPILOT_CMD + ["-p", prompt] + _FLAGS_COMMON + flags

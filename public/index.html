@@ -551,13 +551,10 @@
   #localsettings .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
   #localsettings .err{color:var(--danger); font-size:.85rem; margin:.5rem 0 0}
   #localsettings .err:empty{display:none}
-  .mcprow{
-    border:1px solid var(--line); border-radius:.7rem; padding:.55rem .6rem;
-    margin-bottom:.5rem; background:var(--bg);
-  }
-  .mcprow .newrow{margin-bottom:.35rem}
-  .mcprow input[type=text]{margin-bottom:0}
-  .mcprow select{width:auto}
+  .mcpcheckrow{display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem}
+  .mcpcheckrow .mcpname{min-width:6rem; font-size:.9rem}
+  .mcpcheckrow .mcpsrc{font-size:.72rem; color:var(--muted); flex:0 0 auto; white-space:nowrap}
+  .mcpcheckrow .mcpnote{flex:1; min-width:5rem; margin:0; font-size:.85rem}
 
   /* ---- tree overview ---- */
   #overview{
@@ -1645,11 +1642,20 @@
     <code>local_settings.json</code> next to your knowledge folder, and takes effect
     on the next tutor reply, no restart needed.</p>
 
-    <label for="lstutormodel">models <span style="font-weight:400; color:var(--muted)">(blank = auto)</span></label>
+    <label>tutor model <span style="font-weight:400; color:var(--muted)">(blank = auto)</span></label>
     <div class="newrow">
-      <input id="lstutormodel" type="text" placeholder="tutor · auto" style="flex:1">
-      <input id="lslearnermodel" type="text" placeholder="learner · auto" style="flex:1">
-      <input id="lsglossarymodel" type="text" placeholder="flashcards · auto" style="flex:1">
+      <select class="lsmodel" data-role="tutor" style="flex:1"></select>
+      <input class="lsmodelcustom" data-role="tutor" type="text" placeholder="exact model id" style="display:none; flex:1">
+    </div>
+    <label>learner model</label>
+    <div class="newrow">
+      <select class="lsmodel" data-role="learner" style="flex:1"></select>
+      <input class="lsmodelcustom" data-role="learner" type="text" placeholder="exact model id" style="display:none; flex:1">
+    </div>
+    <label>flashcards model</label>
+    <div class="newrow">
+      <select class="lsmodel" data-role="glossary" style="flex:1"></select>
+      <input class="lsmodelcustom" data-role="glossary" type="text" placeholder="exact model id" style="display:none; flex:1">
     </div>
 
     <label for="lseffort">reasoning effort</label>
@@ -1673,16 +1679,18 @@
     sounds like it's about your own code or notes, not for general questions.</p>
 
     <label>MCP tools the tutor can call before answering</label>
-    <div id="mcprows"></div>
-    <div class="btnrow" style="margin-top:.4rem">
-      <button type="button" id="lsaddconfluence">＋ add confluence</button>
-      <button type="button" id="lsaddmcp" class="ghost">＋ add a custom MCP server</button>
+    <div id="mcplist"></div>
+    <p class="hint" id="mcpempty" style="display:none">no MCP servers registered with
+    the Copilot CLI yet — add one below, or run <code>copilot mcp add</code> yourself
+    and reopen this panel.</p>
+    <div class="btnrow" style="margin-top:.2rem">
+      <button type="button" id="lsaddconfluence">＋ set up confluence</button>
     </div>
-    <p class="hint">confluence uses Atlassian's own remote MCP server — no token to
-    type in here; the first question that needs it opens a browser tab for you to
-    sign in, handled entirely by the Copilot CLI. A custom server's box is the raw
-    JSON <code>copilot mcp add</code> would take: <code>{"command","args","env"}</code>
-    for a local (stdio) tool, or <code>{"url","headers"}</code> for a remote one.</p>
+    <p class="hint">servers themselves live in your own Copilot CLI config
+    (<code>copilot mcp add</code>, or the button above, which runs that command for
+    you) — this panel only picks which ones the tutor may reach for. <b>skills</b>
+    and your <code>AGENTS.md</code> custom instructions are always available to the
+    tutor too, same as any other <code>copilot</code> session on this machine.</p>
 
     <div class="err" id="lserror" role="alert" style="min-height:1.1em"></div>
     <div class="foot">
@@ -2396,78 +2404,107 @@ function deleteTutor(){
 /* (Copilot CLI transport only: CONFIG.local gates the button that opens */
 /* this, but the routes simply don't exist against the hosted backend)  */
 /* ------------------------------------------------------------------ */
-let localSettingsDoc = {models: {}, effort: "", code_dir: "", mcp_servers: [], presets: {}};
+let localSettingsDoc = {models: {}, effort: "", code_dir: "", mcp_servers: [],
+                         presets: {}, available_mcp_servers: []};
 
-function mcpConfigText(s){
-  return s.transport === "stdio"
-    ? JSON.stringify({command: s.command || "", args: s.args || [], env: s.env || {}}, null, 2)
-    : JSON.stringify({url: s.url || "", headers: s.headers || {}}, null, 2);
+// A best-effort menu, not an authoritative list (the CLI has no "list models"
+// flag) — "other…" always covers whatever isn't on it yet.
+const MODEL_OPTIONS = [
+  ["", "auto (recommended)"],
+  ["gpt-5.4", "gpt-5.4"],
+  ["gpt-5-mini", "gpt-5-mini"],
+  ["claude-sonnet-5", "claude-sonnet-5"],
+  ["claude-haiku-4.5", "claude-haiku-4.5"],
+  ["claude-opus-4.8", "claude-opus-4.8"],
+  ["gemini-3-pro", "gemini-3-pro"],
+];
+function buildModelSelects(){
+  const opts = MODEL_OPTIONS.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("")
+    + `<option value="__custom">other… (type a model id)</option>`;
+  document.querySelectorAll(".lsmodel").forEach(sel => { sel.innerHTML = opts; });
 }
-function mcpRowHtml(s){
-  const transport = (s.transport === "http" || s.transport === "sse") ? s.transport : "stdio";
-  const opt = (v, label) => `<option value="${v}"${transport === v ? " selected" : ""}>${label}</option>`;
-  return `<div class="mcprow">
-    <div class="newrow">
-      <input type="text" class="mcpname" placeholder="name" value="${esc(s.name || "")}" style="flex:1" maxlength="32">
-      <select class="mcptransport">
-        ${opt("stdio", "stdio · local")}${opt("http", "http · remote")}${opt("sse", "sse · remote")}
-      </select>
-      <label style="display:flex; align-items:center; gap:.3rem; font-size:.82rem; white-space:nowrap">
-        <input type="checkbox" class="mcpenabled" ${s.enabled ? "checked" : ""}> on
-      </label>
-      <button type="button" class="ghost mcpremove" title="remove this server" aria-label="remove this server">✕</button>
-    </div>
-    <input type="text" class="mcpnote" placeholder="what it's for, shown to the tutor" value="${esc(s.note || "")}" style="margin-bottom:.35rem">
-    <textarea class="mcpconfig" rows="2" spellcheck="false">${esc(mcpConfigText(s))}</textarea>
+function setModelField(role, value){
+  const sel = document.querySelector(`.lsmodel[data-role="${role}"]`);
+  const custom = document.querySelector(`.lsmodelcustom[data-role="${role}"]`);
+  const known = MODEL_OPTIONS.some(([v]) => v === value);
+  sel.value = known ? value : "__custom";
+  custom.style.display = known ? "none" : "";
+  custom.value = known ? "" : value;
+}
+function getModelField(role){
+  const sel = document.querySelector(`.lsmodel[data-role="${role}"]`);
+  const custom = document.querySelector(`.lsmodelcustom[data-role="${role}"]`);
+  return sel.value === "__custom" ? custom.value.trim() : sel.value;
+}
+
+function mcpCheckRowHtml(server, enabledSet, notes){
+  const name = server.name;
+  const checked = enabledSet.has(name) ? "checked" : "";
+  const note = notes[name] ?? server.note ?? "";
+  const src = [server.type, server.source].filter(Boolean).join(" · ");
+  return `<div class="mcpcheckrow">
+    <input type="checkbox" class="mcpon" data-name="${esc(name)}" aria-label="let the tutor use ${esc(name)}" ${checked}>
+    <span class="mcpname">${esc(name)}</span>
+    <span class="mcpsrc">${esc(src)}</span>
+    <input type="text" class="mcpnote" data-name="${esc(name)}" placeholder="what it's for, shown to the tutor" value="${esc(note)}">
   </div>`;
 }
+function renderMcpList(){
+  const d = localSettingsDoc;
+  const saved = d.mcp_servers || [];
+  const enabledSet = new Set(saved.filter(s => s.enabled).map(s => s.name));
+  const notes = Object.fromEntries(saved.map(s => [s.name, s.note || ""]));
+  const available = d.available_mcp_servers || [];
+  $("mcplist").innerHTML = available.map(s => mcpCheckRowHtml(s, enabledSet, notes)).join("");
+  $("mcpempty").style.display = available.length ? "none" : "";
+  $("lsaddconfluence").style.display = available.some(s => s.name === "confluence") ? "none" : "";
+}
 function collectMcpServers(){
-  return [...document.querySelectorAll("#mcprows .mcprow")].map(row => {
-    const name = row.querySelector(".mcpname").value.trim().toLowerCase();
-    const transport = row.querySelector(".mcptransport").value;
-    const enabled = row.querySelector(".mcpenabled").checked;
-    const note = row.querySelector(".mcpnote").value.trim();
-    const raw = row.querySelector(".mcpconfig").value.trim();
-    let cfg = {};
-    if (raw){
-      try { cfg = JSON.parse(raw); }
-      catch { throw new Error(`"${name || "(unnamed server)"}" — config isn't valid JSON`); }
-    }
-    return {name, transport, enabled, note, ...cfg};
-  }).filter(s => s.name);   // a row left with no name is just dropped, not an error
+  return [...document.querySelectorAll("#mcplist .mcpcheckrow")].map(row => ({
+    name: row.querySelector(".mcpon").dataset.name,
+    enabled: row.querySelector(".mcpon").checked,
+    note: row.querySelector(".mcpnote").value.trim(),
+  }));
+}
+function setLocalSettingsLoading(loading){
+  // the GET can take a moment (it shells out to `copilot mcp list`) — lock
+  // the form while it's in flight so a field the operator already touched
+  // can't get silently overwritten once the slow response lands. cancel
+  // stays live throughout so backing out never waits on it.
+  $("localsettings").querySelectorAll(".box input, .box select, .box button")
+    .forEach(el => { if (el.id !== "lscancel") el.disabled = loading; });
 }
 async function openLocalSettings(){
   $("localsettings").classList.add("open");
   $("lserror").textContent = "";
+  setLocalSettingsLoading(true);
   try {
     const r = await fetch("/api/local_settings");
     if (r.ok) localSettingsDoc = await r.json();
   } catch {}
   const d = localSettingsDoc;
-  $("lstutormodel").value = d.models?.tutor || "";
-  $("lslearnermodel").value = d.models?.learner || "";
-  $("lsglossarymodel").value = d.models?.glossary || "";
+  setModelField("tutor", d.models?.tutor || "");
+  setModelField("learner", d.models?.learner || "");
+  setModelField("glossary", d.models?.glossary || "");
   $("lseffort").value = d.effort || "";
   $("lscodedir").value = d.code_dir || "";
-  $("mcprows").innerHTML = (d.mcp_servers || []).map(mcpRowHtml).join("");
-  setTimeout(() => $("lstutormodel").focus(), 50);
+  renderMcpList();
+  setLocalSettingsLoading(false);
+  setTimeout(() => document.querySelector('.lsmodel[data-role="tutor"]')?.focus(), 50);
 }
 function closeLocalSettings(){ $("localsettings").classList.remove("open"); }
 async function saveLocalSettings(){
   const err = $("lserror");
   err.textContent = "";
-  let servers;
-  try { servers = collectMcpServers(); }
-  catch (e){ err.textContent = e.message; return; }
   const doc = {
     models: {
-      tutor: $("lstutormodel").value.trim(),
-      learner: $("lslearnermodel").value.trim(),
-      glossary: $("lsglossarymodel").value.trim(),
+      tutor: getModelField("tutor"),
+      learner: getModelField("learner"),
+      glossary: getModelField("glossary"),
     },
     effort: $("lseffort").value,
     code_dir: $("lscodedir").value.trim(),
-    mcp_servers: servers,
+    mcp_servers: collectMcpServers(),
   };
   const btn = $("lssave");
   btn.disabled = true;
@@ -2483,25 +2520,41 @@ async function saveLocalSettings(){
   } catch (e){ err.textContent = e.message; }
   finally { btn.disabled = false; }
 }
+async function registerConfluence(){
+  const btn = $("lsaddconfluence"), err = $("lserror");
+  err.textContent = "";
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/mcp_register", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({preset: "confluence"}),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "could not set up confluence");
+    localSettingsDoc = data;
+    renderMcpList();
+    // clicking the button was clearly asking for it on — save() still required to persist
+    const cb = document.querySelector('#mcplist .mcpon[data-name="confluence"]');
+    if (cb) cb.checked = true;
+  } catch (e){ err.textContent = e.message; }
+  finally { btn.disabled = false; }
+}
 function wireLocalSettings(){
+  buildModelSelects();
+  document.querySelectorAll(".lsmodel").forEach(sel => {
+    sel.onchange = () => {
+      const custom = document.querySelector(`.lsmodelcustom[data-role="${sel.dataset.role}"]`);
+      custom.style.display = sel.value === "__custom" ? "" : "none";
+      if (sel.value === "__custom") custom.focus();
+    };
+  });
   $("localsettingsbtn").onclick = openLocalSettings;
   $("lscancel").onclick = closeLocalSettings;
   $("lssave").onclick = saveLocalSettings;
+  $("lsaddconfluence").onclick = registerConfluence;
   $("localsettings").addEventListener("click", (e) => {
     if (e.target === $("localsettings")) closeLocalSettings();
   });
-  $("mcprows").addEventListener("click", (e) => {
-    if (e.target.classList.contains("mcpremove")) e.target.closest(".mcprow").remove();
-  });
-  $("lsaddmcp").onclick = () => {
-    $("mcprows").insertAdjacentHTML("beforeend", mcpRowHtml(
-      {name: "", transport: "stdio", enabled: true, note: ""}));
-  };
-  $("lsaddconfluence").onclick = () => {
-    const preset = localSettingsDoc.presets?.confluence;
-    if (!preset) return;
-    $("mcprows").insertAdjacentHTML("beforeend", mcpRowHtml({...preset, enabled: false}));
-  };
 }
 
 /* ------------------------------------------------------------------ */

@@ -72,17 +72,28 @@ def handle_config() -> dict:
 # --------------------------------------------------------------------------- #
 class LocalSettingsEndpoint:
     """Thin HTTP-shaped wrapper around a LocalSettingsStore: GET returns the
-    saved settings plus the built-in presets (Confluence, so far); POST
-    validates strictly, persists, and immediately reconfigures
+    saved settings plus which MCP servers this Copilot CLI already knows
+    about (so the panel can render a checklist, not a form for redefining
+    them); POST validates strictly, persists, and immediately reconfigures
     copilot_backend so the next model call already sees the change — no
-    server restart."""
+    server restart. `register()` is the one-click Confluence button: it
+    shells out to `copilot mcp add` on the operator's behalf, the same as if
+    they'd typed the command themselves."""
+
+    PRESETS = {"confluence": local_settings.CONFLUENCE_PRESET}
 
     def __init__(self, store: local_settings.LocalSettingsStore) -> None:
         self.store = store
 
+    def _payload(self, doc: dict) -> dict:
+        return {
+            **doc,
+            "presets": self.PRESETS,
+            "available_mcp_servers": copilot_backend.list_global_mcp_servers(),
+        }
+
     def get(self) -> dict:
-        doc = self.store.load()
-        return {**doc, "presets": {"confluence": local_settings.CONFLUENCE_PRESET}}
+        return self._payload(self.store.load())
 
     def put(self, body: dict) -> dict:
         try:
@@ -90,7 +101,16 @@ class LocalSettingsEndpoint:
         except ValueError as exc:
             raise ApiError(str(exc)) from exc
         copilot_backend.configure(clean)
-        return {**clean, "presets": {"confluence": local_settings.CONFLUENCE_PRESET}}
+        return self._payload(clean)
+
+    def register(self, preset_name: str) -> dict:
+        preset = self.PRESETS.get(preset_name)
+        if not preset:
+            raise ApiError(f'no such preset: "{preset_name}"')
+        copilot_backend.add_global_mcp_server(
+            preset["name"], transport=preset["transport"], url=preset["url"],
+        )
+        return self._payload(self.store.load())
 
 
 # --------------------------------------------------------------------------- #
@@ -406,6 +426,8 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                     self._send_json(200, {"ok": True})
                 elif path == "/api/local_settings":
                     self._send_json(200, settings.put(body))
+                elif path == "/api/mcp_register":
+                    self._send_json(200, settings.register(str(body.get("preset") or "")))
                 elif path in ("/api/login", "/api/logout"):
                     self._send_json(200, {"ok": True})  # no auth on localhost
                 elif path.startswith("/api/"):

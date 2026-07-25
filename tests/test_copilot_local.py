@@ -73,17 +73,24 @@ def test_tool_policy():
         msgs = [{"role": "user", "content": "q"}]
         argv, cost = stub_call(d, "sys", msgs, "tutor")
         assert cost == 0.5
-        assert "--available-tools=view,grep,glob" in argv
+        assert "--available-tools=view,grep,glob,skill" in argv
         assert "--allow-all-paths" in argv and "--allow-tool=view" in argv
-        assert "--disable-builtin-mcps" in argv and "--no-custom-instructions" in argv
+        assert "--allow-tool=skill" in argv
+        assert "--disable-builtin-mcps" in argv
+        # the tutor keeps AGENTS.md/custom instructions and skills active —
+        # it's meant to answer like the operator's own Copilot setup would
+        assert "--no-custom-instructions" not in argv
 
         argv, _ = stub_call(d, "sys", msgs, "learner")
         assert "--available-tools=none" in argv
         assert "--allow-all-paths" not in argv
+        # the learner/glossary personas must stay uncontaminated roleplay
+        assert "--no-custom-instructions" in argv
 
         # glossary's "none" effort means: no --effort flag at all
         argv, _ = stub_call(d, "sys", msgs, "glossary", effort="none")
         assert "--effort" not in argv
+        assert "--no-custom-instructions" in argv
     print("ok  per-role tool policy")
 
 
@@ -98,13 +105,16 @@ def test_overflow_prompt():
 
 
 def test_local_settings_sanitize():
-    # lenient (load) path: garbage is silently dropped, never raises
+    # lenient (load) path: garbage is silently dropped, never raises. Server
+    # entries are just {name, enabled, note} references now — no transport/
+    # command/url to validate, since the servers themselves are defined in
+    # the Copilot CLI's own config, not here.
     d = local_settings.sanitize({
         "effort": "wat", "models": "nope",
-        "mcp_servers": [{"name": "BAD NAME"}, {"name": "ok", "transport": "stdio"}],
+        "mcp_servers": [{"name": "BAD NAME"}, {"name": "ok"}, "not a dict"],
     })
     assert d["effort"] == "" and d["models"] == {"learner": "", "tutor": "", "glossary": ""}
-    assert d["mcp_servers"] == []   # bad name dropped; "ok" has no command -> dropped too
+    assert [s["name"] for s in d["mcp_servers"]] == ["ok"]   # bad name / non-dict dropped
 
     with tempfile.TemporaryDirectory() as td:
         d2 = local_settings.sanitize({"code_dir": td, "models": {"tutor": "gpt-5.4"}})
@@ -117,12 +127,9 @@ def test_local_settings_sanitize():
         ({"effort": "extreme"}, "effort"),
         ({"code_dir": "C:/definitely/not/a/real/path/xyz"}, "not a directory"),
         ({"mcp_servers": [{"name": "Bad Name"}]}, "lowercase"),
-        ({"mcp_servers": [{"name": "srv", "transport": "http"}]}, "url"),
-        ({"mcp_servers": [{"name": "srv", "transport": "stdio"}]}, "command"),
-        ({"mcp_servers": [{"name": "srv", "transport": "http", "url": "https://a"},
-                          {"name": "srv", "transport": "http", "url": "https://b"}]}, "duplicate"),
-        ({"mcp_servers": [{"name": f"s{i}", "transport": "http", "url": "https://x"}
-                          for i in range(local_settings.MAX_SERVERS + 1)]}, "at most"),
+        ({"mcp_servers": "nope"}, "list"),
+        ({"mcp_servers": [{"name": "srv"}, {"name": "srv"}]}, "duplicate"),
+        ({"mcp_servers": [{"name": f"s{i}"} for i in range(local_settings.MAX_SERVERS + 1)]}, "at most"),
     ]:
         try:
             local_settings.sanitize(bad, strict=True)
@@ -130,15 +137,14 @@ def test_local_settings_sanitize():
         except ValueError as e:
             assert needle in str(e), f"{needle!r} not in {e}"
 
-    # a valid stdio server and the Confluence preset both round-trip
+    # a valid reference round-trips; enabled defaults true when omitted
     good = local_settings.sanitize({"mcp_servers": [
-        {"name": "files", "transport": "stdio", "command": "npx",
-         "args": ["-y", "thing"], "enabled": True, "note": "x"},
-        {**local_settings.CONFLUENCE_PRESET, "enabled": True},
+        {"name": "confluence", "enabled": True, "note": local_settings.CONFLUENCE_PRESET["note"]},
+        {"name": "files"},
     ]}, strict=True)
-    assert [s["name"] for s in good["mcp_servers"]] == ["files", "confluence"]
-    assert good["mcp_servers"][0]["args"] == ["-y", "thing"]
-    assert good["mcp_servers"][1]["url"] == local_settings.CONFLUENCE_PRESET["url"]
+    assert [s["name"] for s in good["mcp_servers"]] == ["confluence", "files"]
+    assert good["mcp_servers"][0]["note"] == local_settings.CONFLUENCE_PRESET["note"]
+    assert good["mcp_servers"][1]["enabled"] is True
     print("ok  local_settings.sanitize (lenient load vs strict save)")
 
 
@@ -169,8 +175,8 @@ def test_copilot_backend_overrides():
             settings = local_settings.sanitize({
                 "models": {"tutor": "gpt-5.4"}, "effort": "high", "code_dir": d,
                 "mcp_servers": [
-                    {**local_settings.CONFLUENCE_PRESET, "enabled": True},
-                    {"name": "sidelined", "transport": "http", "url": "https://x", "enabled": False},
+                    {"name": "confluence", "enabled": True, "note": local_settings.CONFLUENCE_PRESET["note"]},
+                    {"name": "sidelined", "enabled": False},
                 ],
             }, strict=True)
             copilot_backend.configure(settings)
@@ -181,26 +187,76 @@ def test_copilot_backend_overrides():
             assert copilot_backend.effective_effort() == "high"
 
             flags, cwd = copilot_backend._role_flags("tutor")
-            assert "--available-tools=view,grep,glob,confluence" in flags
+            assert "--available-tools=view,grep,glob,skill,confluence" in flags
             assert "--allow-tool=confluence" in flags
             assert "--allow-tool=sidelined" not in flags   # disabled server excluded entirely
             assert "--add-dir" in flags and d in flags
-            i = flags.index("--additional-mcp-config")
-            cfg = json.loads(flags[i + 1])
-            assert list(cfg["mcpServers"]) == ["confluence"]
-            assert cfg["mcpServers"]["confluence"]["url"] == local_settings.CONFLUENCE_PRESET["url"]
+            # servers are never defined here — they live in the CLI's own
+            # ~/.copilot/mcp-config.json, loaded by default with no flag needed
+            assert "--additional-mcp-config" not in flags
 
             grounding = copilot_backend.grounding_text()
             assert d in grounding and "confluence" in grounding and "sidelined" not in grounding
 
-            # learner/glossary stay tool-free regardless of any of this
-            assert copilot_backend._role_flags("learner") == (["--available-tools=none"], None)
+            # learner/glossary stay tool-free and instruction-free regardless
+            assert copilot_backend._role_flags("learner") == (
+                ["--available-tools=none", "--no-custom-instructions"], None)
     finally:
         copilot_backend.configure(original)
     # settings reset -> the untouched-default flags are exactly what they were before
     argv, _ = stub_call(tempfile.mkdtemp(), "sys", [{"role": "user", "content": "q"}], "tutor")
-    assert "--available-tools=view,grep,glob" in argv and "--additional-mcp-config" not in argv
+    assert "--available-tools=view,grep,glob,skill" in argv
+    assert "--additional-mcp-config" not in argv
     print("ok  copilot_backend settings overlay (models, effort, code_dir, mcp servers)")
+
+
+MCP_STUB = """
+import json, sys
+argv = sys.argv[1:]
+if len(argv) >= 2 and argv[0] == "mcp" and argv[1] == "list":
+    print(json.dumps({"mcpServers": {
+        "confluence": {"type": "http", "url": "https://mcp.atlassian.com/v1/mcp/authv2",
+                       "source": "user", "tools": ["*"]},
+        "files": {"type": "stdio", "command": "npx", "source": "workspace"},
+    }}))
+    sys.exit(0)
+if len(argv) >= 2 and argv[0] == "mcp" and argv[1] == "add":
+    sys.exit(1 if "FAIL" in argv else 0)
+sys.exit(1)
+"""
+
+
+def test_mcp_server_discovery_and_registration():
+    with tempfile.TemporaryDirectory() as d:
+        stub = Path(d) / "mcp_stub.py"
+        stub.write_text(MCP_STUB, encoding="utf-8")
+        real = copilot_backend.COPILOT_CMD
+        copilot_backend.COPILOT_CMD = [sys.executable, str(stub)]
+        try:
+            servers = copilot_backend.list_global_mcp_servers()
+            names = {s["name"] for s in servers}
+            assert names == {"confluence", "files"}
+            conf = next(s for s in servers if s["name"] == "confluence")
+            assert conf["source"] == "user" and conf["type"] == "http"
+
+            copilot_backend.add_global_mcp_server(
+                "confluence", transport="http", url="https://mcp.atlassian.com/v1/mcp/authv2")
+            try:
+                copilot_backend.add_global_mcp_server("confluence", transport="http", url="FAIL")
+                assert False, "a nonzero exit must raise ApiError"
+            except ApiError:
+                pass
+        finally:
+            copilot_backend.COPILOT_CMD = real
+
+        # a CLI that can't run at all -> empty list, never a crash (the
+        # settings panel just shows an empty checklist, nothing to toggle)
+        copilot_backend.COPILOT_CMD = [sys.executable, str(Path(d) / "does_not_exist.py")]
+        try:
+            assert copilot_backend.list_global_mcp_servers() == []
+        finally:
+            copilot_backend.COPILOT_CMD = real
+    print("ok  MCP server discovery + registration (list/add, stubbed CLI)")
 
 
 def test_tree_store():
@@ -295,6 +351,7 @@ if __name__ == "__main__":
     test_local_settings_sanitize()
     test_local_settings_store()
     test_copilot_backend_overrides()
+    test_mcp_server_discovery_and_registration()
     test_tree_store()
     test_tree_store_revs()
     test_tutor_store()

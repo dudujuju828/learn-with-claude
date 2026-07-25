@@ -2,12 +2,20 @@
 
 Lets someone running ``learn --web`` swap the model per role, pick a
 reasoning effort, point the tutor at a directory of their own code or notes,
-and wire up MCP servers (Confluence, notably) the tutor may call on before
-answering. Persisted as one small JSON document beside the knowledge dir
-(``local_settings.json``, next to ``tutors.json``) so it survives restarts.
+and choose which of their own already-registered MCP servers (Confluence,
+notably) the tutor may call on before answering. Persisted as one small JSON
+document beside the knowledge dir (``local_settings.json``, next to
+``tutors.json``) so it survives restarts.
+
+MCP servers are NOT defined here — they live in the Copilot CLI's own
+``~/.copilot/mcp-config.json`` (edited via ``copilot mcp add``, or the
+one-click Confluence button, which shells out to the same command). This
+file only remembers which of those already-registered servers are turned on
+for the tutor, plus an optional note describing each one to the tutor —
+deliberately not a second place to define what a server IS.
 
 Irrelevant to, and never imported by, the hosted Vercel backend (api/index.py)
-— that transport has no local filesystem or MCP story at all.
+— that transport has no local filesystem, MCP, or skills story at all.
 """
 
 from __future__ import annotations
@@ -17,27 +25,24 @@ import re
 from pathlib import Path
 
 EFFORT_CHOICES = {"", "none", "minimal", "low", "medium", "high", "xhigh", "max"}
-TRANSPORTS = {"stdio", "http", "sse"}
 ROLES = ("learner", "tutor", "glossary")
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
 MAX_MODEL_LEN = 80
-MAX_SERVERS = 8
-MAX_ARGS = 20
-MAX_KV = 20
-MAX_VAL_LEN = 400
+MAX_SERVERS = 20
 MAX_NOTE_LEN = 200
 
-# Atlassian's own remote MCP server: one URL, OAuth 2.1 handled by the
-# Copilot CLI itself on first use (a browser tab opens to sign in) — no API
-# token to type in or store. Covers Confluence *and* Jira on Atlassian Cloud;
-# self-hosted Confluence needs a different (stdio, token-based) server, which
-# is exactly what the free-form "advanced config" on a custom row is for.
+# Args `copilot mcp add` needs to register Atlassian's own remote MCP server:
+# one URL, OAuth 2.1 handled by the CLI itself on first use (a browser tab
+# opens to sign in) — no API token to type in or store here. Covers
+# Confluence *and* Jira on Atlassian Cloud; self-hosted Confluence needs a
+# different (stdio, token-based) server, which someone can register with
+# `copilot mcp add` themselves like any other — it'll show up in the
+# settings panel's checklist same as this one does.
 CONFLUENCE_PRESET = {
     "name": "confluence",
     "transport": "http",
     "url": "https://mcp.atlassian.com/v1/mcp/authv2",
-    "headers": {},
     "note": "the team's Confluence/Jira wiki (Atlassian's official remote MCP "
             "— first use opens a browser tab to sign in, nothing to type here)",
 }
@@ -52,22 +57,12 @@ def default() -> dict:
     }
 
 
-def _clean_kv(raw, *, max_items: int) -> dict:
-    if not isinstance(raw, dict):
-        return {}
-    out = {}
-    for k, v in list(raw.items())[:max_items]:
-        key = str(k).strip()[:64]
-        if key:
-            out[key] = str(v)[:MAX_VAL_LEN]
-    return out
-
-
-def _clean_server(raw: dict, *, strict: bool) -> "dict | None":
-    """One MCP server entry, or None if invalid (and not strict)."""
+def _clean_server_ref(raw: dict, *, strict: bool) -> "dict | None":
+    """One {name, enabled, note} entry — a reference to a server already
+    registered in ~/.copilot/mcp-config.json, not a definition of one."""
     if not isinstance(raw, dict):
         if strict:
-            raise ValueError("each mcp server must be an object")
+            raise ValueError("each mcp server entry must be an object")
         return None
     name = str(raw.get("name") or "").strip().lower()
     if not _NAME.match(name):
@@ -77,36 +72,11 @@ def _clean_server(raw: dict, *, strict: bool) -> "dict | None":
                 "starting with a letter"
             )
         return None
-    transport = str(raw.get("transport") or "stdio").strip().lower()
-    if transport not in TRANSPORTS:
-        if strict:
-            raise ValueError(f'server "{name}": transport must be stdio, http, or sse')
-        return None
-    out = {
+    return {
         "name": name,
-        "transport": transport,
         "enabled": bool(raw.get("enabled", True)),
         "note": str(raw.get("note") or "").strip()[:MAX_NOTE_LEN],
     }
-    if transport == "stdio":
-        command = str(raw.get("command") or "").strip()
-        if not command:
-            if strict:
-                raise ValueError(f'server "{name}": a stdio server needs a command')
-            return None
-        out["command"] = command
-        out["args"] = [str(a).strip() for a in (raw.get("args") or [])
-                       if str(a).strip()][:MAX_ARGS]
-        out["env"] = _clean_kv(raw.get("env"), max_items=MAX_KV)
-    else:
-        url = str(raw.get("url") or "").strip()
-        if not url.startswith(("http://", "https://")):
-            if strict:
-                raise ValueError(f'server "{name}": needs an http(s):// url')
-            return None
-        out["url"] = url
-        out["headers"] = _clean_kv(raw.get("headers"), max_items=MAX_KV)
-    return out
 
 
 def sanitize(doc, *, strict: bool = False) -> dict:
@@ -159,7 +129,7 @@ def sanitize(doc, *, strict: bool = False) -> dict:
         raise ValueError(f"at most {MAX_SERVERS} mcp servers")
     servers, seen = [], set()
     for raw in (raw_servers or [])[:MAX_SERVERS]:
-        s = _clean_server(raw, strict=strict)
+        s = _clean_server_ref(raw, strict=strict)
         if s is None:
             continue
         if s["name"] in seen:

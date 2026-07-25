@@ -8,22 +8,30 @@ what was chosen, why, and which candidates were rejected.
 ## Feature 37 — ⚙ local settings: the tutor can ground itself in your own systems
 
 *(user-requested, not picked from the autonomous candidate list — logged
-here anyway since it's the running record of what changed and why.)*
+here anyway since it's the running record of what changed and why. Went
+through a design pivot mid-flight after the first cut shipped — see below —
+this entry describes the final shape.)*
 
 ### What it is
 In `learn --web` (the Copilot CLI transport), the tutor's Copilot session
 already got read-only filesystem tools (`view`/`grep`/`glob`), but nothing
-told it so, and nothing let it reach further than "look around the home
-directory" — there was no way to point it at proprietary material like a
-team's Confluence. A new **⚙ local settings** button (header, this mode
-only) opens a panel to: swap the model per role and pick a reasoning effort
-without setting env vars and restarting; name one project directory of the
-learner's own code or notes the tutor should check first; and turn on MCP
-servers the tutor can call before answering, with a one-click **+ add
-confluence** that wires up Atlassian's own remote MCP server (OAuth in a
-browser tab on first use — nothing to type in) plus a **+ add a custom MCP
-server** escape hatch (the same JSON `copilot mcp add` takes) for anything
-else, self-hosted Confluence included. Everything saves to
+told it so, nothing let it reach further than "look around the home
+directory," and it couldn't touch skills, `AGENTS.md`, or MCP servers at
+all — no way to point it at proprietary material like a team's Confluence.
+A new **⚙ local settings** button (header, this mode only) opens a panel
+to: swap the model per role (dropdown of common ones, plus "other…" for
+anything not listed — the CLI has no way to enumerate what's actually
+available) and pick a reasoning effort, no env vars or restart; name one
+project directory of the operator's own code or notes the tutor should
+check first; and turn on whichever of the operator's own already-registered
+MCP servers the tutor may call before answering, via a checklist — a
+one-click **+ set up confluence** runs `copilot mcp add` for Atlassian's
+official remote server on their behalf (OAuth in a browser tab on first
+use, nothing to type in), anything else the operator registers themselves
+with `copilot mcp add` shows up in the checklist too. The tutor also now
+gets `skill` and its normal `AGENTS.md`/custom instructions — same as any
+other `copilot` session on the machine — while shell and write access stay
+off. Everything (except the MCP servers themselves) saves to
 `local_settings.json` next to the knowledge folder and takes effect on the
 next reply, no restart.
 
@@ -52,14 +60,41 @@ next reply, no restart.
   result means every tutor turn re-reads the live settings, confirmed by a
   test that a stub grounding function is called once per request, not once
   total.
-- **Confluence is baked in as one URL, not a credential form.** Atlassian's
+- **MCP servers are read from the real `~/.copilot/mcp-config.json`, not
+  redefined in this app — a mid-flight pivot.** The first cut let the panel
+  author full server JSON (command/url/headers/env) into `local_settings.json`
+  and injected it per-call via `--additional-mcp-config`. Asked *why not
+  just use the config `copilot mcp add` already writes*, and the honest
+  answer was: no good reason — this app still has to know a server's *name*
+  to add it to the tutor's `--available-tools` allowlist (that part is
+  inherently app-level state), but the server *definition* was pure
+  duplication of something the CLI already manages, and it meant a checkbox
+  in this app could never see servers set up any other way, or interact
+  cleanly with an operator's existing `copilot` setup — which was the whole
+  point once skills and custom instructions were also in scope. Replaced
+  with `copilot_backend.list_global_mcp_servers()` (`copilot mcp list
+  --json`) feeding a checklist, `add_global_mcp_server()` (`copilot mcp
+  add`) behind the one-click Confluence button, and
+  `local_settings.mcp_servers` shrunk to `{name, enabled, note}` —
+  references, never definitions. `--additional-mcp-config` is gone entirely;
+  registered servers load the way the CLI already loads them for everyone.
+- **Confluence needed zero secret-handling code either way.** Atlassian's
   own remote MCP server (`https://mcp.atlassian.com/v1/mcp/authv2`) handles
   auth itself via OAuth the first time the tutor actually calls it — a
-  browser tab opens, the learner signs in, done. That meant the preset
-  needed zero secret-handling code in this app at all. Self-hosted
-  Confluence (token-based, different server entirely) isn't guessable up
-  front, so it goes through the generic custom-server JSON box instead of a
-  second hardcoded guess.
+  browser tab opens, the operator signs in, done. True before and after the
+  pivot; only *where* the URL gets registered changed (this app's JSON vs.
+  a real `copilot mcp add` call).
+- **Skills and custom instructions: opened up, not left as a maybe.** Initial
+  build kept `--no-custom-instructions` on the tutor and never exposed the
+  `skill` tool, reasoning that skills can have side effects beyond a
+  read-only lookup. Asked directly, and the answer was clear: these are the
+  operator's own already-trusted config, useful for answering better, and
+  not something a question-answering session is realistically going to
+  misuse. `--no-custom-instructions` moved to the learner/glossary branch
+  only (those two must stay uncontaminated fixed personas — picking up the
+  operator's own coding instructions would break the simulation, not help
+  it); the tutor's `--available-tools` grew a `skill` entry. Shell and write
+  access were never on the table either way.
 - **Settings apply through a live overlay, not a restart.** `copilot_backend`
   holds a lock-guarded settings dict `configure()` replaces wholesale;
   `effective_model()`/`effective_effort()` check it before falling back to
@@ -73,15 +108,32 @@ next reply, no restart.
   duplicate server name), but silently drops garbage when reading the file
   back at startup — a hand-edited or stale `local_settings.json` must never
   stop the server from booting.
-- Verified past the unit tests with the real stack: booted the actual local
-  server against the real knowledge dir, drove the real page over the
-  Chrome DevTools Protocol (headless Edge) — clicked ⚙, clicked **+ add
-  confluence**, watched the row render with the right URL, saved with a
-  fake directory and watched the server reject it with the exact validation
-  message inline, then saved for real and confirmed `/api/local_settings`
-  came back with the model, directory, and enabled server persisted. Also
-  checked the `mcpRowHtml` row-builder's HTML-escaping directly in Node (a
-  name/note containing `"><script>` cannot break out of the row markup).
+- **A real race, found only by driving the real page.** `GET
+  /api/local_settings` now shells out to `copilot mcp list --json` to build
+  the checklist — measured close to a second, cold. `openLocalSettings()` is
+  `async`; its `setModelField()`/`$("lscodedir").value = ...` calls run
+  *after* that `await fetch(...)` resolves. Open the panel, and — before that
+  fetch lands — pick a model: the panel looked fine, but the slow response
+  landing afterward silently overwrote the pick back to blank, because the
+  same in-flight `openLocalSettings()` call resumes and repopulates
+  everything from the (already-stale) server response. Unit tests couldn't
+  have caught this — it only exists as a timing gap in a real browser
+  against a real slow endpoint. Found it by scripting the actual page over
+  the Chrome DevTools Protocol and noticing a selection didn't stick; fixed
+  by disabling the whole form (cancel excepted) between open and populate,
+  which closes the race for a real user categorically rather than papering
+  over one observed timing.
+- Verified past the unit tests with the real stack throughout: booted the
+  actual local server, drove the real page over CDP (headless Edge) —
+  clicked ⚙, registered Confluence for real (`copilot mcp add` really ran,
+  really showed up in `copilot mcp list`), saved with a fake directory and
+  watched the server reject it with the exact validation message inline,
+  saved for real and confirmed `/api/local_settings` came back with the
+  model, directory, and enabled server persisted, and confirmed the loading
+  race above both existed and was fixed by watching `disabled` flip and a
+  selection survive a full wait cycle. Also checked the row-builder's
+  HTML-escaping directly in Node (a name/note containing `"><script>` cannot
+  break out of the row markup).
 
 ---
 

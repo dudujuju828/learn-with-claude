@@ -297,20 +297,28 @@ How it differs from the Vercel deployment:
 - **Costs are premium requests, not dollars** — the header counts `req`
   as reported by the CLI per call; trees grown against the API keep their `$`.
 - **The tutor can ground itself locally.** Its Copilot session gets
-  **read-only** tools (`view`, `grep`, `glob` — never shell, write, or web)
-  with file access from your home directory down, so when a question touches
-  material you have on disk, it can go look. The learner, glossary, and quiz
-  roles run with no tools at all.
+  **read-only** tools (`view`, `grep`, `glob`, `skill` — never shell, write, or
+  web) with file access from your home directory down, plus its normal
+  `AGENTS.md`/custom instructions and whichever of your own MCP servers you
+  turn on — so when a question touches material you have on disk, your
+  team's Confluence, or anything else your Copilot setup already knows, it
+  can go look. The learner, glossary, and quiz roles run with no tools and
+  no custom instructions at all — they're a fixed roleplay, not a coding
+  assistant.
 - **⚙ local settings** (header, local mode only) lets you swap the model per
-  role, pick a reasoning effort, point the tutor at one project directory of
-  your own code or notes to check first, and turn on MCP servers it can call
-  before answering — a one-click **+ add confluence** wires up [Atlassian's
-  official remote MCP server](https://mcp.atlassian.com/v1/mcp/authv2) (Jira +
-  Confluence Cloud; first use opens a browser tab to sign in, no token to
-  type in), and **+ add a custom MCP server** takes the same JSON `copilot mcp
-  add` would. Everything here is saved to `local_settings.json` next to your
-  knowledge folder and applies to the next reply, no restart — and only ever
-  exists in this local mode, never in the hosted deployment.
+  role (a dropdown of common ones, or type any exact id) and pick a reasoning
+  effort, name one project directory of your own code or notes for the tutor
+  to check first, and turn on whichever MCP servers you've already registered
+  with the Copilot CLI — a checklist read straight from `copilot mcp list`,
+  not a second place to define one. A one-click **+ set up confluence** runs
+  `copilot mcp add` for [Atlassian's official remote MCP
+  server](https://mcp.atlassian.com/v1/mcp/authv2) (Jira + Confluence Cloud;
+  first use opens a browser tab to sign in, no token to type in) on your
+  behalf; anything else you register yourself with `copilot mcp add` shows up
+  in the checklist the same way. Model/effort/directory/enabled-servers save
+  to `local_settings.json` next to your knowledge folder and apply to the
+  next reply, no restart — and only ever exist in this local mode, never in
+  the hosted deployment.
 
 Options: `--port` (default 8577), `--dir` for the knowledge folder,
 `--no-open` to skip the browser. Env knobs: `LEARN_COPILOT_MODEL` (or
