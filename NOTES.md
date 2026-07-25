@@ -5,6 +5,68 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 35 — 🗣 explain it back keeps probing after the first round
+
+*(user-requested, not picked from the autonomous candidate list — logged
+here anyway since it's the running record of what changed and why.)*
+
+### What it is
+Previously, every "explain it back" send was stateless: the tutor graded
+whatever was in the box against the conversation digest from a cold
+start, with zero memory of the previous round's feedback or its
+probing question — "aim your next try at the gap and send again" meant
+re-explaining the whole thing into the same box and hoping the edit
+addressed it. Now, once a round comes back **≈ close** or **△ gappy**
+(anything but clean), the box turns into answering that one question:
+placeholder and button both change ("Take on the question above…" /
+**answer**), the box is left empty for a short, targeted reply instead
+of a wall of text, and the reply is sent along with the thread's
+history since the last **✓ clean** (capped at 5 rounds). The tutor's
+feedback is judged against the WHOLE exchange, not the latest reply
+alone — crediting what's now resolved, narrowing on whatever nuance is
+still missing, and pushing further with a follow-up in the SAME line of
+inquiry rather than a fresh unrelated question — until it reaches clean
+(placeholder/button reset to the fresh-explanation state) or the
+learner stops. **⤳ chase it** is unchanged — it still hands the
+question to the real conversation instead, for when you'd rather have
+the tutor just answer it there.
+
+### Design notes
+- **No new data shape.** `tree.teach` already stored a flat, ordered
+  array of attempts per node (`{node, when, text, right, missing,
+  question, verdict}`) to drive the trail UI and the spaced-repetition
+  ladder — a "thread" is just the trailing run of that same array back
+  to (not including) the last clean verdict. `threadHistory()` computes
+  it client-side; nothing new syncs, merges, or exports differently.
+- **Wire-shape mismatch caught by the headless test, not by hand.** The
+  stored attempt's explanation field is `text` (chosen to stay generic
+  across the app's other authored-text fields); the API's top-level
+  field is `explanation`. `threadHistory()` has to map one to the other
+  when building the outgoing history — missed this on the first pass,
+  and the browser probe threw on it immediately (`history[0].explanation`
+  was `undefined`), which is exactly the kind of wiring bug a
+  behavioural test catches and a syntax check can't.
+- **Backend change is additive and bounded.** `teachback_message()`
+  gained an optional `history` parameter (old call sites — the CLI has
+  no teach-back path, so only this one — are unaffected by the default
+  `None`); `handle_teachback()` clips it the same defensive way as the
+  `interview` route already clips its exchange list (last 6, each field
+  capped). No prompt behaviour changes when `history` is empty, verified
+  by asserting `"CONTINUING" not in` the built message in that case.
+- **Found and fixed a latent test-suite gap while in this file:**
+  `test_handle_interview` and `test_handle_teachback` were both defined
+  but never called from `tests/test_web_helpers.py`'s `__main__` block —
+  my new continuation-mode assertions would have silently never run.
+  Wired both into the runner.
+- Verified with the now-running `test_handle_teachback` (one-shot
+  framing unchanged, continuation framing includes prior explanation +
+  question, malformed/empty history entries dropped, entry count capped)
+  and a 15-assertion headless browser run of the real UI: fresh round →
+  close verdict → box reframes to answering mode → second round sends
+  history → clean verdict → box resets to the fresh-explanation state.
+
+---
+
 ## Feature 34 — ❓ question bank
 
 *(user-requested, not picked from the autonomous candidate list — logged
