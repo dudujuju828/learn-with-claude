@@ -239,6 +239,7 @@ def test_handle_teachback():
                           "explanation": "you hash the key to get an index"}, stub)
     assert seen["role"] == "tutor"
     assert "ground truth" in seen["msg"] and "you hash the key" in seen["msg"]
+    assert "CONTINUING" not in seen["msg"]            # no history -> one-shot framing
     assert "never" in seen["system"].lower()          # style is off-limits
     assert r["cost"] == 0.02
     assert r["right"].startswith("You nailed") and "Collisions" in r["missing"]
@@ -264,6 +265,30 @@ def test_handle_teachback():
         raise AssertionError("expected ApiError")
     except ApiError as e:
         assert e.status == 502
+
+    # continuing a thread: history present -> the message frames the new
+    # explanation as a reply to the tutor's last question, not a restart
+    seen2 = {}
+
+    def stub2(system, messages, role, **kw):
+        seen2["msg"] = messages[0]["content"]
+        return json.dumps(reply), 0.01
+
+    r4 = handle_teachback({
+        "explanation": "when they collide you probe to the next open slot",
+        "history": [
+            {"explanation": "you hash the key to get an index", "right": "got the index part",
+             "missing": "collisions", "question": "What should happen when they do?"},
+            "not a dict",           # ignored
+            {"explanation": "", "right": "x"},   # empty explanation -> skipped
+        ],
+    }, stub2)
+    assert r4["cost"] == 0.01
+    assert "CONTINUING" in seen2["msg"]
+    assert "you hash the key to get an index" in seen2["msg"]
+    assert "What should happen when they do?" in seen2["msg"]
+    assert "when they collide you probe to the next open slot" in seen2["msg"]
+    assert seen2["msg"].count("Learner said") == 1   # the two bad entries were dropped
     print("ok  teachback handler")
 
 
@@ -367,6 +392,8 @@ if __name__ == "__main__":
     test_split_tutor_parts()
     test_knowledge_round_trip()
     test_message_builders()
+    test_handle_interview()
+    test_handle_teachback()
     test_handle_survey()
     test_source_threading()
     print("\nall green")

@@ -1226,11 +1226,14 @@
   against what was actually covered and answers with what's solid, the one
   gap that matters, one question to push deeper — and an honest verdict:
   <b>✓ clean</b>, <b>≈ close</b>, or <b>△ gappy</b>. Ideas only, never the
-  spelling. Then the loop: aim your next try at the gap and send again —
-  every attempt is kept, the trail of verdicts shows your explanation
-  getting cleaner, and tapping an old attempt brings its words back.
-  <b>⤳ chase it</b> sends the tutor's probing question into the
-  conversation as your own turn; the <b>🔊</b> (or <b>s</b>) reads the
+  spelling. If it isn't clean, the box turns into answering that one
+  question — not re-explaining everything — and the tutor keeps pushing on
+  the SAME nuance across replies, crediting what you've already resolved,
+  until it either clicks (clean) or you stop; every reply is kept, the
+  trail of verdicts shows the thread narrowing in, and tapping an old
+  attempt brings its words back. <b>⤳ chase it</b> sends the tutor's
+  probing question into the conversation as your own turn instead, if
+  you'd rather have it answered there; the <b>🔊</b> (or <b>s</b>) reads the
   feedback aloud. A <b>clean</b> explanation comes due again later —
   3 days, then 7, then longer — and the <b>🗣 explain again</b> nudge in
   the words tab (and ⌘K) takes you straight to what's due: re-explaining
@@ -2619,12 +2622,37 @@ function speakTeach(){
   speakBlock($("tbfeedback"));
 }
 window.speakTeach = speakTeach;
+/* the exchange since the last "clean" verdict (or the start of the trail) —
+   sent to the tutor so a reply to its question is judged in context
+   instead of graded from zero, and capped so it can't balloon the call */
+function threadHistory(attempts){
+  const hist = [];
+  for (let i = attempts.length - 1; i >= 0; i--){
+    if (attempts[i].verdict === "clean") break;
+    hist.unshift(attempts[i]);
+  }
+  // the wire shape uses "explanation" (matching the top-level field the
+  // tutor reads); attempts store it as "text" — map it going out
+  return hist.slice(-5).map(a =>
+    ({explanation: a.text, right: a.right, missing: a.missing, question: a.question}));
+}
+/* an open thread: the last attempt wasn't clean and left a question on the
+   table, so the next box is for answering THAT, not re-explaining fresh */
+function isContinuingThread(tree, nodeId){
+  if (!tree || nodeId == null) return false;
+  const past = teachAttempts(tree, nodeId);
+  const last = past[past.length - 1];
+  return !!(last && last.verdict !== "clean" && last.question);
+}
 function updateTeachMeta(){
   if (teachBusy) return;
+  const continuing = isContinuingThread(cur(), teachNodeId);
   const words = $("tbarea").value.trim() ? $("tbarea").value.trim().split(/\s+/).length : 0;
   $("tbmeta").textContent = words
     ? `${words} word${words === 1 ? "" : "s"} · feedback is one model call`
-    : "explain it fresh, from memory — that's the rehearsal that counts";
+    : continuing
+      ? "answer the question above — chase that one nuance, not the whole thing again"
+      : "explain it fresh, from memory — that's the rehearsal that counts";
 }
 function openTeach(){
   const tree = cur(); if (!tree || running || currentNode == null) return;
@@ -2636,6 +2664,9 @@ function openTeach(){
   $("tbarea").value = "";   // fresh recall beats editing old words
   const past = teachAttempts(tree, node.id);
   teachShown = past.length - 1;
+  const continuing = isContinuingThread(tree, node.id);
+  $("tbarea").placeholder = continuing ? "Take on the question above…" : "The way I understand it…";
+  $("tbsend").textContent = continuing ? "answer" : "get feedback";
   renderTeach(past, past[past.length - 1] || null,
     past.length ? `last time (attempt ${past.length}, ${(past[past.length - 1].when || "").slice(0, 10)}):` : "");
   updateTeachMeta();
@@ -2648,13 +2679,15 @@ async function sendTeach(){
   const node = getNode(tree, teachNodeId);
   const v = $("tbarea").value.trim().slice(0, 8000);
   if (!node || !v){ $("tbarea").focus(); return; }
+  const history = threadHistory(teachAttempts(tree, node.id));
   teachBusy = true;
   $("tbsend").disabled = true;
-  $("tbmeta").textContent = provName() + " is reading your explanation…";
+  $("tbmeta").textContent = provName() + (history.length ? " is reading your answer…" : " is reading your explanation…");
   try {
     const r = await api("teachback", {
       topic: tree.root_topic, label: node.label,
       digest: conversationDigest(node.turns), explanation: v,
+      ...(history.length ? {history} : {}),
     });
     node.cost += r.cost;
     const attempt = {node: node.id, when: new Date().toISOString(), text: v,
@@ -2666,10 +2699,16 @@ async function sendTeach(){
     const past = teachAttempts(tree, node.id);
     teachShown = past.length - 1;
     renderTeach(past, attempt);
+    const continuing = attempt.verdict !== "clean" && !!attempt.question;
+    $("tbarea").value = "";   // the next round answers fresh — it's not an edit
+    $("tbarea").placeholder = continuing ? "Take on the question above…" : "The way I understand it…";
+    $("tbsend").textContent = continuing ? "answer" : "get feedback";
     const ivl = teachIvl(past);
     $("tbmeta").textContent = attempt.verdict === "clean"
       ? `clean — explain it again in ${ivl} day${ivl === 1 ? "" : "s"} to make it stick (you'll be nudged)`
-      : "aim at the gap: edit your words above and send again";
+      : continuing
+        ? "one nuance left — answer the question above"
+        : "aim at the gap: explain it again below";
     updateRevRow();   // the explain-again nudge may have moved
   } catch (e){
     $("tbmeta").textContent = oneLine(e.message, 140) + " — your words are still here; try again.";

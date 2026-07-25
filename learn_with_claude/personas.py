@@ -553,19 +553,50 @@ RULES:
 - Plain, friendly language. 1-3 short sentences per field. Sentence case,
   never ALL CAPS.
 
+CONTINUING A THREAD: sometimes you'll be shown a prior exchange where you
+already gave feedback and asked a follow-up question, and the learner is now
+replying to THAT question rather than re-explaining everything. Judge their
+understanding across the WHOLE exchange, not the latest reply in isolation:
+- If the reply resolves what you flagged, say so plainly in "right" (credit
+  the earlier parts too) and move the verdict toward "clean".
+- If a nuance is still missing, "missing" names that specific nuance, and
+  "question" keeps pushing on THAT SAME thread — the natural next step in
+  the same line of inquiry, never a fresh, unrelated question. You're
+  narrowing in on one idea across turns, like a tutor actually would.
+
 OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
 {"right": "...", "missing": "...", "question": "...",
  "verdict": "<clean|close|gappy>"}"""
 
 
-def teachback_message(root_topic: str, label: str, digest: str, explanation: str) -> str:
-    return (
+def teachback_message(
+    root_topic: str, label: str, digest: str, explanation: str,
+    history: "list | None" = None,
+) -> str:
+    parts = [
         f'The learner has been investigating "{root_topic}" and is now explaining '
-        f'the conversation about "{label}" back in their own words.\n\n'
-        f"Digest of that conversation (the ground truth):\n{digest}\n\n"
-        f"The learner's explanation:\n\"\"\"\n{explanation}\n\"\"\"\n\n"
-        "Give your feedback and output the JSON object now."
-    )
+        f'the conversation about "{label}" back in their own words.',
+        "",
+        f"Digest of that conversation (the ground truth):\n{digest}",
+    ]
+    if history:
+        parts.append(
+            "\nThis is a CONTINUING conversation — you already gave feedback below and "
+            "asked a follow-up question; the learner is now replying to it, oldest first:"
+        )
+        for i, h in enumerate(history, 1):
+            parts.append(f'{i}. Learner said: """{h.get("explanation", "")}"""')
+            bits = [f"{k}: {h[k]}" for k in ("right", "missing", "question") if h.get(k)]
+            if bits:
+                parts.append("   your feedback then — " + " · ".join(bits))
+        parts.append(
+            f'\nThe learner\'s new reply to your last question:\n"""\n{explanation}\n"""\n'
+            "Judge it against the whole exchange above, not on its own."
+        )
+    else:
+        parts.append(f'\nThe learner\'s explanation:\n"""\n{explanation}\n"""')
+    parts.append("\nGive your feedback and output the JSON object now.")
+    return "\n".join(parts)
 
 
 def followup_learner_message(root_topic: str, recap: str, concept: str, opening_question: str) -> str:

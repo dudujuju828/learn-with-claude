@@ -293,15 +293,35 @@ def handle_interview(body: dict, call_model) -> dict:
 def handle_teachback(body: dict, call_model) -> dict:
     """The Feynman step: the learner explains a conversation back in their
     own words; the tutor answers with what's solid, the one thing missing,
-    and one probing question. Feedback, not a grade — content only."""
+    and one probing question. Feedback, not a grade — content only.
+
+    An optional 'history' carries the prior exchange in this same thread
+    (since the last "clean" verdict, or the start): when present, the
+    learner's 'explanation' is their reply to the tutor's last question,
+    not a fresh restart, so the tutor can keep pushing on the same nuance
+    instead of re-grading from zero."""
     explanation = (body.get("explanation") or "").strip()
     if not explanation:
         raise ApiError("missing 'explanation'")
+    history = []
+    for h in (body.get("history") or [])[:6]:
+        if not isinstance(h, dict):
+            continue
+        exp = str(h.get("explanation") or "").strip()[:4000]
+        if not exp:
+            continue
+        history.append({
+            "explanation": exp,
+            "right": str(h.get("right") or "").strip()[:1200],
+            "missing": str(h.get("missing") or "").strip()[:1200],
+            "question": str(h.get("question") or "").strip()[:400],
+        })
     message = teachback_message(
         (body.get("topic") or "").strip()[:200],
         (body.get("label") or "").strip()[:120],
         (body.get("digest") or "").strip()[:24000],
         explanation[:8000],
+        history=history,
     )
     text, cost = call_model(TEACHBACK_SYSTEM, [{"role": "user", "content": message}], "tutor")
     data = first_json_object(text)
