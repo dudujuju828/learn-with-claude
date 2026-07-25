@@ -5,6 +5,62 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 34 — ❓ question bank
+
+*(user-requested, not picked from the autonomous candidate list — logged
+here anyway since it's the running record of what changed and why.)*
+
+### What it is
+Press **q** anywhere while reading a conversation and a small floating
+bar appears — no dialog dimming the page, no scrolling away — asking
+what you're wondering. It tags itself with whichever turn sits at the
+top of the viewport (the same scroll-position heuristic `j`/`k` turn-
+hopping already uses), so the question is anchored to the passage that
+actually prompted it. Saving doesn't ask the tutor right away: it goes
+into that tree's question bank instead, so a stray thought never
+interrupts a run in progress. A **❓ questions** button in the
+conversation header (shown once the tree has any) opens the bank:
+**investigate** answers one question on its own, **run all** queues
+every pending one in sequence — exactly like `full` queues its four
+follow-ups, just reusing the existing queue instead of adding a second
+one. Either path rides the same single "ask the tutor directly with
+this node's context" call as 🧑 ask-the-tutor-yourself / ⛏ dig, so
+investigating a banked question is one real model call, appended to
+the conversation as your own turn (`user: true`), never one the
+simulated learner sees. Answered questions fold under a disclosure with
+a jump back to the Q&A they became; discarding a pending one just
+drops it. Everything lives on `tree.questions` — travels in
+`.know.json`, syncs last-write-wins-per-field like highlights (union by
+id, with "answered" a one-way flip so a lagging device can't
+resurrect a question the other side already answered).
+
+### Design notes
+- **Scoped to one tree, not the profile.** The docket and highlights hub
+  aggregate across every tree in the active profile, and an early draft
+  of this feature did too — until tracing the "run all" path showed it
+  would process nodes in trees other than the one on screen. The app's
+  `activity` object (drives the "tutor is answering…" inline indicator)
+  is keyed by `nodeId` alone, with no `treeId`, because every existing
+  queue thunk (root/branch/follow-up/ask) only ever touches the
+  currently open tree — node ids aren't unique across trees, so a
+  background answer in tree B could paint its "answering…" spinner
+  under the wrong node if tree A (open, unrelated) happened to reuse
+  that id. Keeping the bank per-tree sidesteps the mismatch entirely by
+  never introducing cross-tree background execution — lower risk than
+  patching a shared global that every other thunk also depends on.
+- **Investigating one rides `askThunk`'s exact path**, parameterised by
+  a question id instead of the ask box's live input, and marks the bank
+  entry answered in the same save. No backend changes at all — the
+  `/api/tutor` route it calls already existed for the ask box and ⛏ dig.
+- Verified with a 25-assertion headless run (capture → tag → save →
+  Escape-cancels vs Enter-saves → header count → bank rows → individual
+  investigate through the real queue and stub tutor → run-all →
+  discard → jump-to-context → Esc closes both panels → the merge
+  union/answered-wins logic) plus the existing `test_web_helpers.py`
+  suite and a CSS/JS syntax and brace-balance pass.
+
+---
+
 ## Feature 33 — 📚 ground it in your own material
 
 ### What it is
