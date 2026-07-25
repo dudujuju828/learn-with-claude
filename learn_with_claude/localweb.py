@@ -11,9 +11,11 @@ with three differences:
   * trees persist as .know.json files in the CLI's knowledge directory
     ($LEARN_DIR or ~/.learn-with-claude/knowledge), so the shell and the web
     app grow the same collection;
-  * custom tutors live next to them in tutors.json, and the model/effort/
+  * custom tutors live next to them in tutors.json, the model/effort/
     project-directory/MCP-server settings (local_settings.py) in
-    local_settings.json.
+    local_settings.json, and the global question bank (questions banked
+    from anywhere, investigated as a fresh root topic) in
+    global_questions.json.
 
 Binds 127.0.0.1 only.
 """
@@ -50,6 +52,7 @@ STATIC_TYPES = {
 
 _TREE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _TUTOR_ID = re.compile(r"^[a-z0-9-]{1,32}$")
+_GQ_ID = re.compile(r"^[a-f0-9]{8,32}$")
 
 ROUTES = model_routes(copilot_backend.call_model, tutor_grounding=copilot_backend.grounding_text)
 
@@ -325,9 +328,55 @@ class TutorStore:
 
 
 # --------------------------------------------------------------------------- #
+# global question bank — questions banked from anywhere, not tied to a tree;
+# investigated fresh (a new root investigation), unlike tree.questions
+# (the per-tree bank, answered as a turn in the node you were reading).
+# Same "one small synced JSON doc" shape as TutorStore/tutors.json.
+# --------------------------------------------------------------------------- #
+class GlobalQuestionStore:
+    MAX_QUESTIONS, MAX_TEXT = 300, 500
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.lock = threading.Lock()
+
+    def get(self) -> "dict | None":
+        with self.lock:
+            try:
+                return json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+
+    def put(self, doc) -> None:
+        if not self._valid(doc):
+            raise ApiError("invalid global questions document")
+        with self.lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(
+                json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
+    @classmethod
+    def _valid(cls, doc) -> bool:
+        if not isinstance(doc, dict) or not isinstance(doc.get("questions"), list):
+            return False
+        qs = doc["questions"]
+        if len(qs) > cls.MAX_QUESTIONS:
+            return False
+        return all(
+            isinstance(q, dict)
+            and _GQ_ID.match(str(q.get("id") or ""))
+            and isinstance(q.get("text"), str) and q["text"].strip()
+            and len(q["text"]) <= cls.MAX_TEXT
+            for q in qs
+        )
+
+
+# --------------------------------------------------------------------------- #
 # http
 # --------------------------------------------------------------------------- #
-def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEndpoint):
+def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEndpoint,
+                 global_questions: GlobalQuestionStore):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -397,6 +446,8 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                             self._send_json(200, {"tree": doc})
                 elif path == "/api/tutors":
                     self._send_json(200, {"doc": tutors.get()})
+                elif path == "/api/global_questions":
+                    self._send_json(200, {"doc": global_questions.get()})
                 elif path == "/api/local_settings":
                     self._send_json(200, settings.get())
                 elif path.startswith("/api/"):
@@ -423,6 +474,9 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                         self._send_json(200, result)
                 elif path == "/api/tutors":
                     tutors.put(body.get("doc"))
+                    self._send_json(200, {"ok": True})
+                elif path == "/api/global_questions":
+                    global_questions.put(body.get("doc"))
                     self._send_json(200, {"ok": True})
                 elif path == "/api/local_settings":
                     self._send_json(200, settings.put(body))
@@ -477,10 +531,12 @@ def serve(port: int = 8577, knowledge_dir: "str | None" = None,
 
     trees = TreeStore(root)
     tutors = TutorStore(root.parent / "tutors.json")
+    global_questions = GlobalQuestionStore(root.parent / "global_questions.json")
     settings_store = local_settings.LocalSettingsStore(root.parent / "local_settings.json")
     copilot_backend.configure(settings_store.load())
     settings = LocalSettingsEndpoint(settings_store)
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(trees, tutors, settings))
+    httpd = ThreadingHTTPServer(("127.0.0.1", port),
+                                make_handler(trees, tutors, settings, global_questions))
     url = f"http://localhost:{port}/"
     print(f"learn-with-claude local web · {version}")
     print(f"  trees: {root}")

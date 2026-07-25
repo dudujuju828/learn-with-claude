@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from learn_with_claude import copilot_backend, local_settings  # noqa: E402
 from learn_with_claude.copilot_backend import _parse_stream, compose_prompt  # noqa: E402
-from learn_with_claude.localweb import TreeStore, TutorStore  # noqa: E402
+from learn_with_claude.localweb import GlobalQuestionStore, TreeStore, TutorStore  # noqa: E402
 from learn_with_claude.webapi import ApiError  # noqa: E402
 
 # A stand-in copilot: prints one assistant.message whose content is the argv
@@ -343,6 +343,32 @@ def test_tutor_store():
     print("ok  tutor store (round-trip, validation)")
 
 
+def test_global_question_store():
+    with tempfile.TemporaryDirectory() as d:
+        store = GlobalQuestionStore(Path(d) / "global_questions.json")
+        assert store.get() is None
+        doc = {"saved_at": "2026-07-26", "questions": [
+            {"id": "cac7a33b", "text": "why does a hash table resize", "added": "2026-07-26"}]}
+        store.put(doc)
+        assert store.get() == doc
+        # an answered entry (treeId/node/turn added once investigated) round-trips too
+        answered = {"saved_at": "2026-07-26", "questions": [
+            {"id": "cac7a33b", "text": "why does a hash table resize", "added": "2026-07-26",
+             "answered": True, "treeId": "abc123def456", "node": 1, "turn": 1}]}
+        store.put(answered)
+        assert store.get() == answered
+        for bad in [None, {"questions": "nope"},
+                    {"questions": [{"id": "BAD ID", "text": "y"}]},
+                    {"questions": [{"id": "cac7a33b", "text": ""}]},
+                    {"questions": [{"id": f"{i:08x}", "text": "x"} for i in range(301)]}]:
+            try:
+                store.put(bad)
+                assert False, f"must reject {bad!r}"
+            except ApiError:
+                pass
+    print("ok  global question store (round-trip, answered fields, validation)")
+
+
 if __name__ == "__main__":
     test_compose_prompt()
     test_parse_stream()
@@ -355,4 +381,5 @@ if __name__ == "__main__":
     test_tree_store()
     test_tree_store_revs()
     test_tutor_store()
+    test_global_question_store()
     print("\nall green")

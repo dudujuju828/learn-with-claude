@@ -773,22 +773,22 @@
   .rcard .rwait i.go{transform:scaleX(1)}
 
   /* ---- progress dashboard (read-only stats over review + quizzes),
-          the ★ highlights hub, and ❓ question bank, which share its
-          skeleton ---- */
-  #statsbox, #hlbox, #docketbox, #qbankbox{
+          the ★ highlights hub, and the ❓ question banks (local + global),
+          which share its skeleton ---- */
+  #statsbox, #hlbox, #docketbox, #qbankbox, #globalqbox{
     display:none; position:fixed; inset:0; z-index:95;
     background:color-mix(in srgb, var(--bg) 76%, transparent);
     align-items:center; justify-content:center; padding:1rem;
   }
-  #statsbox.open, #hlbox.open, #docketbox.open, #qbankbox.open{display:flex}
-  #statsbox .box, #hlbox .box, #docketbox .box, #qbankbox .box{
+  #statsbox.open, #hlbox.open, #docketbox.open, #qbankbox.open, #globalqbox.open{display:flex}
+  #statsbox .box, #hlbox .box, #docketbox .box, #qbankbox .box, #globalqbox .box{
     background:var(--card); border:1px solid var(--line); border-radius:1rem;
     padding:1.1rem 1.3rem 1.3rem; width:min(34rem,94vw); max-height:88dvh;
     overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,.25);
   }
-  #statsbox .sthead, #hlbox .sthead, #docketbox .sthead, #qbankbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
-  #statsbox #stattitle, #hlbox #hltitle, #docketbox #dktitle, #qbankbox #qbtitle{font-weight:600}
-  #statsbox #statscope, #hlbox #hlscope, #docketbox #dkscope, #qbankbox #qbscope{flex:1; color:var(--muted); font-size:.82rem;
+  #statsbox .sthead, #hlbox .sthead, #docketbox .sthead, #qbankbox .sthead, #globalqbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
+  #statsbox #stattitle, #hlbox #hltitle, #docketbox #dktitle, #qbankbox #qbtitle, #globalqbox #gqtitle{font-weight:600}
+  #statsbox #statscope, #hlbox #hlscope, #docketbox #dkscope, #qbankbox #qbscope, #globalqbox #gqscope{flex:1; color:var(--muted); font-size:.82rem;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #hlbox .hltree, #docketbox .hltree{font-weight:600; margin:1rem 0 .4rem}
   #hlbox .hltree:first-child, #docketbox .hltree:first-child{margin-top:0}
@@ -803,24 +803,25 @@
   /* the docket's per-tree thread groups and its all-clear state */
   #docketbox .dktree{color:var(--muted); font-size:.8rem; margin:.5rem 0 .2rem}
   #docketbox .dkthreads{margin:.35rem 0 .1rem}
-  #docketbox .dkempty, #qbankbox .dkempty{text-align:center; padding:1.6rem 0 1rem; color:var(--muted)}
-  #docketbox .dkempty .big, #qbankbox .dkempty .big{font-size:1.7rem; margin-bottom:.5rem}
+  #docketbox .dkempty, #qbankbox .dkempty, #globalqbox .dkempty{text-align:center; padding:1.6rem 0 1rem; color:var(--muted)}
+  #docketbox .dkempty .big, #qbankbox .dkempty .big, #globalqbox .dkempty .big{font-size:1.7rem; margin-bottom:.5rem}
   /* question bank rows — a card per banked question: the text (tap to
-     jump to where it came from), where it was raised, and its actions */
-  #qbankbox .qrow{
+     jump to where it came from), where it was raised, and its actions.
+     Shared by both banks (#qbankbox = local, #globalqbox = global). */
+  #qbankbox .qrow, #globalqbox .qrow{
     border:1px solid var(--line); border-radius:.6rem; background:var(--bg);
     padding:.55rem .7rem; margin:.45rem 0;
   }
-  #qbankbox .qrow.done{opacity:.72}
-  #qbankbox .qtext{font-size:.95em; cursor:pointer}
-  #qbankbox .qtext:hover{color:var(--term)}
-  #qbankbox .qrow.done .qtext{text-decoration:line-through; text-decoration-color:var(--muted)}
-  #qbankbox .qwhere{color:var(--muted); font-size:.76rem; margin-top:.3rem}
-  #qbankbox .qacts{display:flex; gap:.4rem; margin-top:.5rem}
-  #qbankbox .qacts button{font-size:.82rem; padding:.28rem .6rem}
-  #qbankbox .qbdone{margin-top:1rem}
-  #qbankbox .qbdone summary{cursor:pointer; color:var(--muted); font-size:.85rem}
-  #qbankbox .qbdone[open] summary{margin-bottom:.3rem}
+  #qbankbox .qrow.done, #globalqbox .qrow.done{opacity:.72}
+  #qbankbox .qtext, #globalqbox .qtext{font-size:.95em; cursor:pointer}
+  #qbankbox .qtext:hover, #globalqbox .qtext:hover{color:var(--term)}
+  #qbankbox .qrow.done .qtext, #globalqbox .qrow.done .qtext{text-decoration:line-through; text-decoration-color:var(--muted)}
+  #qbankbox .qwhere, #globalqbox .qwhere{color:var(--muted); font-size:.76rem; margin-top:.3rem}
+  #qbankbox .qacts, #globalqbox .qacts{display:flex; gap:.4rem; margin-top:.5rem}
+  #qbankbox .qacts button, #globalqbox .qacts button{font-size:.82rem; padding:.28rem .6rem}
+  #qbankbox .qbdone, #globalqbox .qbdone{margin-top:1rem}
+  #qbankbox .qbdone summary, #globalqbox .qbdone summary{cursor:pointer; color:var(--muted); font-size:.85rem}
+  #qbankbox .qbdone[open] summary, #globalqbox .qbdone[open] summary{margin-bottom:.3rem}
   #statsbox .st-tiles{
     display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin-bottom:1.1rem;
   }
@@ -1168,7 +1169,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #fcpop, #selchip, #palette, #qcap,
-    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #gapsbox, #tutoreditor, #overview, #qbankbox, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #gapsbox, #tutoreditor, #overview, #qbankbox, #globalqbox, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1386,16 +1387,20 @@
   <p><b>ask the tutor yourself</b> — the box under any conversation sends your
   own question with the same context. It's recorded as your turn (🧑), and the
   simulated learner never sees it.</p>
-  <p><b>❓ question bank</b> — press <b>q</b> while reading to jot down a
-  question without losing your place: no dialog, no scrolling away, just a
-  small bar to type it into. It's saved against the passage you were reading,
-  not asked right away, so a stray thought doesn't interrupt the run. The
-  <b>❓ questions</b> button in the conversation header opens the bank for
-  that tree — <b>investigate</b> any one on its own, or <b>run all</b> to
-  queue every pending question in one pass, exactly like "full" queues its
-  follow-ups. Either way it's the same single question straight to the
-  tutor as asking yourself, just saved for later; answered ones fold under
-  a disclosure with a jump back to what they became.</p>
+  <p><b>❓ question banks</b> — jot down a question without losing your place:
+  no dialog, no scrolling away, just a small bar to type it into. There are
+  two, answered completely differently. Press <b>q</b> anywhere (no tree
+  needed) for the <b>global</b> bank — <b>investigate</b> one later and it
+  starts a brand-new investigation with its own text as the topic, exactly
+  as if you'd typed it into the topic box and pressed <b>new</b>; the
+  <b>❓ global questions</b> row in the words tab opens it. Press
+  <b>Shift+Q</b> while reading for the <b>local</b> bank — saved against the
+  passage you were reading, it stays inside that same conversation:
+  <b>investigate</b> asks the tutor directly on the spot, or <b>run all</b>
+  queues every pending one in a pass, exactly like "full" queues its
+  follow-ups. The <b>❓ questions</b> button in the conversation header opens
+  the local bank for that tree; either bank folds answered questions under a
+  disclosure with a jump back to what they became.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
   another device or the CLI — the file format is identical. On a phone or
   tablet, saving opens the <b>share sheet</b> (AirDrop, Save to Files, Drive…)
@@ -1413,7 +1418,8 @@
     <tr><td><kbd>/</kbd></td><td>jump to the topic box</td></tr>
     <tr><td><kbd>?</kbd></td><td>open this help</td></tr>
     <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>hop to the next / previous turn</td></tr>
-    <tr><td><kbd>q</kbd></td><td>jot a question for the question bank</td></tr>
+    <tr><td><kbd>q</kbd></td><td>jot a question for the global bank — investigated fresh, later</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>Q</kbd></td><td>jot a question for this tree's local bank</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>step the reading ruler / focus line (when on)</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>stop speech · close panels · turn the ruler off</td></tr>
   </table>
@@ -1557,6 +1563,10 @@
       </div>
       <div id="hlwrap" style="display:none">
         <div class="btnrow"><button id="hlbtn" title="every passage you highlighted, across this profile's trees"></button></div>
+      </div>
+      <div id="globalqwrap" style="display:none">
+        <div class="btnrow"><button id="globalqbtn"
+          title="questions jotted with q, from anywhere — investigate one to start a fresh investigation from its text"></button></div>
       </div>
       <div id="termswrap" style="display:none">
         <h2>glossary <span id="glossmeta" style="font-weight:300;text-transform:none;letter-spacing:0"></span>
@@ -1840,6 +1850,17 @@
       <button id="qbclose" class="ghost" aria-label="close question bank">✕</button>
     </div>
     <div id="qbbody"></div>
+  </div>
+</div>
+
+<div id="globalqbox" role="dialog" aria-modal="true" aria-label="global question bank">
+  <div class="box">
+    <div class="sthead">
+      <span id="gqtitle">❓ global question bank</span>
+      <span id="gqscope"></span>
+      <button id="gqclose" class="ghost" aria-label="close global question bank">✕</button>
+    </div>
+    <div id="gqbody"></div>
   </div>
 </div>
 
@@ -3717,6 +3738,7 @@ async function syncFromServer(){
   renderAll(true);
   if (dirty.size) flushDirty(); else setSync("ok");
   syncTutorsFromServer();
+  syncGlobalQFromServer();
 }
 
 /* ------------------------------------------------------------------ */
@@ -3981,7 +4003,7 @@ function renderConversation(keepScroll){
     const qPending = pendingQuestions(tree).length;
     if (qPending || questionsOf(tree).length)
       acts.push(`<button class="notes${qPending ? " has" : ""}" onclick="openQBank()"` +
-                ` title="questions you jotted while reading this tree — press q to add another">` +
+                ` title="questions you jotted while reading this tree — press Shift+Q to add another">` +
                 `${ico("❓")}questions${qPending ? ` <span class="ndot" aria-hidden="true">●</span> · ${qPending}` : ""}</button>`);
   }
   if (!running && node.turns.some(t => t.tutor)){
@@ -4493,6 +4515,7 @@ let glossAll = false;   // words tab scope: this tree, or every tree
 function renderTerms(){
   updateRevRow();
   updateHlRow();
+  updateGlobalQRow();
   const tree = cur();
   const wrap = $("termswrap");
   let items;
@@ -6115,14 +6138,23 @@ function jumpToTerm(nodeId, turn){
 }
 
 /* ------------------------------------------------------------------ */
-/* ❓ question bank — while reading, press q to jot a question that     */
-/* occurs to you instead of losing the thread of what you're doing.    */
-/* Stored on tree.questions ({id, node, turn, text, added, answered,    */
-/* answerTurn}), so it syncs and travels with the tree like highlights. */
-/* Investigating one (alone, or all at once) rides the same "ask the   */
-/* tutor directly" path as 🧑 ask / ⛏ dig — a single real model call,   */
-/* not a whole new investigation — so batching them is just queueing   */
-/* more than one of the same thunk, exactly like "full" queues four.   */
+/* ❓ question banks — two of them, jotted the same way but answered    */
+/* completely differently:                                             */
+/*   LOCAL  (Shift+Q) — tied to the tree/node/turn you were reading,    */
+/*     stored on tree.questions ({id, node, turn, text, added,          */
+/*     answered, answerTurn}); investigating one rides the same "ask   */
+/*     the tutor directly" path as 🧑 ask / ⛏ dig — a single real model */
+/*     call appended as a turn in that SAME node, not a whole new       */
+/*     investigation. Batching them ("run all") is just queueing more  */
+/*     than one, exactly like "full" queues four follow-ups.           */
+/*   GLOBAL (q) — not tied to anything; investigating one starts a      */
+/*     brand-new root investigation with the question's own text as    */
+/*     the topic, exactly as if you'd typed it into the topic box and  */
+/*     pressed "new". No "run all" here on purpose — each one is a full */
+/*     multi-turn investigation, not a single cheap call, so running   */
+/*     a batch unattended is a much bigger action than the local bank's.*/
+/*     Stored in its own small synced doc (globalQDoc), same pattern as */
+/*     tutorsDoc, since it isn't part of any one tree.                 */
 /* ------------------------------------------------------------------ */
 function questionsOf(tree){
   return Array.isArray(tree.questions) ? tree.questions : [];
@@ -6157,6 +6189,75 @@ function removeQuestion(qid){
 }
 window.removeQuestion = removeQuestion;
 
+/* the global bank — its own small synced doc (not part of any tree),
+   loaded/persisted/merged exactly like tutorsDoc. */
+function loadGlobalQDoc(){
+  try {
+    const d = JSON.parse(localStorage.getItem("lwc.globalq.v1"));
+    if (d && Array.isArray(d.questions)) return d;
+  } catch {}
+  return {saved_at: "", questions: []};
+}
+let globalQDoc = loadGlobalQDoc();
+function globalQuestionsOf(){
+  return Array.isArray(globalQDoc.questions) ? globalQDoc.questions : [];
+}
+function pendingGlobalQuestions(){
+  return globalQuestionsOf().filter(q => !q.answered);
+}
+function answeredGlobalQuestions(){
+  return globalQuestionsOf().filter(q => q.answered);
+}
+async function persistGlobalQDoc(){
+  globalQDoc.saved_at = new Date().toISOString();
+  try { localStorage.setItem("lwc.globalq.v1", JSON.stringify(globalQDoc)); } catch {}
+  try { await api("global_questions", {doc: globalQDoc}); setSync("ok"); }
+  catch (e){ if (e.message !== "logged out") setSync("err"); }
+}
+function addGlobalQuestion(text){
+  const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 500);
+  if (t.length < 3) return null;
+  const qs = globalQuestionsOf().slice();
+  if (qs.length >= 300) return null;   // a sane ceiling for the whole bank
+  const q = {id: randHex(8), text: t, added: nowIso()};
+  qs.push(q);
+  globalQDoc.questions = qs;
+  persistGlobalQDoc();
+  return q;
+}
+function removeGlobalQuestion(qid){
+  const qs = globalQuestionsOf().slice();
+  const i = qs.findIndex(q => q.id === qid);
+  if (i < 0) return;
+  qs.splice(i, 1);
+  globalQDoc.questions = qs;
+  persistGlobalQDoc();
+}
+window.removeGlobalQuestion = removeGlobalQuestion;
+function markGlobalQuestionAnswered(qid, treeId, nodeId, turn){
+  const q = globalQuestionsOf().find(x => x.id === qid);
+  if (!q) return;
+  q.answered = true; q.treeId = treeId; q.node = nodeId; q.turn = turn;
+  persistGlobalQDoc();
+}
+async function syncGlobalQFromServer(){
+  try {
+    const r = await fetch("/api/global_questions");
+    if (!r.ok) return;
+    const {doc} = await r.json();
+    if (doc && Array.isArray(doc.questions) &&
+        (doc.saved_at || "") > (globalQDoc.saved_at || "")){
+      globalQDoc = doc;
+      try { localStorage.setItem("lwc.globalq.v1", JSON.stringify(globalQDoc)); } catch {}
+      updateGlobalQRow();
+      renderGlobalQBank();
+    } else if (globalQuestionsOf().length &&
+               (!doc || (globalQDoc.saved_at || "") > (doc.saved_at || ""))){
+      await api("global_questions", {doc: globalQDoc}).catch(() => {});
+    }
+  } catch {}
+}
+
 /* the capture bar: press q while reading a conversation to jot a
    question without leaving the page — no modal dimming, no scroll
    jump. Ties to whichever turn sits at the top of the viewport, the
@@ -6171,10 +6272,14 @@ function guessReadingTurn(){
   return +turns[i].dataset.turn;
 }
 let qcapPrevFocus = null, qcapTimer = null;
-function qcapFormHtml(turn){
-  return `<div class="qcaphead">your question — turn ${turn}</div>` +
+function qcapFormHtml(mode, turn){
+  const head = mode === "global" ? "your question — global bank" : `your question — turn ${turn}`;
+  const placeholder = mode === "global"
+    ? "what are you curious about? (investigated fresh, later)"
+    : "what are you wondering?";
+  return `<div class="qcaphead">${esc(head)}</div>` +
     `<div class="qcaprow">` +
-    `<input id="qcapinput" type="text" maxlength="500" placeholder="what are you wondering?"` +
+    `<input id="qcapinput" type="text" maxlength="500" placeholder="${esc(placeholder)}"` +
     ` aria-label="your question" enterkeyhint="done" autocomplete="off">` +
     `<button id="qcapsave" class="primary" aria-label="save to question bank">save</button>` +
     `<button id="qcapcancel" class="ghost" aria-label="cancel">✕</button></div>`;
@@ -6189,14 +6294,21 @@ function wireQcapForm(){
   });
   inp.focus();
 }
-function openQCap(){
-  const tree = cur(); if (!tree || currentNode == null) return;
-  const node = getNode(tree, currentNode);
-  if (!node || !node.turns.some(t => t.tutor)) return;
+/* mode "global" (q, from anywhere — no tree needed) or "local" (Shift+Q,
+   tied to the node/turn you're reading; requires one with a tutor reply) */
+function openQCap(mode){
+  mode = mode === "global" ? "global" : "local";
+  let turn = null;
+  if (mode === "local"){
+    const tree = cur(); if (!tree || currentNode == null) return;
+    const node = getNode(tree, currentNode);
+    if (!node || !node.turns.some(t => t.tutor)) return;
+    turn = guessReadingTurn() || node.turns[node.turns.length - 1].turn;
+  }
   clearTimeout(qcapTimer);
-  const turn = guessReadingTurn() || node.turns[node.turns.length - 1].turn;
-  $("qcap").dataset.turn = turn;
-  $("qcap").innerHTML = qcapFormHtml(turn);
+  $("qcap").dataset.mode = mode;
+  $("qcap").dataset.turn = turn ?? "";
+  $("qcap").innerHTML = qcapFormHtml(mode, turn);
   qcapPrevFocus = document.activeElement;
   $("qcap").hidden = false;
   wireQcapForm();
@@ -6210,14 +6322,26 @@ function closeQCap(){
 }
 window.closeQCap = closeQCap;
 function saveQCap(){
-  const turn = +($("qcap").dataset.turn || 0) || null;
-  const q = addQuestion(currentNode, turn, $("qcapinput") ? $("qcapinput").value : "");
+  const mode = $("qcap").dataset.mode === "global" ? "global" : "local";
+  const text = $("qcapinput") ? $("qcapinput").value : "";
+  const q = mode === "global"
+    ? addGlobalQuestion(text)
+    : addQuestion(currentNode, +($("qcap").dataset.turn || 0) || null, text);
   if (!q){ closeQCap(); return; }
-  renderConversation(true);   // the header's ❓ questions count just changed
-  const n = pendingQuestions(cur()).length;
-  $("qcap").innerHTML = `<div class="qcapok">${ico("✓")}saved to the question bank` +
+  let n, openBank;
+  if (mode === "global"){
+    n = pendingGlobalQuestions().length;
+    updateGlobalQRow();
+    openBank = "openGlobalQBank()";
+  } else {
+    renderConversation(true);   // the header's ❓ questions count just changed
+    n = pendingQuestions(cur()).length;
+    openBank = "openQBank()";
+  }
+  $("qcap").innerHTML = `<div class="qcapok">${ico("✓")}saved to the ` +
+    (mode === "global" ? "global " : "") + `question bank` +
     (n > 1 ? ` · ${n} pending` : "") + ` — <span class="cl" tabindex="0" role="button"` +
-    ` onclick="closeQCap();openQBank()">open it</span></div>`;
+    ` onclick="closeQCap();${openBank}">open it</span></div>`;
   qcapTimer = setTimeout(closeQCap, 2400);
 }
 
@@ -6272,9 +6396,9 @@ function renderQBank(){
   if (!pend.length && !done.length){
     $("qbbody").innerHTML =
       `<div class="dkempty"><div class="big">❓</div>` +
-      `<p>nothing banked yet — press <b>q</b> while reading to jot down a question ` +
-      `instead of losing the thread. Investigate it on the spot, or save up a few ` +
-      `and run them together.</p></div>`;
+      `<p>nothing banked yet — press <b>Shift+Q</b> while reading to jot down a ` +
+      `question instead of losing the thread. Investigate it on the spot, or save up ` +
+      `a few and run them together.</p></div>`;
     return;
   }
   let h = "";
@@ -6305,6 +6429,99 @@ function closeQBank(){
 window.closeQBank = closeQBank;
 $("qbclose").onclick = closeQBank;
 $("qbankbox").addEventListener("click", (e) => { if (e.target === $("qbankbox")) closeQBank(); });
+
+/* the global hub: every question banked from anywhere, pending first —
+   investigate one to start a brand-new root investigation with its text
+   as the topic (exactly as if typed into the topic box and "new" pressed).
+   No "run all": each is a full multi-turn investigation, not one cheap
+   call, so batching them unattended is a much bigger action than the local
+   bank's. Answered ones fold under a disclosure with a cross-tree jump to
+   whatever investigation they became (openSearchHit, not jumpToTerm — the
+   result usually isn't the tree you're currently looking at). */
+function gqRowHtml(q, done){
+  const where = done
+    ? (store[q.treeId] ? oneLine(store[q.treeId].root_topic, 40) : "…")
+    : "";
+  return `<div class="qrow${done ? " done" : ""}">` +
+    (done
+      ? `<div class="qtext cl" tabindex="0" role="button" data-act="jump" data-tree="${esc(q.treeId)}"` +
+        ` data-node="${q.node}" data-turn="${q.turn}"` +
+        ` title="jump to the investigation this became">${esc(oneLine(q.text, 160))}</div>` +
+        `<div class="qwhere">became: ${esc(where)}</div>`
+      : `<div class="qtext">${esc(oneLine(q.text, 160))}</div>`) +
+    `<div class="qacts">` +
+    (done
+      ? `<button data-act="clear" data-q="${esc(q.id)}" class="ghost">${ico("✕")}clear</button>`
+      : `<button data-act="go" data-q="${esc(q.id)}" class="primary" ${running ? "disabled" : ""}>${ico("▶")}investigate</button>` +
+        `<button data-act="discard" data-q="${esc(q.id)}" class="ghost">${ico("✕")}discard</button>`) +
+    `</div></div>`;
+}
+function wireGlobalQBody(){
+  $("gqbody").querySelectorAll("[data-act]").forEach(el => {
+    el.onclick = () => {
+      const act = el.dataset.act;
+      if (act === "jump"){
+        closeGlobalQBank();
+        openSearchHit(el.dataset.tree, +el.dataset.node, +el.dataset.turn);
+        return;
+      }
+      if (act === "discard" || act === "clear"){ removeGlobalQuestion(el.dataset.q); renderGlobalQBank(); return; }
+      if (act === "go"){
+        if (running) return;
+        closeGlobalQBank();
+        enqueue(globalBankInvestigateThunk(el.dataset.q));
+      }
+    };
+    if (el.getAttribute("role") === "button")
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " "){ e.preventDefault(); el.click(); }
+      });
+  });
+}
+function renderGlobalQBank(){
+  if (!$("globalqbox").classList.contains("open")) return;
+  const pend = pendingGlobalQuestions();
+  const done = answeredGlobalQuestions();
+  $("gqscope").textContent = pend.length ? `· ${pend.length} waiting` : "";
+  if (!pend.length && !done.length){
+    $("gqbody").innerHTML =
+      `<div class="dkempty"><div class="big">❓</div>` +
+      `<p>nothing banked yet — press <b>q</b> anywhere to jot down something you're ` +
+      `curious about. Investigating one starts a brand-new investigation with its ` +
+      `own text as the topic, exactly like typing it into the topic box and pressing ` +
+      `<b>new</b>.</p></div>`;
+    return;
+  }
+  let h = pend.map(q => gqRowHtml(q, false)).join("");
+  if (done.length){
+    h += `<details class="qbdone"${pend.length ? "" : " open"}><summary>${ico("✓")}investigated · ${done.length}</summary>` +
+         done.map(q => gqRowHtml(q, true)).join("") + `</details>`;
+  }
+  $("gqbody").innerHTML = h;
+  wireGlobalQBody();
+}
+let gqPrevFocus = null;
+function openGlobalQBank(){
+  gqPrevFocus = document.activeElement;
+  $("globalqbox").classList.add("open");
+  renderGlobalQBank();
+  $("gqclose").focus();
+}
+window.openGlobalQBank = openGlobalQBank;
+function closeGlobalQBank(){
+  $("globalqbox").classList.remove("open");
+  if (gqPrevFocus && gqPrevFocus.focus && document.contains(gqPrevFocus)) gqPrevFocus.focus();
+  gqPrevFocus = null;
+}
+window.closeGlobalQBank = closeGlobalQBank;
+$("gqclose").onclick = closeGlobalQBank;
+$("globalqbtn").onclick = () => openGlobalQBank();
+$("globalqbox").addEventListener("click", (e) => { if (e.target === $("globalqbox")) closeGlobalQBank(); });
+function updateGlobalQRow(){
+  const n = pendingGlobalQuestions().length;
+  $("globalqwrap").style.display = (n || globalQuestionsOf().length) ? "" : "none";
+  $("globalqbtn").innerHTML = `${ico("❓")}global questions` + (n ? ` · ${n}` : "");
+}
 
 /* select words in a conversation -> a floating chip offers several moves.
    "define" is the one-click fast path: an instant plain-definition card,
@@ -6657,6 +6874,14 @@ function paletteActions(){
     if (nhl) acts.push({icon: "★", label: "highlights",
       sub: `${nhl} marked passage${nhl === 1 ? "" : "s"}`, run(){ openHl(); }});
   }
+  acts.push({icon: "❓", label: "jot a question (global)", sub: "press q anytime — investigated fresh, later",
+    run(){ openQCap("global"); }});
+  {
+    const ngq = pendingGlobalQuestions().length;
+    if (ngq || globalQuestionsOf().length)
+      acts.push({icon: "❓", label: "global question bank",
+        sub: ngq ? `${ngq} waiting to be investigated` : "all answered", run(){ openGlobalQBank(); }});
+  }
   if (tree && !running){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     if (Object.values(tree.nodes).some(n => n.turns.some(t => t.tutor)))
@@ -6669,10 +6894,11 @@ function paletteActions(){
     acts.push({icon: "📝", label: "my notes", sub: tree.note && tree.note.trim() ? "your synthesis of this tree" : "jot your own synthesis", run(){ openNotes(); }});
     if (tree.source) acts.push({icon: "📚", label: "source", sub: "the passage this tree is grounded in", run(){ openSrcbox(); }});
     if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor))
-      acts.push({icon: "❓", label: "jot a question", sub: "press q anytime while reading", run(){ openQCap(); }});
+      acts.push({icon: "❓", label: "jot a question (this tree)", sub: "press Shift+Q while reading",
+        run(){ openQCap("local"); }});
     if (questionsOf(tree).length){
       const nq = pendingQuestions(tree).length;
-      acts.push({icon: "❓", label: "question bank",
+      acts.push({icon: "❓", label: "question bank (this tree)",
         sub: nq ? `${nq} question${nq === 1 ? "" : "s"} waiting` : "all answered", run(){ openQBank(); }});
     }
     acts.push({icon: "🔊", label: "listen", sub: "read this conversation aloud", run(){ listenNode(); }});
@@ -6831,7 +7057,8 @@ function renderAll(keepScroll){
   renderHeader(); renderMap(); renderLoose(); renderTreeList(); renderTerms();
   renderConversation(keepScroll);
   if ($("surveybox").classList.contains("open")) renderSurvey();
-  renderQBank();   // keep an open bank honest as investigations complete
+  renderQBank();       // keep an open bank honest as investigations complete
+  renderGlobalQBank();
   updateHash();
 }
 
@@ -7296,6 +7523,33 @@ function runAllQuestions(){
 }
 window.runAllQuestions = runAllQuestions;
 
+/* a GLOBAL banked question, investigated: a brand-new root investigation
+   with the question's own text as the topic — the same mechanics as
+   rootThunk (pressing "new" with that text typed in), just marking the
+   global bank entry answered once the whole investigation concludes, with
+   where it landed so the bank can jump back to it later (cross-tree, via
+   openSearchHit — the result is a new tree, not whatever was open). */
+function globalBankInvestigateThunk(qid){
+  let node = null, treeId = null;
+  return async () => {
+    runLabel = "";
+    const q = globalQuestionsOf().find(x => x.id === qid);
+    if (!q || q.answered) return;
+    if (!node){
+      const tree = newTree(q.text);
+      store[tree.id] = tree; currentId = tree.id; treeId = tree.id;
+      node = makeNode(tree, q.text);
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    activeRun = {treeId, nodeId: node.id};
+    await runInvestigation(store[treeId], node, {kind: "root", topic: q.text});
+    markGlobalQuestionAnswered(qid, treeId, node.id, 1);
+    updateGlobalQRow();
+    renderAll(true);   // keep an open global bank honest as this concludes
+  };
+}
+
 function cmdNew(topic, source){ enqueue(rootThunk(topic, "", source)); }
 function cmdFull(topic, source){
   enqueue(rootThunk(topic, "investigation 1 of 4", source),
@@ -7637,6 +7891,7 @@ document.addEventListener("keydown", (e) => {
     if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
     if ($("srcbox").classList.contains("open")){ closeSrcbox(); return; }
     if ($("qbankbox").classList.contains("open")){ closeQBank(); return; }
+    if ($("globalqbox").classList.contains("open")){ closeGlobalQBank(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
@@ -7729,16 +7984,22 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     stepTurn(e.key === "j" ? 1 : -1);
   }
-  /* q: jot a question for the bank without losing your place in the
-     reading — only once there's something to read and no other panel
-     is already claiming the keyboard */
-  if (e.key.toLowerCase() === "q" && !typing && $("qcap").hidden &&
+  /* q: jot a GLOBAL question — investigated fresh later, from anywhere,
+     no tree needed. Shift+Q: jot a LOCAL one, tied to the tree/turn you're
+     reading (only once there's something to read). Either way, no other
+     panel may already be claiming the keyboard. */
+  if (e.key === "q" && !typing && $("qcap").hidden &&
+      !e.ctrlKey && !e.metaKey && !e.altKey){
+    e.preventDefault();
+    openQCap("global");
+  }
+  if (e.key === "Q" && !typing && $("qcap").hidden &&
       !e.ctrlKey && !e.metaKey && !e.altKey){
     const tree = cur();
     const node = tree && currentNode != null ? getNode(tree, currentNode) : null;
     if (node && node.turns.some(t => t.tutor)){
       e.preventDefault();
-      openQCap();
+      openQCap("local");
     }
   }
 });
@@ -7746,7 +8007,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "docketbox", "notesbox", "srcbox", "qbankbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "docketbox", "notesbox", "srcbox", "qbankbox", "globalqbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(

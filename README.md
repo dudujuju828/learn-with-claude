@@ -248,17 +248,21 @@ directly (a local `claude` login can't run on a server), so it needs an
   learned, which autosaves, syncs with the tree, and heads every export. You
   can also **ask the tutor yourself** under any conversation — your question
   is answered with the node's context and stored as your own turn
-  (`user: true`), which the simulated learner never sees. A **❓ question
-  bank** catches the ones you don't want answered mid-read: press **q**
-  anywhere while reading and a small bar (no dialog, no lost scroll
-  position) asks what you're wondering, tagged with the turn you were on.
-  The **❓ questions** button in the conversation header opens the bank for
-  that tree — **investigate** any one on its own, or **run all** to queue
-  every pending question in one pass, exactly like `full` queues its
-  follow-ups; either way it's the same single question straight to the
-  tutor as asking yourself, just saved for later instead of interrupting
-  the moment. Answered ones fold under a disclosure with a jump back to
-  what they became. Conversations
+  (`user: true`), which the simulated learner never sees. Two **❓ question
+  banks** catch the ones you don't want answered mid-read, jotted the same
+  way (a small bar, no dialog, no lost scroll position) but answered
+  completely differently. Press **q** anywhere — no tree needs to be open —
+  for the **global** bank: **investigate** one later and it starts a
+  brand-new investigation with its own text as the topic, exactly as if
+  you'd typed it into the topic box and pressed **new**. Press **Shift+Q**
+  while reading for the **local** bank, tagged to the turn you were on: the
+  **❓ questions** button in the conversation header opens it for that tree —
+  **investigate** any one on its own, or **run all** to queue every pending
+  question in one pass, exactly like `full` queues its follow-ups; either
+  way it's the same single question straight to the tutor as asking
+  yourself, just saved for later instead of interrupting the moment.
+  Answered ones fold under a disclosure with a jump back to what they
+  became, in both banks. Conversations
   interrupted mid-run offer **▶ continue**; URLs deep-link to the exact tree
   and node, and reopening the app puts you back at the exact spot you last
   scrolled to in a conversation — the bookmark survives reloads and mobile

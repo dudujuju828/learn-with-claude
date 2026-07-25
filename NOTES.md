@@ -5,6 +5,79 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 38 — two question banks: local (Shift+Q) and global (q)
+
+*(user-requested, not picked from the autonomous candidate list — logged
+here anyway since it's the running record of what changed and why.)*
+
+### What it is
+The question bank split in two, because the two kinds of "I want to ask this
+later" are actually different actions. **Shift+Q** still jots a question tied
+to the tree/turn you're reading (unchanged: **local** bank, tree.questions,
+investigate = one direct answer appended right there). Plain **q** — now
+usable from anywhere, even the welcome screen with no tree open — jots a
+question into a new **global** bank instead. Investigating a global question
+starts a brand-new investigation with the question's own text as the topic,
+exactly as if you'd typed it into the topic box and pressed **new**. The
+global bank gets its own hub entry in the words tab (**❓ global questions**)
+and its own dialog; the command palette lists both jot actions and both
+banks. The global bank has no "run all" — each item is a full multi-turn
+investigation, not the local bank's single cheap call, so batching several
+unattended felt like a materially bigger, less reversible action than the
+local bank's "run all" ever was.
+
+### Design notes
+- **Swapped which key means what, on request.** The user said they use the
+  global one more, so it gets the bare `q` (previously local's key); local
+  moved to `Shift+Q`. Worth remembering for future keybinding requests on
+  this project: the more-used action gets the lower-friction key, not
+  whichever one happened to exist first.
+- **A genuinely new store, not a bigger tree.questions.** A global question
+  isn't associated with any tree at the time it's jotted (you might not have
+  one open at all), so it can't live inside `tree.questions`. Gave it its own
+  small synced doc (`globalQDoc`) instead — same shape and lifecycle as the
+  existing `tutorsDoc` (custom tutors): `loadGlobalQDoc`/`persistGlobalQDoc`/
+  `syncGlobalQFromServer`, localStorage-first with a server round-trip,
+  whole-doc last-write-wins. Reusing that exact pattern (rather than
+  reinventing sync for a second time in the same app) is what made the
+  cross-device story free.
+- **Sync reused existing infrastructure end to end, on both backends.**
+  `api/tutors.js` turned out to already be "one small JSON doc in the shared
+  `docs` table, keyed `settings:tutors`" — and `api/trees.js`'s tree-listing
+  query already filters out `id LIKE 'settings:%'`, meaning this exact
+  pattern was designed to be reused for more than one settings-like doc from
+  the start. `api/global_questions.js` (hosted) and `GlobalQuestionStore`
+  (local, mirrors `TutorStore` exactly) are the second user of it —
+  `settings:global_questions` / `global_questions.json`. Zero new
+  infrastructure on either backend, just a second small doc through the
+  same pipe.
+- **"As if 'new' was pressed" taken literally.** `globalBankInvestigateThunk`
+  is `rootThunk`'s body with the banked question's text standing in for
+  whatever would've been typed into the topic box, plus bookkeeping at the
+  end to mark the bank entry answered and remember where it landed
+  (`treeId`/`node`/`turn`) for a cross-tree jump later (`openSearchHit`, not
+  `jumpToTerm` — the result is essentially always a different tree than
+  whatever was open when the question was jotted).
+- **No "run all" for the global bank — a deliberate omission, not an
+  oversight.** The local bank's "run all" is cheap to offer because each
+  item is one model call. Every global item is a full learner↔tutor loop
+  (same cost/time as pressing "new" by hand); queueing several unattended
+  didn't feel like a reasonable default to ship without being asked for it
+  specifically. Flagged here in case that's wanted later.
+- Verified past the unit tests (`GlobalQuestionStore` round-trip + the same
+  validation shape as `TutorStore`) with the real stack: booted the actual
+  local server, drove the real page over the Chrome DevTools Protocol —
+  dispatched a synthetic `q` keydown with **no tree open at all** and
+  confirmed the global capture bar still opens (the local one requires a
+  read tutor turn; the global one must not), saved a question, confirmed it
+  landed in `/api/global_questions` on the server, opened the global bank
+  dialog and confirmed the row rendered, then actually pressed **new** for a
+  real topic, waited for the real investigation's first turn, and confirmed
+  `Shift+Q` still opens the local capture bar exactly as before once a
+  tutor-answered turn exists to attach it to.
+
+---
+
 ## Feature 37 — ⚙ local settings: the tutor can ground itself in your own systems
 
 *(user-requested, not picked from the autonomous candidate list — logged
