@@ -5,6 +5,63 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 29 — 🎧 hands-free drill: the review deck runs itself, out loud
+
+### What it is
+A **🎧 drill** toggle in the review header (the **d** key; *hands-free
+drill* in ⌘K). While it's on, the deck drives itself: the term is
+spoken, a recall pause follows — its length set by a ⏱ stepper right in
+the header (2–12s), made visible as a thin bar filling under the card —
+then the term and answer are spoken together, and after a beat the card
+is marked **good** and the next one begins. The screen is held awake
+(Wake Lock, progressive) because this is a look-away mode. Your hands
+stay free but keep the last word: **1–3** grades a card yourself at any
+moment, **Space** shows the answer early, **↩ / u** takes a grade back —
+and then the drill *waits* for your hand-picked verdict before rolling
+on — ✎ edit pauses it, **d** or the toggle stops it. Leaving the tab and
+coming back restarts the current card instead of stalling. Scheduling
+semantics are untouched, an "again" card still comes back inside the
+session, and the summary owns up to every grade the drill gave itself
+("the 🎧 drill marked 7 good — ↩ takes back the last one if it deserved
+again"). 🎧 and ⌨ type are opposites (one asks for your hands, the other
+frees them), so turning one on turns the other off.
+
+### Why this one
+- The most-parked candidate in this log — deferred in Features 17, 18,
+  19, 21 and 23, always with the same note: "attractive for the audience
+  but a real design cycle of its own (timing, auto-advance,
+  background-tab speech limits)". This session was that cycle, and each
+  named risk got its answer: timing is a user-set pause with a visible
+  bar; auto-advance follows Anki's auto-advance precedent (default
+  *good*, any key overrides, undo holds the loop); background-tab limits
+  are handled by restarting the card's phase on `visibilitychange` plus
+  a wake lock so the phone never sleeps mid-drill.
+- It completes the audio story the app has been building for its
+  dyslexic audience since Feature 7 (voice/speed), 17 (karaoke), 19
+  (spoken cards), 22 (spoken quiz): every surface could *speak*, but
+  review — the daily loop — still demanded eyes and fingers for every
+  card. Now the deck can run while you walk.
+- Zero model cost, no backend, no storage or sync changes: two pref
+  keys, one reactive loop re-armed by `renderReview` (every state change
+  already funnels there), and a token that quietly retires callbacks
+  from a phase that's no longer current.
+- Verified end-to-end in headless Edge with a stubbed speech engine:
+  22 assertions across the whole lifecycle (auto-reveal, auto-grade,
+  schedule write, undo-hold, manual release, requeue, summary
+  disclosure, wake-lock release, toggle-off).
+
+### Candidates rejected (this cycle)
+- **Mermaid diagrams in web tutor answers** — the CLI's diagram story on
+  the web, but it's a heavy client dependency plus model-generated
+  syntax that fails unpredictably; wrong risk profile.
+- **Voice-answered review (speech *recognition*)** — still
+  Chromium-only and flaky offline; parked with its cousins.
+- **Notification-based review reminders** — permission-heavy and
+  PWA-scoped; the tab title + icon badge (Feature 13) already carry the
+  nudge.
+
+---
+
 ## Feature 28 — explain it back grows into the full Feynman loop
 
 ### What it is
