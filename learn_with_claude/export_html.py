@@ -638,9 +638,14 @@ def tree_to_html(tree) -> str:
         key=lambda e: str(e.get("term", "")).lower(),
     )
     if defined:
+        def _gloss_label(e: dict) -> str:
+            reason = str(e.get("reason") or "").strip()
+            term = _esc(e["term"])
+            return f"{term} ({_esc(reason)})" if reason and reason != "definition" else term
+
         entries = "".join(
             f'<div class="turn"><div class="block ans">'
-            f'<div class="label">🔍 {_esc(e["term"])}</div>'
+            f'<div class="label">🔍 {_gloss_label(e)}</div>'
             f'<p>{_esc(e["def"])}</p></div></div>'
             for e in defined
         )

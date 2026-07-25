@@ -303,26 +303,56 @@ def branch_learner_message(
     )
 
 
+# A flashcard is never just "the definition" — the reader picks the angle
+# that's actually worth rehearsing for whatever they highlighted. Each entry
+# is the instruction embedded in the glossary/flashcard prompt; "definition"
+# is the default (and the only angle the old, pre-reason cards ever used).
+GLOSSARY_REASONS = {
+    "definition": {
+        "label": "definition",
+        "instruction": "Define what it IS. Not the surrounding topic, not its history.",
+    },
+    "purpose": {
+        "label": "purpose",
+        "instruction": "Explain what it's FOR — the problem it solves, what you'd lose "
+                        "without it. Not what it is; why it exists.",
+    },
+    "example": {
+        "label": "example",
+        "instruction": "Give ONE concrete, specific example of it in use — a scenario "
+                        "or instance the learner can picture. Not an abstract definition.",
+    },
+    "mechanism": {
+        "label": "how it works",
+        "instruction": "Explain HOW it works — what actually happens, step by step in "
+                        "miniature. Not what it's for; the mechanics.",
+    },
+}
+
 GLOSSARY_SYSTEM = """\
-You write single entries for a learner's personal glossary. You will be shown
-a term and the exchange where the learner met it. Define the term AS USED
-THERE, so the learner can look it up later and recognise the idea.
+You write single entries for a learner's personal flashcard deck. You will be
+shown a term (or a short passage the learner highlighted), the exchange where
+they met it, and which ANGLE the card should answer from. Answer strictly
+that angle, AS USED IN THAT EXCHANGE, so the learner can look the card up
+later and recognise the idea.
 
 RULES:
 - 1-2 short, plain sentences (roughly 10-35 words). Everyday words first;
   no jargon that itself needs a glossary entry.
-- Define what the term IS — not the surrounding topic, not its history.
+- Stick to the requested angle — don't drift into a different one.
 - No hedging ("in this context..."), no cross-references, no markdown.
 
 OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
-{"definition": "<the definition>"}"""
+{"definition": "<the answer, matching the requested angle>"}"""
 
 
-def define_message(term: str, topic: str, context: str) -> str:
+def define_message(term: str, topic: str, context: str, reason: str = "definition") -> str:
+    angle = GLOSSARY_REASONS.get(reason, GLOSSARY_REASONS["definition"])
     return (
         f'Term: "{term}"\n'
         f'The learner met it while learning about: "{topic}"\n\n'
         f"The exchange where it came up:\n{context or '(not recorded)'}\n\n"
+        f"Angle to answer from — {angle['label']}: {angle['instruction']}\n\n"
         "Output the JSON object now."
     )
 

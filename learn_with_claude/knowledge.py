@@ -370,7 +370,9 @@ class KnowledgeTree:
             out.append("## Glossary")
             out.append("")
             for e in defined:
-                out.append(f"- **{e['term']}** — {e['def']}")
+                reason = str(e.get("reason") or "").strip()
+                label = f"{e['term']} ({reason})" if reason and reason != "definition" else e["term"]
+                out.append(f"- **{label}** — {e['def']}")
             out.append("")
 
         teach = self.teach_map()

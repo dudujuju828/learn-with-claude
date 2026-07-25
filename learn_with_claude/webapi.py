@@ -21,6 +21,7 @@ import re
 
 from .knowledge import KnowledgeTree, conversation_digest
 from .personas import (
+    GLOSSARY_REASONS,
     GLOSSARY_SYSTEM,
     INTERVIEW_FINISH,
     INTERVIEW_SYSTEM,
@@ -338,15 +339,21 @@ def handle_teachback(body: dict, call_model) -> dict:
 
 
 def handle_define(body: dict, call_model) -> dict:
-    """One glossary definition, on the cheap model. Context is the exchange
-    where the learner hit the term, so the definition matches its use there."""
+    """One flashcard entry, on the cheap model. Context is the exchange where
+    the learner hit the term, so the answer matches its use there. "reason"
+    picks the angle (definition/purpose/example/mechanism); an unknown or
+    missing reason falls back to a plain definition, the original behaviour."""
     term = (body.get("term") or "").strip()
     if not term:
         raise ApiError("missing 'term'")
+    reason = (body.get("reason") or "definition").strip().lower()
+    if reason not in GLOSSARY_REASONS:
+        reason = "definition"
     message = define_message(
         term[:120],
         (body.get("topic") or "").strip()[:200],
         (body.get("context") or "").strip()[:4000],
+        reason,
     )
     text, cost = call_model(
         GLOSSARY_SYSTEM, [{"role": "user", "content": message}],
