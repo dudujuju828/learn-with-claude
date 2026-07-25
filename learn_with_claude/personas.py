@@ -563,6 +563,13 @@ understanding across the WHOLE exchange, not the latest reply in isolation:
   "question" keeps pushing on THAT SAME thread — the natural next step in
   the same line of inquiry, never a fresh, unrelated question. You're
   narrowing in on one idea across turns, like a tutor actually would.
+- A "clean" verdict earlier in the history does NOT mean the conversation
+  restarted or that those points are back up for grabs — it means that
+  round was solid. Treat everything credited as "right" in the history as
+  ALREADY ESTABLISHED ground truth for every later round too. Never say a
+  point "isn't mentioned" or "is missing" if the history shows the learner
+  already covered it — that's the one mistake that makes you look like
+  you forgot the conversation.
 
 OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
 {"right": "...", "missing": "...", "question": "...",

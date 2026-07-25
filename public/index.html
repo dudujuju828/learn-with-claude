@@ -1241,12 +1241,15 @@
   straight away (Shift+Enter for a line break; a fresh explanation still
   uses Ctrl/Cmd+Enter, since that box is a paragraph, not a one-liner).
   The tutor keeps pushing on the SAME nuance across replies, crediting
-  what you've already resolved, until it either clicks (clean) or you
-  stop — and every round of that thread is right there on screen above
-  the box (what you said, what it then asked), not just held invisibly:
-  what the tutor is judging you against is exactly what you can see.
-  Every reply is kept, the trail of verdicts shows the thread
-  narrowing in, and tapping an old attempt brings its words back.
+  what's already resolved — a <b>✓ clean</b> round is praise, not a reset:
+  the tutor still leaves a real next question on the table, and it never
+  re-flags something you've already covered as missing. Keep going for as
+  long as there's something worth chewing on, or just close the box; every
+  round of that thread is right there on screen above the box (what you
+  said, what it then asked), not just held invisibly — what the tutor is
+  judging you against is exactly what you can see. Every reply is kept,
+  the trail of verdicts shows the thread narrowing in, and tapping an old
+  attempt brings its words back.
   <b>⤳ chase it</b> sends the tutor's
   probing question into the conversation as your own turn instead, if
   you'd rather have it answered there; the <b>🔊</b> (or <b>s</b>) reads the
@@ -2610,34 +2613,26 @@ function teachTrailHtml(past){
     `${TEACH_TAGS[a.verdict] || "·"} ${i + 1}</button>`).join(" ");
   return `<p class="tbwhen">your attempts, oldest first: ${chips}</p>`;
 }
-/* the display counterpart of openThreadAttempts: unlike the wire history
-   (which excludes a just-resolved clean round, because the NEXT round
-   starts fresh with no history), the on-screen arc always includes the
-   latest attempt — even a clean one — since that's "how this thread
-   wrapped up", not context for a future call that isn't happening. */
-function threadArcForDisplay(attempts){
-  if (!attempts.length) return [];
-  const arc = [attempts[attempts.length - 1]];
-  for (let i = attempts.length - 2; i >= 0; i--){
-    if (attempts[i].verdict === "clean") break;
-    arc.unshift(attempts[i]);
-  }
-  return arc.slice(-5);
-}
-/* what the tutor already has in view for THIS thread — every round since
-   the last clean verdict, question and reply together, so the fact that
-   it's judging the whole exchange (not just your latest reply) is
-   something you can actually see, not just something the code does. */
+/* what the tutor already has in view for THIS thread — every round,
+   question and reply together, so the fact that it's judging the whole
+   exchange (not just your latest reply) is something you can actually
+   see, not just something the code does. A "clean" verdict does NOT
+   end the recap: the tutor keeps a genuine follow-up question on the
+   table even after clean (crediting what's solid, pushing one nuance
+   further), so treating clean as "wipe the memory" was the bug — a
+   narrow reply to that follow-up got graded against the whole digest
+   cold, with zero awareness of everything already established. */
 function threadTranscriptHtml(past){
-  const arc = threadArcForDisplay(past);
+  const arc = recentTeachAttempts(past);
   if (arc.length < 2) return "";
+  const firstEver = past[0];
   // every round's own words, oldest first, including the current one's —
   // but its question is left for the feedback card just below to show,
   // so the thread reads as one continuous conversation, not a repeat
-  const rows = arc.map((a, i) =>
-    `<div class="tbturn"><div class="tbturn-a">${i === 0 ? "you explained" : "you answered"}: ` +
+  const rows = arc.map((a) =>
+    `<div class="tbturn"><div class="tbturn-a">${a === firstEver ? "you explained" : "you answered"}: ` +
     `"${esc(oneLine(a.text, 140))}"</div>` +
-    (i < arc.length - 1 && a.question
+    (a !== arc[arc.length - 1] && a.question
       ? `<div class="tbturn-q">then asked: "${esc(oneLine(a.question, 140))}"</div>` : "") +
     `</div>`).join("");
   return `<div class="tbthread"><p class="tbwhen">this thread so far — the tutor sees all of it:</p>${rows}</div>`;
@@ -2670,32 +2665,29 @@ function speakTeach(){
   speakBlock($("tbfeedback"));
 }
 window.speakTeach = speakTeach;
-/* the exchange since the last "clean" verdict (or the start of the trail) —
-   the rounds that make up the CURRENT open thread, oldest first, capped so
-   a long back-and-forth can't balloon the call. Both the payload sent to
-   the tutor and the on-screen recap of "what it already knows" are built
-   from this same selection, so they can never drift apart. */
-function openThreadAttempts(attempts){
-  const hist = [];
-  for (let i = attempts.length - 1; i >= 0; i--){
-    if (attempts[i].verdict === "clean") break;
-    hist.unshift(attempts[i]);
-  }
-  return hist.slice(-5);
+/* the whole conversation about this node never resets — a "clean" verdict
+   is praise for that round, not a memory wipe, and the tutor keeps a real
+   follow-up question on the table regardless. Both the payload sent to
+   the tutor and the on-screen recap are built from this same selection,
+   capped so a very long back-and-forth can't balloon the call. */
+const TEACH_HISTORY_CAP = 10;
+function recentTeachAttempts(attempts){
+  return attempts.slice(-TEACH_HISTORY_CAP);
 }
 function threadHistory(attempts){
   // the wire shape uses "explanation" (matching the top-level field the
   // tutor reads); attempts store it as "text" — map it going out
-  return openThreadAttempts(attempts).map(a =>
+  return recentTeachAttempts(attempts).map(a =>
     ({explanation: a.text, right: a.right, missing: a.missing, question: a.question}));
 }
-/* an open thread: the last attempt wasn't clean and left a question on the
-   table, so the next box is for answering THAT, not re-explaining fresh */
+/* a live thread: the last attempt left a real follow-up question on the
+   table, so the next box is for answering THAT, not re-explaining fresh —
+   regardless of whether that round was clean */
 function isContinuingThread(tree, nodeId){
   if (!tree || nodeId == null) return false;
   const past = teachAttempts(tree, nodeId);
   const last = past[past.length - 1];
-  return !!(last && last.verdict !== "clean" && last.question);
+  return !!(last && last.question);
 }
 function updateTeachMeta(){
   if (teachBusy) return;
@@ -2754,13 +2746,14 @@ async function sendTeach(){
     teachShown = past.length - 1;
     renderTeach(past, attempt);
     $("tbintro").style.display = "none";   // the feedback above is context enough now
-    const continuing = attempt.verdict !== "clean" && !!attempt.question;
+    const continuing = !!attempt.question;
     $("tbarea").value = "";   // the next round answers fresh — it's not an edit
     $("tbarea").placeholder = continuing ? "Take on the question above…" : "The way I understand it…";
     $("tbsend").textContent = continuing ? "answer" : "get feedback";
     const ivl = teachIvl(past);
     $("tbmeta").textContent = attempt.verdict === "clean"
-      ? `clean — explain it again in ${ivl} day${ivl === 1 ? "" : "s"} to make it stick (you'll be nudged)`
+      ? `clean — explain it again in ${ivl} day${ivl === 1 ? "" : "s"} to make it stick (you'll be nudged)` +
+        (continuing ? " · one more nuance above, if you want it" : "")
       : continuing
         ? "one nuance left — answer the question above"
         : "aim at the gap: explain it again below";

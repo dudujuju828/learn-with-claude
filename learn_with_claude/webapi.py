@@ -295,16 +295,17 @@ def handle_teachback(body: dict, call_model) -> dict:
     own words; the tutor answers with what's solid, the one thing missing,
     and one probing question. Feedback, not a grade — content only.
 
-    An optional 'history' carries the prior exchange in this same thread
-    (since the last "clean" verdict, or the start): when present, the
-    learner's 'explanation' is their reply to the tutor's last question,
-    not a fresh restart, so the tutor can keep pushing on the same nuance
-    instead of re-grading from zero."""
+    An optional 'history' carries the whole conversation about this node so
+    far (it never resets — a "clean" verdict is praise for that round, not
+    a memory wipe, since the tutor keeps a real follow-up question on the
+    table regardless): when present, the learner's 'explanation' is their
+    reply to the tutor's last question, not a fresh restart, so the tutor
+    can keep pushing on the same nuance instead of re-grading from zero."""
     explanation = (body.get("explanation") or "").strip()
     if not explanation:
         raise ApiError("missing 'explanation'")
     history = []
-    for h in (body.get("history") or [])[:6]:
+    for h in (body.get("history") or [])[:10]:
         if not isinstance(h, dict):
             continue
         exp = str(h.get("explanation") or "").strip()[:4000]
