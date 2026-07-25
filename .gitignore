@@ -12,6 +12,9 @@ knowledge/
 *.exe
 *.cpp
 
+# Node dependencies for the api/ routes
+node_modules/
+
 # Vercel project link (contains project/org ids)
 .vercel/
 .vercel
