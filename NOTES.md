@@ -5,6 +5,73 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 33 — 📚 ground it in your own material
+
+### What it is
+A **ground it in your own material** fold under the topic box: paste a
+passage — a textbook section, an article, lecture notes — and pressing
+**new** or **full** grounds the whole tree in it. The simulated
+learner's opening (and every branch/follow-up/gaps opening) gets the
+passage prepended before the task, so its questions stay anchored to
+what it actually says; the tutor's system prompt gets a matching
+grounding block telling it to answer from the passage, use its
+terminology, and say plainly when the passage is wrong or
+oversimplified. The passage lives on `tree.source` — travels in
+`.know.json` via the existing extras round-trip, syncs last-write-wins
+like `note`, is quoted at the top of both exports — and a **📚 source**
+button appears in the conversation header (and ⌘K) on a grounded tree
+to reopen or correct it, taking effect from the next turn. Capped at
+6000 characters, enforced on both ends.
+
+### Why this one
+- The audit's honest gap: every other production surface in the app —
+  the CLI's diagram pen, the survey map, the gaps interview — starts
+  from the tutor's general knowledge. But the actual use case "I have a
+  reading and I don't get it" (a student with an assigned chapter, a
+  practitioner with a paper) had no way in; the closest existing tool,
+  the CLI's `seeplusplus` code reader, is source code only and
+  terminal-only. Grounding the whole learner↔tutor loop in a pasted
+  passage is a different, complementary way to start a tree — read *with*
+  a tutor instead of asking one cold.
+- Threading was genuinely low-risk because every conversation kind
+  already funnels through one function: `runInvestigation(tree, node,
+  ctx)` builds every learner and tutor call for root, branch, follow-up,
+  and continued conversations, so grounding is one `if (tree.source)
+  ctx = {...ctx, source: tree.source}` at its top — not four call
+  sites. Ask-the-tutor is the one path outside that loop and got its
+  own one-line addition. Server-side, `source_of()` is one new field
+  read in `learner_opening()`/`tutor_extra_context()`, which every
+  route already calls.
+- Free data round-trip: `KnowledgeTree.from_dict`/`to_dict` already
+  preserve unrecognised top-level keys verbatim (`extras`) — the
+  mechanism Feature 9 built for exactly this — so `source` survives the
+  CLI without a single knowledge.py schema change. Only the two
+  exporters needed a two-line addition to surface it to a reader.
+- Verified with 30 assertions total: 16 headless (source threads into
+  the learner AND tutor call bodies, box clears after starting, header
+  chip appears/edits/persists, Esc closes, ask-the-tutor inherits it,
+  an unsourced tree sends no `source` key at all, a failed topic guard
+  doesn't wipe an unsubmitted paste, the client-side cap) and 14 Python
+  (passage lands before the task text in every conversation kind, the
+  tutor block reads "Ground your answers", it composes correctly after
+  each kind's own context, the server-side cap, junk-input tolerance).
+
+### Candidates rejected (this cycle)
+- **Import a PDF/URL as source material** — real value, but fetching
+  and extracting text server-side is a much bigger surface (fetch
+  policy, PDF parsing, size limits) for a first cut; paste covers the
+  common case (copy from wherever you're reading) at zero new risk.
+- **A dedicated "study a source" start mode** (5th button beside new
+  /full/survey/gaps) — considered, but the fold under the existing
+  topic box was the smaller, more discoverable surface: it composes
+  with new/full instead of forking a fifth path, and survey/gaps keep
+  their own specialised openings untouched.
+- **Highlighting which passage sentence an answer came from** — a nice
+  future layer once the grounding itself has proven its worth; the
+  tutor already free-quotes the passage in prose today.
+
+---
+
 ## Feature 32 — 📜 study sheet: the profile compiled into one document
 
 ### What it is
