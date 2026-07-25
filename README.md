@@ -153,7 +153,11 @@ directly (a local `claude` login can't run on a server), so it needs an
   marked passage under its turn, the HTML reading page bands it in
   highlighter colour. A **★ highlights** hub in the words tab collects
   every marked passage across the profile's trees; tap one to jump back to
-  it in context. **anki
+  it in context. **📅 today** collects everything *actionable* across the
+  profile in one place — cards due, conversations due another
+  explanation, loose threads from every tree (not just the open one),
+  survey maps with uncovered ground — each a tap from doing it, so the
+  session starts with a list instead of a wander. **anki
   cards** downloads the defined terms as a file Anki imports directly — or
   skip the export: **🔁 review** turns every defined term into
   an in-app flashcard (recall → flip → grade yourself again / good / easy,
