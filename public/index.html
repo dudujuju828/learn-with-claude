@@ -724,6 +724,24 @@
   .rcard .rverd.vok{color:var(--ask)}
   .rcard .rverd.vclose{color:var(--think)}
   .rcard .rverd.vmiss{color:var(--danger)}
+  /* hands-free drill — the 🎧 mode: hear the term, recall, hear the answer */
+  #revdrillbtn{font-size:.8rem; color:var(--muted); white-space:nowrap; padding:.34rem .45rem}
+  #revdrillbtn:hover{color:var(--fg)}
+  #revdrillbtn.on{color:var(--accent)}
+  #drillwaitui{display:flex; align-items:center; gap:.15rem; white-space:nowrap}
+  #drillwaitui button{
+    border:none; background:none; color:var(--muted); cursor:pointer;
+    font-size:.95rem; line-height:1; padding:.2rem .35rem;
+  }
+  #drillwaitui button:hover{color:var(--fg)}
+  #drillwaitval{min-width:1.7rem; text-align:center; font-variant-numeric:tabular-nums}
+  /* the recall pause made visible: a thin bar filling toward the answer */
+  .rcard .rwait{height:3px; margin-top:.95rem; border-radius:2px;
+    background:var(--line); overflow:hidden; visibility:hidden}
+  .rcard .rwait.run{visibility:visible}
+  .rcard .rwait i{display:block; height:100%; background:var(--accent);
+    transform:scaleX(0); transform-origin:left; transition:transform 0ms linear}
+  .rcard .rwait i.go{transform:scaleX(1)}
 
   /* ---- progress dashboard (read-only stats over review + quizzes),
           and the ★ highlights hub which shares its skeleton ---- */
@@ -1193,7 +1211,12 @@
   single typo don't count against you) — a stricter test of recall than
   flipping and judging yourself. Fat-fingered a grade? <b>↩</b> (or the
   <b>u</b> key) takes the last one back and restores the card's
-  schedule.</p>
+  schedule. The <b>🎧 drill</b> toggle (or the <b>d</b> key) runs the
+  deck hands-free: each term is spoken, a recall pause follows (set it
+  with the ⏱ stepper), then the answer — and the card is marked
+  <i>good</i> and the next begins. Press <b>1</b>–<b>3</b> at any moment
+  to grade a card yourself instead; the summary says how many the drill
+  marked on its own, and ↩ still takes the last one back.</p>
   <p><b>★ highlights</b> — select a longer stretch of an answer and the chip
   offers <b>★ highlight</b>: a highlighter band that persists and syncs
   (tap a mark to lift it). The <b>★ highlights</b> button in the words tab
@@ -1474,10 +1497,16 @@
     <div class="rhead">
       <span id="revprog"></span>
       <span class="qkbd" id="revkbd"><kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade</span>
+      <span id="drillwaitui" hidden>⏱<button data-d="-1"
+          title="shorter recall pause" aria-label="shorter recall pause">−</button><span
+          id="drillwaitval"></span><button data-d="1"
+          title="longer recall pause" aria-label="longer recall pause">+</button></span>
       <button id="revundo" class="ghost" hidden
         title="undo the last grade — or press u" aria-label="undo the last grade">↩</button>
       <button id="revtypebtn" class="ghost" aria-pressed="false"
         title="type the answer — the definition asks, you type the term">⌨ type</button>
+      <button id="revdrillbtn" class="ghost" aria-pressed="false"
+        title="hands-free drill — hear the term, recall it, hear the answer, and the deck advances itself (press d)">🎧 drill</button>
       <button id="revclose" class="ghost" aria-label="close review">✕</button>
     </div>
     <div id="reviewbody"></div>
@@ -1721,7 +1750,7 @@ const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
                        tmode: "balanced", think: true, llevel: "auto", profile: "",
-                       revtype: false};
+                       revtype: false, drill: false, drillwait: 5};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -1853,7 +1882,10 @@ function buildPanel(){
   $("rulerbtn").onclick = () => { prefs.ruler = !prefs.ruler; applyPrefs(); };
   $("focusbtn").onclick = () => { prefs.focus = !prefs.focus; applyPrefs(); };
   $("thinkbtn").onclick = () => { prefs.think = !prefs.think; applyPrefs(); if (rulerActive()) refreshRuler(); };
-  $("aareset").onclick = () => { prefs = Object.assign({}, PREF_DEFAULTS); applyPrefs(); };
+  $("aareset").onclick = () => {
+    prefs = Object.assign({}, PREF_DEFAULTS); applyPrefs();
+    revModeUI();   // the review-header toggles read prefs too
+  };
   $("aabtn").onclick = (e) => {
     e.stopPropagation();
     const wasOpen = $("aapanel").classList.contains("open");
@@ -4478,11 +4510,13 @@ function openReview(){
             rest: due.length - take.length};
   revPrevFocus = document.activeElement;
   $("reviewbox").classList.add("open");
+  if (drillActive()) drillWake();
   renderReview();
 }
 window.openReview = openReview;
 function closeReview(){
   stopSpeech();   // a card being spoken shouldn't outlive the modal
+  drillRest();    // pending drill steps and the wake lock go with it
   $("reviewbox").classList.remove("open"); review = null;
   renderAll(true);   // due counts changed
   if (revPrevFocus && revPrevFocus.focus && document.contains(revPrevFocus))
@@ -4505,6 +4539,7 @@ function renderReview(){
       `<p class="hint">${review.again
           ? `${review.again} came back for another look — they'll be waiting ${dueWord(nextDueDay()) || "tomorrow"}.`
           : `clean sweep. the next card is due ${dueWord(nextDueDay()) || "later"}.`}` +
+      `${review.autos ? ` the 🎧 drill marked ${review.autos} good — ↩ takes back the last one if it deserved again.` : ""}` +
       `${more ? ` ${more} more ${more === 1 ? "is" : "are"} still due — another round when you're ready.` : ""}</p>` +
       `<div class="qnext" style="justify-content:center; flex-wrap:wrap">` +
       (more ? `<button class="primary" onclick="openReview()">keep going · ${more}</button>` +
@@ -4513,6 +4548,7 @@ function renderReview(){
       (review.undo ? `<button class="ghost" onclick="undoGrade()">↩ undo the last grade</button>` : "") +
       `</div></div>`;
     $("reviewbody").querySelector("button")?.focus();
+    drillDrive();   // the deck ran out — the drill lets go of the screen
     return;
   }
   const c = review.queue[review.i];
@@ -4550,8 +4586,10 @@ function renderReview(){
       inp.focus();
     } else {
       $("reviewbody").innerHTML =
-        card(`<p class="rprompt">say what it means — out loud counts.</p>`) +
-        `<div class="rflip"><button class="primary" id="revflip" onclick="revealReview()">show the answer</button></div>`;
+        card(`<p class="rprompt">say what it means — out loud counts.</p>` +
+          (drillActive() ? `<div class="rwait" aria-hidden="true"><i></i></div>` : "")) +
+        `<div class="rflip"><button class="primary" id="revflip" onclick="revealReview()">` +
+        `${drillActive() ? "show it now" : "show the answer"}</button></div>`;
       $("revflip").focus();
     }
   } else if (review.editing){
@@ -4587,6 +4625,7 @@ function renderReview(){
       `<button class="rg rg2" onclick="gradeReview(2)">easy<small>${ivl(2)}</small></button></div>`;
     $("reviewbody").querySelector(review.verdict === "miss" ? ".rg0" : ".rg1")?.focus();
   }
+  drillDrive();   // in 🎧 mode, whatever face just rendered starts speaking
 }
 function startReviewEdit(){
   if (!review || !review.revealed || review.editing) return;
@@ -4637,28 +4676,143 @@ function checkTyped(){
   renderReview();
 }
 window.checkTyped = checkTyped;
+/* the ⌨ type and 🎧 drill toggles are opposites — one asks for your
+   hands, the other frees them — so turning one on turns the other off */
+function revModeUI(){
+  const tb = $("revtypebtn");
+  tb.classList.toggle("on", prefs.revtype);
+  tb.setAttribute("aria-pressed", String(prefs.revtype));
+  tb.hidden = drillActive();
+  const db = $("revdrillbtn");
+  db.hidden = !canSpeak();   // no speech synthesis, no drill
+  db.classList.toggle("on", drillActive());
+  db.setAttribute("aria-pressed", String(drillActive()));
+  $("drillwaitui").hidden = !drillActive();
+  $("drillwaitval").textContent = drillWaitS() + "s";
+  $("revkbd").innerHTML = drillActive()
+    ? `<kbd>1</kbd>–<kbd>3</kbd> grade any time · <kbd>d</kbd> stops`
+    : prefs.revtype
+      ? `<kbd>Enter</kbd> checks · <kbd>1</kbd>–<kbd>3</kbd> grade`
+      : `<kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade`;
+}
 /* the ⌨ toggle: definition-first typed recall instead of flip-and-judge */
 function setRevType(on){
-  prefs.revtype = !!on; savePrefs();
-  const b = $("revtypebtn");
-  b.classList.toggle("on", prefs.revtype);
-  b.setAttribute("aria-pressed", String(prefs.revtype));
-  $("revkbd").innerHTML = prefs.revtype
-    ? `<kbd>Enter</kbd> checks · <kbd>1</kbd>–<kbd>3</kbd> grade`
-    : `<kbd>Space</kbd> shows the answer · <kbd>1</kbd>–<kbd>3</kbd> grade`;
+  prefs.revtype = !!on;
+  if (prefs.revtype && prefs.drill){ prefs.drill = false; drillRest(); stopSpeech(); }
+  savePrefs();
+  revModeUI();
 }
 $("revtypebtn").onclick = () => {
   setRevType(!prefs.revtype);
   if (review && !review.revealed) renderReview();   // the current card swaps face
 };
-setRevType(prefs.revtype);
-function gradeReview(g){
+
+/* ------------------------------------------------------------------ */
+/* 🎧 hands-free drill — the deck runs itself, out loud: the term is   */
+/* spoken, a recall pause follows (the ⏱ stepper sets it), then the    */
+/* answer, and after a beat the card is marked good and the next one   */
+/* starts. Your hands stay free but keep the last word: 1–3 grades a   */
+/* card yourself at any moment, Space shows the answer early, u takes  */
+/* a grade back (the drill then waits for your verdict), ✎ edit        */
+/* pauses it, d or 🎧 stops it. Scheduling semantics are untouched     */
+/* and the session summary owns up to every auto-grade.                */
+/* ------------------------------------------------------------------ */
+const drill = {tok: 0, timer: null, hold: false, lock: null};
+function drillActive(){ return !!prefs.drill && canSpeak(); }
+function drillWaitS(){ return Math.min(12, Math.max(2, Math.round(+prefs.drillwait) || 5)); }
+function drillRest(){
+  drill.tok++;
+  if (drill.timer){ clearTimeout(drill.timer); drill.timer = null; }
+  try { drill.lock?.release(); } catch {}
+  drill.lock = null;
+}
+/* keep the screen awake while the drill runs — it's a look-away mode.
+   Progressive: no Wake Lock API, no harm (the screen just times out). */
+async function drillWake(){
+  if (drill.lock || !navigator.wakeLock) return;
+  try { drill.lock = (await navigator.wakeLock.request("screen")) || null; }
+  catch { drill.lock = null; }
+  drill.lock?.addEventListener?.("release", () => { drill.lock = null; });
+}
+function setDrill(on){
+  const want = !!on && canSpeak();
+  if (want && prefs.revtype) setRevType(false);   // typing needs hands
+  prefs.drill = want;
+  savePrefs();
+  if (want){ drill.hold = false; if (review) drillWake(); }
+  else { drillRest(); stopSpeech(); }
+  revModeUI();
+  if (review) renderReview();   // start (or hand back) the current card
+}
+$("revdrillbtn").onclick = () => setDrill(!prefs.drill);
+$("drillwaitui").querySelectorAll("button").forEach(b => {
+  b.onclick = () => {
+    prefs.drillwait = Math.min(12, Math.max(2, drillWaitS() + (+b.dataset.d)));
+    savePrefs();
+    revModeUI();   // takes effect from this card's next pause
+  };
+});
+/* the recall pause made visible — the bar fills over exactly the wait */
+function drillBar(){
+  const bar = document.querySelector("#reviewbody .rwait");
+  if (!bar || reducedMotion()) return;
+  bar.classList.add("run");
+  const fill = bar.firstElementChild;
+  fill.style.transitionDuration = drillWaitS() * 1000 + "ms";
+  requestAnimationFrame(() => requestAnimationFrame(() => fill.classList.add("go")));
+}
+/* the loop itself — re-armed by every renderReview, so every state
+   change (flip, grade, undo, edit, toggle) lands back here. The token
+   quietly retires callbacks from a phase that's no longer current.    */
+function drillDrive(){
+  if (drill.timer){ clearTimeout(drill.timer); drill.timer = null; }
+  const tok = ++drill.tok;
+  if (!drillActive() || !review) return;
+  if (review.i >= review.queue.length){ drillRest(); return; }   // summary — let go
+  if (review.editing || drill.hold) return;   // your hands are on it — wait
+  const live = () => drillActive() && review && drill.tok === tok;
+  const q = (sel) => document.querySelector("#reviewbody " + sel);
+  if (!review.revealed){
+    const term = q(".rterm"); if (!term) return;
+    speak(term, () => { if (!live()) return;
+      drillBar();
+      drill.timer = setTimeout(() => {
+        if (live() && !review.revealed) revealReview();
+      }, drillWaitS() * 1000);
+    });
+  } else {
+    const term = q(".rterm"), def = q(".rdef"); if (!def) return;
+    // "term — answer": hearing the pair together is the drill's payload
+    const after = () => { if (!live()) return;
+      drill.timer = setTimeout(() => {
+        if (live() && review.revealed && !review.editing) gradeReview(1, true);
+      }, Math.min(4000, Math.max(1500, drillWaitS() * 400)));   // a beat to disagree
+    };
+    if (term) speak(term, () => { if (live()) speak(def, after); });
+    else speak(def, after);
+  }
+}
+/* leaving the tab kills speech and throttles timers — coming back
+   restarts the current card's phase instead of stalling */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (drillActive() && review && $("reviewbox").classList.contains("open")){
+    drillWake();
+    renderReview();
+  }
+});
+// two persisted toggles that contradict each other resolve for the drill
+if (prefs.drill && prefs.revtype) prefs.revtype = false;
+revModeUI();
+function gradeReview(g, auto){
   if (!review || !review.revealed || review.editing) return;
   const c = review.queue[review.i];
   const e = cardEntry(c);
   // a one-slot stash so a fat-fingered grade can be taken back
   review.undo = {c, prevRev: e && e.rev ? structuredClone(e.rev) : null,
-                 requeued: g === 0};
+                 requeued: g === 0, auto: !!auto};
+  if (auto) review.autos = (review.autos || 0) + 1;   // the summary owns up to these
+  drill.hold = false;   // grading (by hand or by the drill) lets the drill roll on
   if (e){
     e.rev = nextRev(e.rev, g);
     const t = store[c.treeId];
@@ -4682,11 +4836,14 @@ function undoGrade(){
     if (t) persistTree(t);
   }
   if (u.requeued){ review.queue.pop(); review.again--; }   // withdraw the "again" copy
+  if (u.auto) review.autos--;   // an undone drill grade never happened
   review.i--;
   review.done--;
   review.revealed = true;   // back on the answer side, grade it properly
   review.typed = ""; review.verdict = null;
   review.undo = null;       // one step back, not a history
+  // undoing means "I disagree" — the drill waits for your hand-picked grade
+  if (drillActive()) drill.hold = true;
   renderReview();
 }
 window.undoGrade = undoGrade;
@@ -5375,6 +5532,9 @@ function paletteActions(){
     const due = dueCards().length;
     if (due) acts.push({icon: "🔁", label: "review the glossary",
       sub: `${due} card${due === 1 ? "" : "s"} due`, run(){ openReview(); }});
+    if (due && canSpeak()) acts.push({icon: "🎧", label: "hands-free drill",
+      sub: "hear each card — recall, hear the answer, it advances itself",
+      run(){ openReview(); if (review && !prefs.drill) setDrill(true); }});
     const tdue = teachDueList().length;
     if (tdue) acts.push({icon: "🗣", label: "explain again",
       sub: `${tdue} conversation${tdue === 1 ? "" : "s"} due another pass`, run(){ openTeachDue(); }});
@@ -6265,6 +6425,10 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "u"){
       const b = $("revundo");
       if (b && !b.hidden){ e.preventDefault(); b.click(); }
+      return;
+    }
+    if (e.key === "d" && canSpeak()){
+      e.preventDefault(); setDrill(!prefs.drill);
       return;
     }
     if (e.key === "s" && canSpeak()){
