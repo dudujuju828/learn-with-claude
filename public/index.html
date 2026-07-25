@@ -931,6 +931,12 @@
   }
   #teachbox .tbcard b, #gapsbox .tbcard b{display:block; margin-bottom:.25rem; font-size:.82rem; color:var(--muted)}
   #teachbox .tbwhen, #gapsbox .tbwhen{margin:.6rem 0 0; font-size:.82rem; color:var(--muted)}
+  /* the visible recap of the thread so far — proof the tutor is judging
+     the whole exchange, not just regrading the latest reply cold */
+  #teachbox .tbthread{margin:.6rem 0 0}
+  #teachbox .tbturn{margin:.5rem 0 0}
+  #teachbox .tbturn-a{padding-left:.9rem; border-left:2px solid var(--line); white-space:pre-wrap}
+  #teachbox .tbturn-q{margin:.2rem 0 0 .9rem; color:var(--muted); font-size:.82rem}
   #gapsbox #gapchat:not(:empty){margin-bottom:.6rem}
   #gapsbox #gapchat .gq{margin:.5rem 0 .1rem; color:var(--muted); font-size:.9rem}
   #gapsbox #gapchat .ga{margin:0; padding-left:.9rem; border-left:2px solid var(--line);
@@ -1236,7 +1242,10 @@
   uses Ctrl/Cmd+Enter, since that box is a paragraph, not a one-liner).
   The tutor keeps pushing on the SAME nuance across replies, crediting
   what you've already resolved, until it either clicks (clean) or you
-  stop; every reply is kept, the trail of verdicts shows the thread
+  stop — and every round of that thread is right there on screen above
+  the box (what you said, what it then asked), not just held invisibly:
+  what the tutor is judging you against is exactly what you can see.
+  Every reply is kept, the trail of verdicts shows the thread
   narrowing in, and tapping an old attempt brings its words back.
   <b>⤳ chase it</b> sends the tutor's
   probing question into the conversation as your own turn instead, if
@@ -2601,9 +2610,41 @@ function teachTrailHtml(past){
     `${TEACH_TAGS[a.verdict] || "·"} ${i + 1}</button>`).join(" ");
   return `<p class="tbwhen">your attempts, oldest first: ${chips}</p>`;
 }
+/* the display counterpart of openThreadAttempts: unlike the wire history
+   (which excludes a just-resolved clean round, because the NEXT round
+   starts fresh with no history), the on-screen arc always includes the
+   latest attempt — even a clean one — since that's "how this thread
+   wrapped up", not context for a future call that isn't happening. */
+function threadArcForDisplay(attempts){
+  if (!attempts.length) return [];
+  const arc = [attempts[attempts.length - 1]];
+  for (let i = attempts.length - 2; i >= 0; i--){
+    if (attempts[i].verdict === "clean") break;
+    arc.unshift(attempts[i]);
+  }
+  return arc.slice(-5);
+}
+/* what the tutor already has in view for THIS thread — every round since
+   the last clean verdict, question and reply together, so the fact that
+   it's judging the whole exchange (not just your latest reply) is
+   something you can actually see, not just something the code does. */
+function threadTranscriptHtml(past){
+  const arc = threadArcForDisplay(past);
+  if (arc.length < 2) return "";
+  // every round's own words, oldest first, including the current one's —
+  // but its question is left for the feedback card just below to show,
+  // so the thread reads as one continuous conversation, not a repeat
+  const rows = arc.map((a, i) =>
+    `<div class="tbturn"><div class="tbturn-a">${i === 0 ? "you explained" : "you answered"}: ` +
+    `"${esc(oneLine(a.text, 140))}"</div>` +
+    (i < arc.length - 1 && a.question
+      ? `<div class="tbturn-q">then asked: "${esc(oneLine(a.question, 140))}"</div>` : "") +
+    `</div>`).join("");
+  return `<div class="tbthread"><p class="tbwhen">this thread so far — the tutor sees all of it:</p>${rows}</div>`;
+}
 function renderTeach(past, attempt, label){
-  $("tbfeedback").innerHTML =
-    teachTrailHtml(past) + (attempt ? teachFeedbackHtml(attempt, label) : "");
+  $("tbfeedback").innerHTML = teachTrailHtml(past) + threadTranscriptHtml(past) +
+    (attempt ? teachFeedbackHtml(attempt, label) : "");
 }
 function showTeachAttempt(i){
   const tree = cur(); if (!tree || teachNodeId == null) return;
@@ -2630,17 +2671,22 @@ function speakTeach(){
 }
 window.speakTeach = speakTeach;
 /* the exchange since the last "clean" verdict (or the start of the trail) —
-   sent to the tutor so a reply to its question is judged in context
-   instead of graded from zero, and capped so it can't balloon the call */
-function threadHistory(attempts){
+   the rounds that make up the CURRENT open thread, oldest first, capped so
+   a long back-and-forth can't balloon the call. Both the payload sent to
+   the tutor and the on-screen recap of "what it already knows" are built
+   from this same selection, so they can never drift apart. */
+function openThreadAttempts(attempts){
   const hist = [];
   for (let i = attempts.length - 1; i >= 0; i--){
     if (attempts[i].verdict === "clean") break;
     hist.unshift(attempts[i]);
   }
+  return hist.slice(-5);
+}
+function threadHistory(attempts){
   // the wire shape uses "explanation" (matching the top-level field the
   // tutor reads); attempts store it as "text" — map it going out
-  return hist.slice(-5).map(a =>
+  return openThreadAttempts(attempts).map(a =>
     ({explanation: a.text, right: a.right, missing: a.missing, question: a.question}));
 }
 /* an open thread: the last attempt wasn't clean and left a question on the
