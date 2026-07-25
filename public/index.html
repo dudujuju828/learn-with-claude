@@ -1251,6 +1251,12 @@
   tablet, saving opens the <b>share sheet</b> (AirDrop, Save to Files, Drive…)
   instead of a download. Coming back the
   other way, <b>drop the file anywhere</b> on the page (or use <b>import</b>).</p>
+  <p><b>📜 study sheet</b> — one revision document for the whole profile:
+  each tree's notes, your best explanation of each conversation (with its
+  verdict), the passages you highlighted, and every defined term merged
+  into one alphabetical glossary at the end. The transcripts stay in the
+  per-tree exports — this is the sheet you'd revise from before an
+  exam.</p>
   <h3>keyboard</h3>
   <table>
     <tr><td><kbd>Ctrl</kbd>+<kbd>K</kbd></td><td>jump anywhere — trees, nodes, terms, commands</td></tr>
@@ -1427,6 +1433,7 @@
         <button id="exporthtml" title="download the standalone dyslexia-friendly reading page (the CLI's HTML export)">export html</button>
         <button id="importbtn" title="open a .know.json from the CLI or another device — or a save-all backup">import</button>
         <button id="saveall" title="every tree in one backup file — import brings them all back">save all</button>
+        <button id="sheetbtn" title="one revision document for the whole profile — your notes, best explanations, highlights, and every defined term">study sheet</button>
         <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
       </div>
       <p class="hint">trees live in this browser. save the file to move one to your PC or the
@@ -3634,6 +3641,7 @@ function renderHeader(){
   $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
   $("exportjson").disabled = $("exportmd").disabled = $("exporthtml").disabled = !tree;
   $("saveall").disabled = !Object.keys(store).length;
+  $("sheetbtn").disabled = !sheetHasContent();
   applyTitle();
 }
 /* the tab title carries the due-card count, mail-client style; where the
@@ -5781,6 +5789,9 @@ function paletteActions(){
     acts.push({icon: "📄", label: "export markdown", sub: "", run(){ $("exportmd").click(); }});
     acts.push({icon: "📖", label: "export reading page", sub: "standalone html", run(){ $("exporthtml").click(); }});
   }
+  if (sheetHasContent()) acts.push({icon: "📜", label: "study sheet",
+    sub: "one revision document — notes, explanations, highlights, glossary",
+    run(){ $("sheetbtn").click(); }});
   acts.push({icon: "Aa", label: "reading settings", sub: "font · size · themes", run(){ $("aabtn").click(); }});
   acts.push({icon: "?", label: "help", sub: "", run(){ $("helpbtn").click(); }});
   return acts;
@@ -6474,6 +6485,73 @@ $("exportmd").onclick = async () => {
     download(r.filename || "tree.md", r.markdown, "text/markdown");
     clearStatus();
   } catch (e){ setError(e.message); }
+};
+
+/* ------------------------------------------------------------------ */
+/* 📜 study sheet — the whole profile compiled into one revision       */
+/* document: per tree, your own synthesis (notes), your best           */
+/* explanation with its verdict, what you marked as mattering          */
+/* (highlights) — then one merged alphabetical glossary. The           */
+/* transcripts stay in the per-tree exports; this is the sheet you'd   */
+/* actually revise from. Built entirely client-side.                   */
+/* ------------------------------------------------------------------ */
+function sheetHasContent(){
+  return profileTrees().some(t => (t.note || "").trim() ||
+    (Array.isArray(t.teach) && t.teach.length) ||
+    highlightsOf(t).length ||
+    Object.values(glossaryOf(t)).some(e => e && e.def));
+}
+function studySheetMd(){
+  const stamp = (t) => t.saved_at || t.created || "";
+  const trees = profileTrees().sort((a, b) => stamp(b).localeCompare(stamp(a)));
+  const gloss = new Map();   // merged across trees; the newest tree's wording wins
+  const sections = [];
+  const RANK = {clean: 3, close: 2, gappy: 1};
+  for (const t of trees){
+    for (const [key, e] of Object.entries(glossaryOf(t)))
+      if (e && e.term && e.def && !gloss.has(key)) gloss.set(key, e);
+    const lines = [];
+    const note = (t.note || "").trim();
+    if (note) lines.push("### my notes\n\n" + note);
+    const byNode = new Map();
+    for (const a of (Array.isArray(t.teach) ? t.teach : []))
+      if (getNode(t, a.node) && (a.text || "").trim()){
+        if (!byNode.has(a.node)) byNode.set(a.node, []);
+        byNode.get(a.node).push(a);
+      }
+    for (const [nid, list] of byNode){
+      list.sort((x, y) => (x.when || "").localeCompare(y.when || ""));
+      let best = null;   // best verdict; the latest attempt among equals
+      for (const a of list)
+        if (!best || (RANK[a.verdict] || 0) >= (RANK[best.verdict] || 0)) best = a;
+      const tag = best.verdict && TEACH_TAGS[best.verdict]
+        ? `${TEACH_TAGS[best.verdict]} ${best.verdict} — ` : "";
+      lines.push(`### explained back — ${getNode(t, nid).label}\n\n` +
+                 `${tag}${best.text.trim()}`);
+    }
+    const hs = highlightsOf(t).filter(h => getNode(t, h.node));
+    if (hs.length)
+      lines.push("### highlighted\n\n" +
+        hs.map(h => "> ★ " + String(h.text || "").replace(/\s+/g, " ")).join("\n>\n"));
+    if (lines.length) sections.push(`## ${t.root_topic}\n\n` + lines.join("\n\n"));
+  }
+  const terms = [...gloss.values()].sort((a, b) => a.term.localeCompare(b.term));
+  if (!sections.length && !terms.length) return null;
+  const prof = activeProfile() || "all trees";
+  const head = `# study sheet — ${prof}\n\n` +
+    `compiled ${localDay(0)} · ${trees.length} tree${trees.length === 1 ? "" : "s"}` +
+    ` · ${terms.length} term${terms.length === 1 ? "" : "s"}\n`;
+  const glossMd = terms.length
+    ? "## glossary — every defined term\n\n" +
+      terms.map(e => `- **${e.term}** — ${String(e.def).replace(/\s+/g, " ")}`).join("\n")
+    : "";
+  return head + (sections.length ? "\n" + sections.join("\n\n") : "") +
+         (glossMd ? "\n\n" + glossMd : "") + "\n";
+}
+$("sheetbtn").onclick = () => {
+  const md = studySheetMd();
+  if (!md) return;
+  download(slug(activeProfile() || "all-trees") + "-study-sheet.md", md, "text/markdown");
 };
 $("exporthtml").onclick = async () => {
   const tree = cur(); if (!tree) return;
