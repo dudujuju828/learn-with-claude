@@ -843,29 +843,40 @@
   }
 
   /* ---- my notes (per-tree free-text synthesis) ---- */
-  #notesbox{
+  #notesbox, #srcbox{
     display:none; position:fixed; inset:0; z-index:95;
     background:color-mix(in srgb, var(--bg) 76%, transparent);
     align-items:center; justify-content:center; padding:1rem;
   }
-  #notesbox.open{display:flex}
-  #notesbox .box{
+  #notesbox.open, #srcbox.open{display:flex}
+  #notesbox .box, #srcbox .box{
     background:var(--card); border:1px solid var(--line); border-radius:1rem;
     padding:1.1rem 1.3rem 1.1rem; width:min(38rem,94vw); max-height:88dvh;
     display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.25);
   }
-  #notesbox .nthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.7rem}
-  #notesbox #nttitle{font-weight:600}
-  #notesbox #ntscope{flex:1; color:var(--muted); font-size:.82rem;
+  #notesbox .nthead, #srcbox .nthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.7rem}
+  #notesbox #nttitle, #srcbox #srctitle{font-weight:600}
+  #notesbox #ntscope, #srcbox #srcscope{flex:1; color:var(--muted); font-size:.82rem;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  #notesbox #ntarea{
+  #notesbox #ntarea, #srcbox #srcboxarea{
     flex:1; min-height:9rem; resize:vertical; width:100%; font-family:inherit;
     font-size:1rem; line-height:1.7; padding:.7rem .8rem; color:var(--fg);
     background:var(--bg); border:1px solid var(--line); border-radius:.7rem;
     letter-spacing:inherit; word-spacing:inherit;
   }
-  #notesbox .ntfoot{display:flex; align-items:center; gap:.7rem; margin-top:.7rem}
-  #notesbox #ntmeta{flex:1}
+  #notesbox .ntfoot, #srcbox .ntfoot{display:flex; align-items:center; gap:.7rem; margin-top:.7rem}
+  #notesbox #ntmeta, #srcbox #srcmeta{flex:1}
+  /* the grow tab's paste-your-own-material fold */
+  #srcdetails{margin:.5rem 0 .2rem}
+  #srcdetails summary{cursor:pointer; color:var(--muted); font-size:.86rem}
+  #srcdetails summary:hover{color:var(--fg)}
+  #srcdetails[open] summary{color:var(--fg)}
+  #srcdetails textarea{
+    width:100%; min-height:7rem; resize:vertical; margin-top:.45rem;
+    font-family:inherit; font-size:.92rem; line-height:1.6; padding:.6rem .7rem;
+    color:var(--fg); background:var(--card); border:1px solid var(--line);
+    border-radius:.6rem; letter-spacing:inherit; word-spacing:inherit;
+  }
   .nodeinfo .nacts button.notes.has{border-color:color-mix(in srgb, var(--accent) 60%, var(--line))}
   .nodeinfo .nacts button.notes .ndot{color:var(--accent); font-size:.7em; vertical-align:.15em}
 
@@ -1050,7 +1061,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette,
-    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #teachbox, #gapsbox, #tutoreditor, #overview, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #gapsbox, #tutoreditor, #overview, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1129,6 +1140,14 @@
   one scoped question at a time until it can explain the idea in its own words.</p>
   <p><b>full</b> does that, then the tutor picks 3 more related concepts to
   investigate — a small tour of the topic.</p>
+  <p><b>📚 ground it in your own material</b> — the fold under the topic box:
+  paste a passage (a textbook section, an article, your lecture notes) and
+  it's <b>new</b> or <b>full</b> that grounds the whole tree in it — the
+  learner's questions anchor to what the passage actually says, and the
+  tutor grounds every answer in it, saying plainly when the passage itself
+  is wrong or oversimplified. A <b>📚 source</b> button appears in the
+  conversation header on a grounded tree — reopen or correct the passage
+  any time.</p>
   <p><b>→ next</b> (in the conversation header) is that same step on any
   tree, one press at a time: the tutor reviews everything covered so far and
   picks the one concept that best builds on it — a why/how/when angle, not
@@ -1345,6 +1364,14 @@
         <button id="surveybtn" title="map the topic's foundations first — investigate them piece by piece, any time">survey</button>
         <button id="gapsbtn" title="say what you already know first — the tutor maps what's solid, what's shaky, and what's missing, then aims the investigation there">gaps</button>
       </div>
+      <details id="srcdetails">
+        <summary>📚 ground it in your own material</summary>
+        <textarea id="srcarea" maxlength="6000" aria-label="source material"
+          placeholder="Paste the passage you're trying to understand — a textbook section, an article, your lecture notes. The learner investigates it: questions anchor to the passage, the tutor grounds every answer in it (and says when the passage itself is wrong)."></textarea>
+        <p class="hint">applies when you press <b>new</b> or <b>full</b> — the
+        passage travels with the tree, every conversation on it stays
+        grounded, and longer passages cost a little more per turn.</p>
+      </details>
       <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
       related concepts to explore. Each turn is two real model calls (~5–7¢).
       “survey” maps a broad topic into the foundations it's built on — you
@@ -1587,6 +1614,22 @@
     <div class="ntfoot">
       <span id="ntmeta" class="hint"></span>
       <button id="ntdone" class="primary">done</button>
+    </div>
+  </div>
+</div>
+
+<div id="srcbox" role="dialog" aria-modal="true" aria-label="source material">
+  <div class="box">
+    <div class="nthead">
+      <span id="srctitle">📚 source</span>
+      <span id="srcscope"></span>
+      <button id="srcclose" class="ghost" aria-label="close source">✕</button>
+    </div>
+    <textarea id="srcboxarea" maxlength="6000" aria-label="the passage this tree is grounded in"
+      placeholder="The passage this tree is grounded in — every conversation's questions and answers anchor to it."></textarea>
+    <div class="ntfoot">
+      <span id="srcmeta" class="hint">edits apply from the next turn on · travels and syncs with the tree</span>
+      <button id="srcdone" class="primary">done</button>
     </div>
   </div>
 </div>
@@ -2349,6 +2392,44 @@ $("ntarea").addEventListener("input", updateNotesMeta);
 $("notesbox").addEventListener("click", (e) => { if (e.target === $("notesbox")) closeNotes(); });
 
 /* ------------------------------------------------------------------ */
+/* 📚 source — the passage a tree was grounded in (set once at "new" / */
+/* "full" time from the grow tab's paste fold). Edit it here after the */
+/* fact; the correction applies from the next turn on. Last-write-wins */
+/* like note, and travels in .know.json via the extras round-trip.     */
+/* ------------------------------------------------------------------ */
+let srcPrevFocus = null;
+function openSrcbox(){
+  const tree = cur(); if (!tree) return;
+  srcPrevFocus = document.activeElement;
+  $("srcscope").textContent = "· " + oneLine(tree.root_topic, 60);
+  const ta = $("srcboxarea");
+  ta.value = tree.source || "";
+  $("srcbox").classList.add("open");
+  ta.focus();
+  ta.setSelectionRange(0, 0);
+}
+window.openSrcbox = openSrcbox;
+function closeSrcbox(){
+  const tree = cur();
+  if (tree){
+    const v = $("srcboxarea").value.trim().slice(0, SOURCE_MAX);
+    if (v !== (tree.source || "")){
+      if (v) tree.source = v; else delete tree.source;
+      persistTree(tree);
+      renderConversation(true);   // refresh the source-chip indicator
+    }
+  }
+  $("srcbox").classList.remove("open");
+  if (srcPrevFocus && srcPrevFocus.focus && document.contains(srcPrevFocus))
+    srcPrevFocus.focus();
+  srcPrevFocus = null;
+}
+window.closeSrcbox = closeSrcbox;
+$("srcdone").onclick = closeSrcbox;
+$("srcclose").onclick = closeSrcbox;
+$("srcbox").addEventListener("click", (e) => { if (e.target === $("srcbox")) closeSrcbox(); });
+
+/* ------------------------------------------------------------------ */
 /* explain it back — the Feynman step. You explain the conversation in */
 /* your own words; the tutor reads it against the digest and answers   */
 /* with what's solid, the one thing missing, and one probing question. */
@@ -2797,10 +2878,13 @@ window.addEventListener("resize", () => { if (rulerActive()) refreshRuler(); });
 /* ------------------------------------------------------------------ */
 const FORMAT = "learn-with-claude/knowledge-tree";
 
-function newTree(topic){
+const SOURCE_MAX = 6000;
+function newTree(topic, source){
   const tree = { format: FORMAT, version: 1, id: randHex(12), root_topic: topic,
                  created: nowIso(), root_id: null, next: 1, nodes: {} };
   if (activeProfile()) tree.profile = activeProfile();   // born into the context
+  const src = (source || "").trim().slice(0, SOURCE_MAX);
+  if (src) tree.source = src;   // 📚 the passage every conversation grounds to
   return tree;
 }
 
@@ -3022,6 +3106,7 @@ function mergeTrees(local, server){
     if (local.survey) out.survey = structuredClone(local.survey);
     if (local.baseline) out.baseline = structuredClone(local.baseline);
     if (typeof local.note === "string") out.note = local.note;
+    if (typeof local.source === "string") out.source = local.source;
     if (typeof local.root_topic === "string" && local.root_topic) out.root_topic = local.root_topic;
     // presence (even "") is intent; absence means the field never existed
     // or a CLI round-trip dropped it — then the server's filing stands
@@ -3417,6 +3502,10 @@ function renderConversation(keepScroll){
     acts.push(`<button class="notes${hasNote ? " has" : ""}" onclick="openNotes()"` +
               ` title="your own synthesis of this tree — it travels with the tree, syncs, and heads every export">` +
               `${ico("📝")}notes${hasNote ? ' <span class="ndot" aria-hidden="true">●</span>' : ""}</button>`);
+    if (tree.source)
+      acts.push(`<button class="notes has" onclick="openSrcbox()"` +
+                ` title="the passage this tree is grounded in — every conversation anchors to it">` +
+                `${ico("📚")}source <span class="ndot" aria-hidden="true">●</span></button>`);
   }
   if (!running && node.turns.some(t => t.tutor)){
     const tb = teachAttempts(tree, node.id);
@@ -5784,6 +5873,7 @@ function paletteActions(){
     if (tree.survey && tree.survey.items && tree.survey.items.length)
       acts.push({icon: "🗺", label: "survey", sub: "the topic's foundations map", run(){ openSurvey(); }});
     acts.push({icon: "📝", label: "my notes", sub: tree.note && tree.note.trim() ? "your synthesis of this tree" : "jot your own synthesis", run(){ openNotes(); }});
+    if (tree.source) acts.push({icon: "📚", label: "source", sub: "the passage this tree is grounded in", run(){ openSrcbox(); }});
     acts.push({icon: "🔊", label: "listen", sub: "read this conversation aloud", run(){ listenNode(); }});
     acts.push({icon: "💾", label: "save .know.json", sub: "", run(){ $("exportjson").click(); }});
     acts.push({icon: "📄", label: "export markdown", sub: "", run(){ $("exportmd").click(); }});
@@ -6121,6 +6211,9 @@ function setRunning(on){
 /* the learner<->tutor loop (mirrors simulator.run_conversation)       */
 /* ------------------------------------------------------------------ */
 async function runInvestigation(tree, node, ctx){
+  // every conversation kind funnels through here, so grounding a tree in
+  // its own material (📚 source) is one line, not one per thunk
+  if (tree.source) ctx = {...ctx, source: tree.source};
   // Resumable: picks up after the last completed step, including the case
   // where the learner asked but the tutor call failed (tutor is empty). The
   // tutor answers even a done=true final restatement, exactly like the CLI.
@@ -6170,12 +6263,12 @@ async function runInvestigation(tree, node, ctx){
 /* ------------------------------------------------------------------ */
 /* commands: new / full / branch (as queue thunks)                     */
 /* ------------------------------------------------------------------ */
-function rootThunk(topic, label=""){
+function rootThunk(topic, label="", source=""){
   let node = null, treeId = null;
   return async () => {
     runLabel = label;
     if (!node){
-      const tree = newTree(topic);
+      const tree = newTree(topic, source);
       store[tree.id] = tree; currentId = tree.id; treeId = tree.id;
       node = makeNode(tree, topic);
       currentNode = node.id;
@@ -6333,8 +6426,9 @@ function askThunk(treeId, nodeId, question){
       activity = {nodeId, kind: "tutor"};
       setStatus(provName() + " is answering you…"); renderAll();
       const before = node.turns.slice(0, node.turns.indexOf(rec));
-      const T = await api("tutor", {...rebuildCtx(tree, node), turns: before,
-                                    action: question, ...tutorParams()});
+      const T = await api("tutor", {...rebuildCtx(tree, node),
+                                    ...(tree.source ? {source: tree.source} : {}),
+                                    turns: before, action: question, ...tutorParams()});
       node.cost += T.cost;
       rec.tutor = T.tutor;
       if (T.parts) rec.parts = T.parts;
@@ -6355,9 +6449,9 @@ function askTutor(){
 $("askbtn").onclick = askTutor;
 $("askinput").addEventListener("keydown", (e) => { if (e.key === "Enter") askTutor(); });
 
-function cmdNew(topic){ enqueue(rootThunk(topic)); }
-function cmdFull(topic){
-  enqueue(rootThunk(topic, "investigation 1 of 4"),
+function cmdNew(topic, source){ enqueue(rootThunk(topic, "", source)); }
+function cmdFull(topic, source){
+  enqueue(rootThunk(topic, "investigation 1 of 4", source),
           followupThunk("investigation 2 of 4"),
           followupThunk("investigation 3 of 4"),
           followupThunk("investigation 4 of 4"));
@@ -6467,8 +6561,16 @@ function guardTopic(){
   closeMenu();
   return t;
 }
-$("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t); };
-$("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t); };
+function takeSource(){
+  // only consumed once a topic guard actually passes — an empty topic
+  // must not silently wipe a pasted-but-not-yet-submitted passage
+  const v = $("srcarea").value.trim();
+  $("srcarea").value = "";
+  $("srcdetails").open = false;
+  return v;
+}
+$("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t, takeSource()); };
+$("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t, takeSource()); };
 $("surveybtn").onclick = () => { const t = guardTopic(); if (t) cmdSurvey(t); };
 $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") $("newbtn").click(); });
 $("stopbtn").onclick = () => { stopRequested = true; setStatus("stopping after this turn…"); };
@@ -6682,6 +6784,7 @@ document.addEventListener("keydown", (e) => {
     if ($("gapsbox").classList.contains("open")){ closeGaps(); return; }
     if ($("teachbox").classList.contains("open")){ closeTeach(); return; }
     if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
+    if ($("srcbox").classList.contains("open")){ closeSrcbox(); return; }
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
@@ -6777,7 +6880,7 @@ document.addEventListener("keydown", (e) => {
 /* keep Tab inside whichever modal is open */
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "docketbox", "notesbox", "tutoreditor", "overview"]){
+  for (const id of ["palette", "quizbox", "surveybox", "reviewbox", "statsbox", "hlbox", "docketbox", "notesbox", "srcbox", "tutoreditor", "overview"]){
     const box = $(id);
     if (!box.classList.contains("open")) continue;
     const focusables = [...box.querySelectorAll(
