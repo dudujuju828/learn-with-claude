@@ -303,6 +303,9 @@ class KnowledgeTree:
             f"- nodes: {len(self.nodes)}  ·  total cost: ${self.total_cost():.4f}",
             "",
         ]
+        source = str(self.extras.get("source") or "").strip()
+        if source:
+            out += ["## Source material", "", "> " + source.replace("\n", "\n> "), "", "---", ""]
         note = (self.note or "").strip()
         if note:
             out += ["## My notes", "", note, "", "---", ""]

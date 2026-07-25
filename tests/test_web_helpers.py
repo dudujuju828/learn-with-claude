@@ -319,6 +319,48 @@ def test_handle_survey():
     print("ok  handle_survey (validation, clipping, depth cap, focus)")
 
 
+def test_source_threading():
+    """A sourced tree grounds both personas; an unsourced body is untouched."""
+    from learn_with_claude.webapi import (
+        SOURCE_MAX,
+        learner_opening,
+        source_of,
+        tutor_extra_context,
+    )
+
+    passage = "A hash table maps keys to buckets via a hash function."
+
+    # the learner opening keeps the passage FIRST and the contract last
+    body = {"topic": "hash tables", "source": "  " + passage + "  "}
+    msg = learner_opening(body)
+    assert passage in msg
+    assert msg.index(passage) < msg.index("hash tables")
+    plain = learner_opening({"topic": "hash tables"})
+    assert msg.endswith(plain[-40:])          # the original task text stays last
+    assert passage not in plain
+
+    # every conversation kind in a sourced tree stays anchored
+    for kind in ("branch", "followup", "gaps"):
+        m = learner_opening({"topic": "t", "kind": kind, "source": passage})
+        assert passage in m
+
+    # the tutor gets a grounding block — alone for root, appended after the
+    # kind's own context otherwise
+    extra = tutor_extra_context({"kind": "root", "source": passage})
+    assert passage in extra and "Ground your answers" in extra
+    both = tutor_extra_context({"kind": "gaps", "baseline": "knows arrays",
+                                "source": passage})
+    assert "knows arrays" in both and passage in both
+    assert both.index("knows arrays") < both.index(passage)
+    assert tutor_extra_context({"kind": "root"}) == ""
+
+    # cap and junk tolerance
+    assert len(source_of({"source": "x" * (SOURCE_MAX + 500)})) == SOURCE_MAX
+    assert source_of({"source": 42}) == ""
+    assert source_of({}) == ""
+    print("ok  source threading (learner opening, tutor context, cap)")
+
+
 if __name__ == "__main__":
     test_learner_levels()
     test_tutor_system_segments()
@@ -326,4 +368,5 @@ if __name__ == "__main__":
     test_knowledge_round_trip()
     test_message_builders()
     test_handle_survey()
+    test_source_threading()
     print("\nall green")

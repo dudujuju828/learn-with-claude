@@ -493,6 +493,38 @@ def gaps_tutor_context(baseline: str) -> str:
     )
 
 
+def source_learner_context(source: str) -> str:
+    """Prepended to the learner's opening when the human brought material —
+    the passage is the anchor, so it comes first and the task (with the
+    output contract) stays last."""
+    return (
+        "You brought a passage you are trying to understand — it is the "
+        "whole reason you opened this chat. Keep your investigation "
+        "anchored to it: ask about what IT says, chase the terms IT uses, "
+        "and when the tutor explains something, check it against the "
+        "passage.\n\n"
+        'The passage:\n"""\n'
+        f"{source}\n"
+        '"""'
+    )
+
+
+def source_tutor_context(source: str) -> str:
+    """Extra tutor system context when the learner brought material."""
+    return (
+        "CONTEXT — the learner brought this passage and is trying to "
+        "understand it:\n"
+        '"""\n'
+        f"{source}\n"
+        '"""\n'
+        "Ground your answers in the passage: use its terminology, refer to "
+        "what it actually says, and answer questions about it from it. "
+        "Where the passage is wrong, oversimplified, or missing something "
+        "important, say so plainly. If a question goes beyond the passage, "
+        "answer it normally and note that the passage does not cover it."
+    )
+
+
 TEACHBACK_SYSTEM = """\
 You are a tutor listening to a learner explain a concept back in their own
 words — the Feynman step. You will be given the topic, a digest of the

@@ -44,6 +44,8 @@ from .personas import (
     learner_system,
     next_concept_message,
     quiz_message,
+    source_learner_context,
+    source_tutor_context,
     survey_message,
     teachback_message,
     tutor_system,
@@ -61,35 +63,56 @@ class ApiError(Exception):
 # --------------------------------------------------------------------------- #
 # prompt reconstruction — mirrors run_conversation() in simulator.py
 # --------------------------------------------------------------------------- #
+SOURCE_MAX = 6000
+
+
+def source_of(body: dict) -> str:
+    """The passage a sourced tree is grounded in, capped server-side."""
+    s = body.get("source")
+    return s.strip()[:SOURCE_MAX] if isinstance(s, str) else ""
+
+
 def learner_opening(body: dict) -> str:
     kind = body.get("kind", "root")
     if kind == "branch":
-        return branch_learner_message(
+        msg = branch_learner_message(
             body["topic"], body.get("breadcrumb", ""), body.get("digest", ""),
             body.get("branch_q", ""), body.get("branch_a", ""), body.get("focus", ""),
         )
-    if kind == "followup":
-        return followup_learner_message(
+    elif kind == "followup":
+        msg = followup_learner_message(
             body["topic"], body.get("recap", ""),
             body.get("concept", ""), body.get("opening_question", ""),
         )
-    if kind == "gaps":
-        return gaps_learner_message(
+    elif kind == "gaps":
+        msg = gaps_learner_message(
             body["topic"], body.get("baseline", ""),
             body.get("focus", ""), body.get("opening_question", ""),
         )
-    return first_learner_message(body["topic"])
+    else:
+        msg = first_learner_message(body["topic"])
+    src = source_of(body)
+    if src:
+        # passage first; the task (and its output contract) stays last
+        msg = f"{source_learner_context(src)}\n\n{msg}"
+    return msg
 
 
 def tutor_extra_context(body: dict) -> str:
     kind = body.get("kind", "root")
     if kind == "branch":
-        return branch_tutor_context(body.get("digest", ""), body.get("branch_a", ""))
-    if kind == "followup":
-        return followup_tutor_context(body.get("recap", ""), body.get("concept", ""))
-    if kind == "gaps":
-        return gaps_tutor_context(body.get("baseline", ""))
-    return ""
+        extra = branch_tutor_context(body.get("digest", ""), body.get("branch_a", ""))
+    elif kind == "followup":
+        extra = followup_tutor_context(body.get("recap", ""), body.get("concept", ""))
+    elif kind == "gaps":
+        extra = gaps_tutor_context(body.get("baseline", ""))
+    else:
+        extra = ""
+    src = source_of(body)
+    if src:
+        block = source_tutor_context(src)
+        extra = f"{extra}\n\n{block}" if extra else block
+    return extra
 
 
 def turn_json(turn: dict) -> str:

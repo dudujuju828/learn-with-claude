@@ -678,6 +678,18 @@ def tree_to_html(tree) -> str:
     meta = (f'<p class="muted">Created {_esc(tree.created)} · {len(tree.nodes)} '
             f'investigations · total cost ${tree.total_cost():.4f}</p>')
 
+    source = str(getattr(tree, "extras", {}).get("source") or "").strip()
+    source_html = ""
+    if source:
+        paras = "".join(
+            "<p>" + "<br>".join(_esc(line) for line in para.split("\n")) + "</p>"
+            for para in re.split(r"\n{2,}", source) if para.strip()
+        )
+        source_html = (
+            '<section class="node" id="sourcematerial"><h2>📚 Source material</h2>'
+            f'<div class="turn"><div class="block">{paras}</div></div></section>'
+        )
+
     note = (getattr(tree, "note", "") or "").strip()
     note_html = ""
     if note:
@@ -697,6 +709,7 @@ def tree_to_html(tree) -> str:
         + toolbar
         + f"<h1>🌳 {_esc(tree.root_topic)}</h1>"
         + meta
+        + source_html
         + note_html
         + '<div class="map"><div class="label">Map of what I explored</div>'
         + nav_html
