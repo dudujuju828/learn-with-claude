@@ -5,6 +5,57 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 31 — search forgives your spelling
+
+### What it is
+The flagship **search every tree** — and the glossary filter, and ⌘K —
+now forgive the way the ⌨ type checker always has. Exact matches behave
+exactly as before; only when a query finds *nothing* does a second pass
+run, where each query word may land as a substring **or** as a word
+within typo distance (nothing under 4 letters, one edit to 7, two from
+8 — an adjacent swapped pair, the classic dyslexic slip, counts as
+one), and word order stops mattering. The results say so — *"nothing
+spelled quite like that — close matches:"* — and the snippet marks the
+word that actually matched, so "collission" finds collision,
+"idempotancy" finds the glossary entry, "amortised analyzis" finds your
+own note, and "chaining separate" finds the phrase it reverses. Garbage
+still honestly finds nothing.
+
+### Why this one
+- For a dyslexia-focused tool, exact-substring search was precisely the
+  wrong matcher: misspelling an unfamiliar technical term is the normal
+  case for the stated audience, and the failure lands on the app's
+  advertised flagship ("search across every tree") as a flat, wrong "no
+  matches" — for content the user *knows is there*. Feature 20 already
+  established the principle (a typo or swapped pair reads as *close*,
+  not wrong) and built `editDist`; this carries the same forgiveness to
+  the retrieval surfaces. Feature 8's log even flagged the stakes:
+  searching a phrase you know you wrote and getting nothing "reads as a
+  bug".
+- Contained by design: the exact pass is byte-for-byte unchanged and
+  always wins; the fuzzy pass only exists where the old behaviour was
+  a dead end, so no existing result set can regress. One matcher
+  (`findHit`) threads through all four search sources, the palette, and
+  the glossary filter; `typedVerdict` now shares the same `typoSlack`
+  rule instead of duplicating it.
+- Verified with an 11-assertion headless run: exact-no-hint, typo,
+  swap-in-phrase, reversed word order, glossary, notes, garbage,
+  short-word strictness, palette fallback, and the typed-recall
+  verdicts unchanged.
+
+### Candidates rejected (this cycle)
+- **FSRS-style scheduling upgrade** — a real algorithmic improvement,
+  but it rewrites the schedule data the whole retention loop rests on,
+  is hard to verify honestly, and the simple ladder is a deliberate
+  design ("Anki-ish, without the ease bookkeeping").
+- **Listen through a whole tree** (chain conversations into one audio
+  queue) — a small extension of listenNode; parked until the drill
+  proves how much hands-free listening actually happens.
+- **Dictated notes/questions** — speech recognition is still
+  Chromium-only; parked with its cousins.
+
+---
+
 ## Feature 30 — 📅 today: the docket
 
 ### What it is
