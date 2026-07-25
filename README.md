@@ -87,7 +87,11 @@ directly (a local `claude` login can't run on a server), so it needs an
   it back into view, until your own scrolling takes over),
   **search across every tree** (turns, glossary, and your own notes and
   highlights — a note hit opens the notes editor, a highlight hit jumps to
-  the marked passage),
+  the marked passage; spelling is forgiven the way the typed-recall
+  checker forgives it — if nothing matches exactly, a word one typo or
+  one swapped letter-pair away still counts, in any word order, and the
+  results say "close matches" — the same forgiveness the glossary filter
+  and ⌘K apply),
   branch buttons under every answer (plus a **loose threads** list of the
   words the learner flagged but never chased — tap one to branch straight
   into it, or ✕ to dismiss the ones you don't care about, ↩ to bring them
