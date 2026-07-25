@@ -5,6 +5,50 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 32 — 📜 study sheet: the profile compiled into one document
+
+### What it is
+A **study sheet** button in the file row (and ⌘K): one Markdown
+document compiling the whole active profile into the sheet you'd
+actually revise from — per tree (newest first): **my notes**, the
+**best explanation** you gave of each conversation (best verdict wins,
+latest among equals, tagged ✓/≈/△), and the passages you
+**highlighted** (quoted, whitespace-collapsed) — then one merged
+**alphabetical glossary** of every defined term across the profile, the
+newest tree's wording winning a collision. Saved through the existing
+`download()` path, so phones get the share sheet; the filename carries
+the profile (`computer-science-study-sheet.md`). Disabled until the
+profile has anything worth compiling.
+
+### Why this one
+- The audit checked first (the Feature 11 lesson, which caught "retry
+  the missed" already existing this same cycle): every export today is
+  per-tree and transcript-centric. Nothing compiled the *user-produced*
+  layer — notes (F4), highlights (F5), teach-back explanations (F25) —
+  across trees, which is exactly what revision before an exam wants:
+  your own words first, the reference glossary second, the transcripts
+  not at all. It's the Readwise insight (what you marked is the
+  valuable residue) applied to everything this app already collects.
+- Entirely client-side over existing data — no model calls, no backend,
+  no new storage; the one design decision (best-verdict-then-latest
+  attempt selection) reuses the teach-verdict semantics F28 defined.
+- Verified with a 14-assertion headless run: section order, verdict
+  selection, whitespace collapsing, alphabetical merge with
+  newest-wins collision, undefined-term exclusion, profile scoping,
+  all-trees fallback, palette entry, and the download filename.
+
+### Candidates rejected (this cycle)
+- **Retry missed quiz questions** — chosen first, then found already
+  shipped (`retryQuiz(true)`, subset runs excluded from the score
+  history); the audit caught it before any duplicate work.
+- **PWA "update available" toast** — checked sw.js: navigations are
+  network-first, deploys land on the next load; there is no staleness
+  to toast about.
+- **🔊 listen through a whole tree** — parked again; still waiting for
+  evidence the per-conversation listen flow is hitting its ceiling.
+
+---
+
 ## Feature 31 — search forgives your spelling
 
 ### What it is
