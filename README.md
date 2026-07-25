@@ -301,14 +301,25 @@ How it differs from the Vercel deployment:
   with file access from your home directory down, so when a question touches
   material you have on disk, it can go look. The learner, glossary, and quiz
   roles run with no tools at all.
+- **⚙ local settings** (header, local mode only) lets you swap the model per
+  role, pick a reasoning effort, point the tutor at one project directory of
+  your own code or notes to check first, and turn on MCP servers it can call
+  before answering — a one-click **+ add confluence** wires up [Atlassian's
+  official remote MCP server](https://mcp.atlassian.com/v1/mcp/authv2) (Jira +
+  Confluence Cloud; first use opens a browser tab to sign in, no token to
+  type in), and **+ add a custom MCP server** takes the same JSON `copilot mcp
+  add` would. Everything here is saved to `local_settings.json` next to your
+  knowledge folder and applies to the next reply, no restart — and only ever
+  exists in this local mode, never in the hosted deployment.
 
 Options: `--port` (default 8577), `--dir` for the knowledge folder,
 `--no-open` to skip the browser. Env knobs: `LEARN_COPILOT_MODEL` (or
 per-role `LEARN_COPILOT_LEARNER_MODEL` / `_TUTOR_MODEL` / `_GLOSSARY_MODEL`)
 to pin a model instead of `auto`, `LEARN_EFFORT` for reasoning effort on
 models that support it, `LEARN_TIMEOUT` per call, `LEARN_COPILOT_EXE` if the
-CLI lives somewhere unusual. `python -m learn_with_claude.localweb` works
-without installing the `learn` command.
+CLI lives somewhere unusual — all of these are the *defaults* the ⚙ local
+settings panel overrides once you save anything there. `python -m
+learn_with_claude.localweb` works without installing the `learn` command.
 
 ## Quick start
 
@@ -474,6 +485,7 @@ learn_with_claude/
   cli.py                      # argument parsing & dispatch
   webapi.py                   # the /api route handlers, shared by both web backends
   copilot_backend.py          # GitHub Copilot CLI as a model transport (local web app)
+  local_settings.py           # ⚙ local settings: models/effort/project dir/MCP servers
   localweb.py                 # `learn --web` — the web app on localhost, trees on disk
 knowledge/                    # your saved trees (*.know.json) + exported markdown
 ```

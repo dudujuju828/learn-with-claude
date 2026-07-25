@@ -5,6 +5,86 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 37 — ⚙ local settings: the tutor can ground itself in your own systems
+
+*(user-requested, not picked from the autonomous candidate list — logged
+here anyway since it's the running record of what changed and why.)*
+
+### What it is
+In `learn --web` (the Copilot CLI transport), the tutor's Copilot session
+already got read-only filesystem tools (`view`/`grep`/`glob`), but nothing
+told it so, and nothing let it reach further than "look around the home
+directory" — there was no way to point it at proprietary material like a
+team's Confluence. A new **⚙ local settings** button (header, this mode
+only) opens a panel to: swap the model per role and pick a reasoning effort
+without setting env vars and restarting; name one project directory of the
+learner's own code or notes the tutor should check first; and turn on MCP
+servers the tutor can call before answering, with a one-click **+ add
+confluence** that wires up Atlassian's own remote MCP server (OAuth in a
+browser tab on first use — nothing to type in) plus a **+ add a custom MCP
+server** escape hatch (the same JSON `copilot mcp add` takes) for anything
+else, self-hosted Confluence included. Everything saves to
+`local_settings.json` next to the knowledge folder and takes effect on the
+next reply, no restart.
+
+### Design notes
+- **The system prompt was the actual gap, not the tool grant.** The tutor
+  already had `--allow-all-paths` and the read tools; `TUTOR_NO_TOOLS`
+  ("do not use any tools or the filesystem") was simply the only clause
+  `tutor_system()` ever appended for the web path, hosted or local, so the
+  model was told not to touch tools it had. Fixed at the root: a new
+  `grounding` kwarg on `tutor_system()` swaps that clause for
+  `local_grounding_system()`'s text (what it has, when to bother looking,
+  never narrate the lookup) instead of leaving both messages in the prompt
+  and hoping the model reconciles them.
+- **Hosted stays provably untouched, not just "should be fine."**
+  `handle_tutor`/`model_routes` gained an optional `grounding` /
+  `tutor_grounding` parameter that defaults to `None`; api/index.py never
+  passes it, so `tutor_system(diagrams=False, grounding=None)` — the exact
+  hosted call — is asserted byte-identical to the pre-feature prompt in
+  `test_tutor_grounding()`. Bolting a second, unrelated concern onto a
+  shared route handler is exactly the kind of change that leaks sideways if
+  you don't pin the "untouched" case down as a test, not just a claim.
+- **`tutor_grounding` is a callable, not a string.** Settings (code
+  directory, which MCP servers are on) can change mid-session from the
+  panel; `ROUTES = model_routes(...)` is built once at import. Passing
+  `copilot_backend.grounding_text` (the function itself) instead of its
+  result means every tutor turn re-reads the live settings, confirmed by a
+  test that a stub grounding function is called once per request, not once
+  total.
+- **Confluence is baked in as one URL, not a credential form.** Atlassian's
+  own remote MCP server (`https://mcp.atlassian.com/v1/mcp/authv2`) handles
+  auth itself via OAuth the first time the tutor actually calls it — a
+  browser tab opens, the learner signs in, done. That meant the preset
+  needed zero secret-handling code in this app at all. Self-hosted
+  Confluence (token-based, different server entirely) isn't guessable up
+  front, so it goes through the generic custom-server JSON box instead of a
+  second hardcoded guess.
+- **Settings apply through a live overlay, not a restart.** `copilot_backend`
+  holds a lock-guarded settings dict `configure()` replaces wholesale;
+  `effective_model()`/`effective_effort()` check it before falling back to
+  the existing env vars, so nothing about the CLI-flag-building code needed
+  to change shape, only where its inputs come from. Confirmed the *default*
+  state (nothing ever saved) reproduces the exact previous argv byte for
+  byte — the pre-existing tool-policy test still passes untouched.
+- **Strict on save, lenient on load.** `local_settings.sanitize(strict=...)`
+  raises a message fit to show the person who typed the bad value when the
+  panel POSTs (a bad effort, a code_dir that isn't a real directory, a
+  duplicate server name), but silently drops garbage when reading the file
+  back at startup — a hand-edited or stale `local_settings.json` must never
+  stop the server from booting.
+- Verified past the unit tests with the real stack: booted the actual local
+  server against the real knowledge dir, drove the real page over the
+  Chrome DevTools Protocol (headless Edge) — clicked ⚙, clicked **+ add
+  confluence**, watched the row render with the right URL, saved with a
+  fake directory and watched the server reject it with the exact validation
+  message inline, then saved for real and confirmed `/api/local_settings`
+  came back with the model, directory, and enabled server persisted. Also
+  checked the `mcpRowHtml` row-builder's HTML-escaping directly in Node (a
+  name/note containing `"><script>` cannot break out of the row markup).
+
+---
+
 ## Feature 36 — flashcards become a deliberate act, with a reason
 
 *(user-requested, not picked from the autonomous candidate list — logged
