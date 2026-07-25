@@ -7241,7 +7241,7 @@ document.addEventListener("keydown", (e) => {
   /* q: jot a question for the bank without losing your place in the
      reading — only once there's something to read and no other panel
      is already claiming the keyboard */
-  if (e.key === "q" && !typing && $("qcap").hidden &&
+  if (e.key.toLowerCase() === "q" && !typing && $("qcap").hidden &&
       !e.ctrlKey && !e.metaKey && !e.altKey){
     const tree = cur();
     const node = tree && currentNode != null ? getNode(tree, currentNode) : null;
