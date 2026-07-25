@@ -126,7 +126,15 @@ directly (a local `claude` login can't run on a server), so it needs an
   evident level, the tutor never re-explains what you have down and
   straightens your shaky beliefs as they come up, and the map and
   transcript stay on the tree (reopen them from the conversation header)
-  and sync and travel like everything else. On any tree, **→ next** in the conversation
+  and sync and travel like everything else. **📚 ground it in your own
+  material** — a fold under the topic box — takes `new` or `full` in a
+  different direction: paste a passage (a textbook section, an article,
+  your notes) and the whole tree grounds itself in it — the learner's
+  questions anchor to what it actually says, the tutor answers from it
+  and says plainly when it's wrong or oversimplified. The passage travels
+  and syncs with the tree, a **📚 source** button in the conversation
+  header reopens or corrects it, and it's quoted at the top of both
+  exports. On any tree, **→ next** in the conversation
   header hands one step to the tutor: it reviews everything covered so far
   and picks the single concept that best builds on it — a why/how/when
   angle rather than another "what is" — then runs that follow-up
