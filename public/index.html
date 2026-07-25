@@ -977,6 +977,10 @@
   #terms .gdot{width:.5rem; height:.5rem; border-radius:50%; flex:none;
     border:1px solid var(--term); background:transparent}
   #terms .gdot.on{background:var(--term)}
+  .gtag{
+    font-size:.72rem; color:var(--muted); border:1px solid var(--line);
+    border-radius:1rem; padding:.05rem .45rem; white-space:nowrap;
+  }
   #terms .gdef{
     margin:.1rem 0 .45rem 1.35rem; padding:.45rem .6rem; font-size:.85rem;
     background:var(--card); border:1px solid var(--line); border-radius:.55rem;
@@ -1069,6 +1073,38 @@
   .flash{outline:3px solid var(--accent) !important; outline-offset:3px;
     transition:outline-color 1s}
 
+  /* + flashcard popover — pick a reason, then review/tweak the generated
+     card before it's actually saved */
+  #fcpop{
+    position:fixed; z-index:87; width:min(19rem,94vw); background:var(--card);
+    border:1px solid var(--term); border-radius:.8rem;
+    box-shadow:0 10px 36px rgba(0,0,0,.22); padding:.8rem .9rem; font-size:.9rem;
+  }
+  #fcpop[hidden]{display:none}
+  #fcpop .fchead{
+    display:flex; align-items:center; justify-content:space-between; gap:.5rem;
+    color:var(--muted); font-size:.8rem; margin-bottom:.5rem;
+  }
+  #fcpop .fcterm{color:var(--term); font-weight:600}
+  #fcpop .fcreasons{display:flex; flex-direction:column; gap:.3rem}
+  #fcpop .fcreasonbtn{
+    display:flex; align-items:center; gap:.4rem; text-align:left;
+    border:1px solid var(--line); background:var(--bg); color:var(--fg);
+    border-radius:.55rem; padding:.4rem .6rem; font-size:.86rem; cursor:pointer;
+  }
+  #fcpop .fcreasonbtn:hover:not(:disabled){border-color:var(--term); background:var(--termbg)}
+  #fcpop .fcreasonbtn:disabled{opacity:.6; cursor:default}
+  #fcpop .fctext{
+    width:100%; min-height:4.2rem; resize:vertical; font-family:inherit;
+    font-size:.86rem; line-height:1.5; padding:.45rem .6rem; color:var(--fg);
+    background:var(--bg); border:1px solid var(--term); border-radius:.55rem;
+    letter-spacing:inherit;
+  }
+  #fcpop .fcrow{display:flex; gap:.4rem; margin-top:.45rem}
+  #fcpop .fcrow button{font-size:.82rem; padding:.3rem .7rem}
+  #fcpop .fchint{color:var(--muted); font-size:.74rem; margin-top:.35rem}
+  #fcpop .fcback{font-size:.8rem}
+
   /* ---- reading ruler + focus line ---- */
   /* the band is positioned over the current visual line; focus mode adds a
      huge box-shadow around it — a typoscope card over the whole page, with
@@ -1103,7 +1139,7 @@
 
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
-    #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #palette, #qcap,
+    #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #fcpop, #selchip, #palette, #qcap,
     #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #gapsbox, #tutoreditor, #overview, #qbankbox, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
@@ -1767,6 +1803,24 @@
   <button id="seldef"></button>
   <button id="seldig"></button>
   <button id="selhi"></button>
+  <button id="selfc"></button>
+</div>
+
+<div id="fcpop" role="dialog" aria-label="make a flashcard" hidden>
+  <div class="fcpick">
+    <div class="fchead">flashcard from “<span class="fcterm"></span>”</div>
+    <div class="fcreasons"></div>
+  </div>
+  <div class="fcdraft" hidden>
+    <div class="fchead"><span class="fcreason"></span>
+      <button class="cl fcback" type="button">‹ back</button></div>
+    <textarea class="fctext" aria-label="edit the card before adding"></textarea>
+    <div class="fcrow">
+      <button class="primary fcadd">add</button>
+      <button class="fccancel">cancel</button>
+    </div>
+    <div class="fchint">tweak it, then add — nothing is saved until you do</div>
+  </div>
 </div>
 
 <div id="qcap" role="dialog" aria-label="capture a question" hidden></div>
@@ -4105,10 +4159,13 @@ $("searchbox").addEventListener("keydown", (e) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* glossary — every term the learner hit, with a generated definition. */
-/* Lives inside the tree (so it syncs and travels in .know.json);      */
-/* definitions come from /api/define on a cheap model, fired the       */
-/* moment a term appears, best-effort ("define missing" backfills).    */
+/* glossary — every term the learner hit is listed (via glossaryItems, */
+/* straight off the turns) whether or not it has an entry here yet; an */
+/* entry — and the card that comes with it — only exists once the      */
+/* reader deliberately asks for one: the words tab's "define it" /     */
+/* "define missing", or the reading-view flashcard picker (which can   */
+/* also tag the card with a reason other than a plain definition).     */
+/* Lives inside the tree (so it syncs and travels in .know.json).      */
 /* ------------------------------------------------------------------ */
 function glossaryOf(tree){
   if (!tree.glossary || typeof tree.glossary !== "object") tree.glossary = {};
@@ -4144,22 +4201,6 @@ function termContext(tree, nodeId, turn){
   if (t && t.action) lines.push("Q: " + oneLine(t.action, 200));
   if (t && t.tutor)  lines.push("A: " + oneLine(t.tutor, 600));
   return lines.join("\n");
-}
-function autoDefine(tree, node, rec){
-  const term = (rec.new_term || "").trim();
-  if (!term) return;
-  const g = glossaryOf(tree);
-  const key = term.toLowerCase();
-  if (g[key] && g[key].def) return;
-  g[key] = {term, def: "", node: node.id, turn: rec.turn};
-  api("define", {term, topic: tree.root_topic,
-                 context: termContext(tree, node.id, rec.turn)})
-    .then(r => {
-      if (r.definition) g[key].def = r.definition;
-      node.cost += r.cost || 0;
-      saveStore(); renderTerms(); renderHeader();
-    })
-    .catch(() => {});   // best-effort; "define missing" backfills later
 }
 let definingAll = false;
 async function defineMissing(){
@@ -4263,9 +4304,11 @@ function renderTerms(){
       links.push(`<span class="cl" tabindex="0" role="button" data-tree="${esc(i.tree.id)}" data-key="${esc(i.key)}"` +
                  ` title="you added this one — remove it and its review schedule"` +
                  ` onclick="forgetTerm(this.dataset.tree,this.dataset.key)">✕ forget</span>`);
+    const reasonMeta = fcReasonMeta(e && e.reason);
+    const tag = reasonMeta ? ` <span class="gtag">${ico(reasonMeta.icon)}${reasonMeta.label}</span>` : "";
     return `<details class="gentry${def ? "" : " undef"}" data-gfold="${esc(foldKey)}"` +
       `${glossOpen.has(foldKey) ? " open" : ""}>` +
-      `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}</summary>` +
+      `<summary><span class="gdot${def ? " on" : ""}" aria-hidden="true"></span>${esc(i.term)}${tag}</summary>` +
       `<div class="gdef">${def ? esc(def) : `<span class="hint">no definition yet</span>`}` +
       `<div class="gdeflinks">${links.join(" · ")}</div></div></details>`;
   }).join("") +
@@ -4301,9 +4344,16 @@ function exportAnki(){
     .sort((a, b) => a.term.toLowerCase().localeCompare(b.term.toLowerCase()));
   if (!entries.length) return;
   const cell = (s) => String(s).replace(/\t/g, " ").replace(/\n/g, "<br>");
-  const tag = "lwc::" + slug(tree.root_topic).replace(/-/g, "_");
+  const baseTag = "lwc::" + slug(tree.root_topic).replace(/-/g, "_");
+  // a reasoned card (purpose, example, …) gets its angle in the front, so two
+  // cards for the same term stay distinct, plus its own tag to filter by
   const tsv = "#separator:tab\n#html:true\n#tags column:3\n" +
-    entries.map(e => `${cell(e.term)}\t${cell(e.def)}\t${tag}`).join("\n") + "\n";
+    entries.map(e => {
+      const meta = fcReasonMeta(e.reason);
+      const front = meta ? `${e.term} (${meta.label})` : e.term;
+      const tags = meta ? `${baseTag} lwc::${e.reason}` : baseTag;
+      return `${cell(front)}\t${cell(e.def)}\t${tags}`;
+    }).join("\n") + "\n";
   download(slug(tree.root_topic) + "-glossary.txt", tsv, "text/plain");
 }
 window.exportAnki = exportAnki;
@@ -4915,20 +4965,23 @@ function renderReview(){
   const say = (what) => canSpeak()
     ? `<button class="rsay" onclick="speakCard(this)" title="hear it aloud — or press s"` +
       ` aria-label="hear ${what} aloud">🔊</button>` : "";
+  const reasonMeta = fcReasonMeta(e.reason);
+  const reasonLabel = reasonMeta ? reasonMeta.label : "definition";
+  const reasonTag = reasonMeta ? ` <span class="gtag">${ico(reasonMeta.icon)}${reasonMeta.label}</span>` : "";
   const card = (inner) =>
     `<div class="rcard">` +
     `<div class="rtree">${ico("🌳")}${esc(oneLine(t ? t.root_topic : "", 48))}</div>` +
-    `<div class="rterm">${esc(e.term)}${say("the term")}</div>${inner}</div>`;
+    `<div class="rterm">${esc(e.term)}${reasonTag}${say("the term")}</div>${inner}</div>`;
   if (!review.revealed){
     if (prefs.revtype){
-      // typed recall: the definition asks, you type the term it defines
+      // typed recall: the card's angle asks, you type the term it describes
       $("reviewbody").innerHTML =
         `<div class="rcard">` +
-        `<div class="rtree">${ico("🌳")}${esc(oneLine(t ? t.root_topic : "", 48))}</div>` +
-        `<div class="rdef" style="margin-top:0">${esc(e.def)}${say("the definition")}</div>` +
+        `<div class="rtree">${ico("🌳")}${esc(oneLine(t ? t.root_topic : "", 48))}${reasonTag}</div>` +
+        `<div class="rdef" style="margin-top:0">${esc(e.def)}${say("the " + reasonLabel)}</div>` +
         `<div class="rtype"><input id="revanswer" type="text" autocomplete="off"` +
         ` autocapitalize="none" spellcheck="false" enterkeyhint="done"` +
-        ` aria-label="type the term this definition describes" placeholder="the term is…">` +
+        ` aria-label="type the term this ${esc(reasonLabel)} describes" placeholder="the term is…">` +
         `<button class="primary" onclick="checkTyped()">check</button></div></div>` +
         `<div class="rflip"><button id="revflip" class="ghost" onclick="revealReview()">skip typing — just show it</button></div>`;
       const inp = $("revanswer");
@@ -6000,12 +6053,15 @@ window.closeQBank = closeQBank;
 $("qbclose").onclick = closeQBank;
 $("qbankbox").addEventListener("click", (e) => { if (e.target === $("qbankbox")) closeQBank(); });
 
-/* select words in a conversation -> a floating chip offers two moves.
-   "define" puts the term in the glossary — the same cheap model call as
-   the automatic definitions, same everything after: dotted underlines,
-   flashcards, anki export. "dig" is for when a definition isn't enough:
-   it asks the tutor, right in this conversation, what the thing IS here
-   — the answer lands as a turn you can re-read, branch, and quiz on. */
+/* select words in a conversation -> a floating chip offers several moves.
+   "define" is the one-click fast path: an instant plain-definition card,
+   same everything after: dotted underlines, flashcards, anki export. "dig"
+   is for when a definition isn't enough: it asks the tutor, right in this
+   conversation, what the thing IS here — the answer lands as a turn you can
+   re-read, branch, and quiz on. "+ flashcard" is the deliberate path: pick a
+   reason (definition / purpose / example / how it works), see what the
+   model wrote for that angle, tweak it, and only then add it as a card —
+   nothing is saved until you say so. "highlight" just marks the passage. */
 const selchip = $("selchip");
 let selTimer = null, selRect = null;
 function hideSelchip(){ selchip.hidden = true; }
@@ -6047,6 +6103,8 @@ document.addEventListener("selectionchange", () => {
     }
     $("selhi").innerHTML = `${ico("★")}highlight`;
     $("selhi").setAttribute("aria-label", `highlight “${oneLine(info.text, 40)}”`);
+    $("selfc").innerHTML = `${ico("➕")}flashcard`;
+    $("selfc").setAttribute("aria-label", `make a flashcard from “${oneLine(info.text, 40)}”`);
     selchip.dataset.term = info.text;
     selchip.dataset.turn = info.turn ?? "";
     selRect = info.rect;
@@ -6124,6 +6182,127 @@ $("selhi").onclick = (ev) => {
   document.getSelection()?.removeAllRanges();   // let the new mark show
   addHighlight(turn, text);
 };
+
+/* + flashcard — the deliberate path: pick a reason (definition / purpose /
+   example / how it works), read what the model drafted for that angle,
+   tweak the wording if you want, and only "add" actually saves it as a
+   card. "definition" keeps the classic bare-term glossary key so old
+   underlines/exports/anki keep working untouched; any other reason files
+   under term::reason so a term can carry more than one reasoned card. */
+const FC_REASONS = [
+  {key: "definition", label: "definition",   icon: "📖"},
+  {key: "purpose",    label: "purpose",      icon: "🎯"},
+  {key: "example",    label: "example",      icon: "🧩"},
+  {key: "mechanism",  label: "how it works", icon: "⚙️"},
+];
+// a bare-key entry with no "reason" predates this feature — treat it as a
+// plain definition, and don't bother badging the common case
+function fcReasonMeta(reason){
+  return reason && reason !== "definition"
+    ? FC_REASONS.find(r => r.key === reason) || null : null;
+}
+const fcpop = $("fcpop");
+let fcState = null;   // {term, turn, rect, reason, draft, loading}
+function fcKey(term, reason){
+  const base = term.toLowerCase();
+  return reason === "definition" ? base : `${base}::${reason}`;
+}
+function hideFcpop(){ fcpop.hidden = true; fcState = null; }
+function positionFcpop(rect){
+  fcpop.style.left = "0px"; fcpop.style.top = "0px"; fcpop.hidden = false;
+  const w = fcpop.offsetWidth, h = fcpop.offsetHeight;
+  const left = Math.max(12, Math.min(rect.left, window.innerWidth - w - 12));
+  const below = matchMedia("(pointer:coarse)").matches || rect.top - h - 8 < 12;
+  fcpop.style.left = left + "px";
+  fcpop.style.top = (below ? Math.min(rect.bottom + 10, window.innerHeight - h - 12)
+                           : rect.top - h - 8) + "px";
+}
+function renderFcpop(){
+  if (!fcState) return;
+  fcpop.querySelector(".fcterm").textContent = oneLine(fcState.term, 40);
+  const pick = fcpop.querySelector(".fcpick"), draft = fcpop.querySelector(".fcdraft");
+  if (!fcState.reason){
+    pick.hidden = false; draft.hidden = true;
+    fcpop.querySelector(".fcreasons").innerHTML = FC_REASONS.map(r =>
+      `<button type="button" class="fcreasonbtn" data-key="${r.key}">${ico(r.icon)}${r.label}</button>`
+    ).join("");
+    return;
+  }
+  pick.hidden = true; draft.hidden = false;
+  const r = FC_REASONS.find(x => x.key === fcState.reason) || FC_REASONS[0];
+  fcpop.querySelector(".fcreason").innerHTML = fcState.loading
+    ? `${ico(r.icon)}writing a ${r.label} card…` : `${ico(r.icon)}${r.label}`;
+  const ta = fcpop.querySelector(".fctext");
+  ta.value = fcState.draft;
+  ta.disabled = fcState.loading;
+  fcpop.querySelector(".fcadd").disabled = fcState.loading || !fcState.draft.trim();
+}
+async function fcPickReason(key){
+  const tree = cur();
+  if (!tree || currentNode == null || !fcState) return;
+  fcState.reason = key; fcState.loading = true; fcState.draft = "";
+  renderFcpop();
+  const nodeId = currentNode, turn = fcState.turn ?? 1;
+  try {
+    const r = await api("define", {term: fcState.term, topic: tree.root_topic, reason: key,
+                                   context: termContext(tree, nodeId, turn)});
+    const node = getNode(tree, nodeId);
+    if (node){ node.cost += r.cost || 0; saveStore(); }
+    if (!fcState) return;   // popover was closed while the call was in flight
+    fcState.draft = r.definition || "";
+    fcState.loading = false;
+    renderFcpop();
+    fcpop.querySelector(".fctext").focus();
+  } catch (e){
+    if (!fcState) return;
+    fcState.reason = null; fcState.loading = false;
+    renderFcpop();
+    if (e.message !== "logged out") setError(e.message);
+  }
+}
+fcpop.querySelector(".fcreasons").addEventListener("click", (e) => {
+  const b = e.target.closest(".fcreasonbtn");
+  if (b) fcPickReason(b.dataset.key);
+});
+fcpop.querySelector(".fctext").addEventListener("input", (e) => {
+  if (fcState) fcState.draft = e.target.value;
+  fcpop.querySelector(".fcadd").disabled = !e.target.value.trim();
+});
+fcpop.querySelector(".fcback").onclick = () => {
+  if (!fcState) return;
+  fcState.reason = null; fcState.draft = ""; fcState.loading = false;
+  renderFcpop();
+};
+fcpop.querySelector(".fccancel").onclick = hideFcpop;
+fcpop.querySelector(".fcadd").onclick = () => {
+  const tree = cur();
+  const draft = fcpop.querySelector(".fctext").value.trim();
+  if (!tree || !fcState || !draft) return;
+  const key = fcKey(fcState.term, fcState.reason);
+  const g = glossaryOf(tree);
+  const had = g[key];
+  g[key] = {term: fcState.term, reason: fcState.reason, def: draft,
+            node: currentNode, turn: fcState.turn ?? 1, src: "you",
+            ...(had && had.rev ? {rev: had.rev} : {})};
+  saveStore();
+  hideFcpop();
+  renderAll(true);
+};
+$("selfc").onclick = (ev) => {
+  ev.stopPropagation();
+  const term = selchip.dataset.term || "";
+  const turn = selchip.dataset.turn ? +selchip.dataset.turn : null;
+  const rect = selRect;
+  hideSelchip();
+  if (!term || !rect || currentNode == null) return;
+  fcState = {term, turn, rect, reason: null, draft: "", loading: false};
+  renderFcpop();
+  positionFcpop(rect);
+};
+document.addEventListener("click", (e) => {
+  if (!fcpop.hidden && !fcpop.contains(e.target) && e.target !== $("selfc")) hideFcpop();
+});
+window.addEventListener("scroll", hideFcpop, {passive: true});
 window.jumpToTerm = jumpToTerm;
 
 /* ------------------------------------------------------------------ */
@@ -6613,7 +6792,6 @@ async function runInvestigation(tree, node, ctx){
                   action: L.action, confidence: L.confidence, done: L.done, tutor: "" };
     node.turns.push(rec);
     saveStore(); renderAll();
-    autoDefine(tree, node, rec);   // glossary entry, in parallel with the tutor
     if (!rec.action) break;
 
     activity = {nodeId: node.id, kind: "tutor"};
@@ -7061,7 +7239,11 @@ function studySheetMd(){
     ` · ${terms.length} term${terms.length === 1 ? "" : "s"}\n`;
   const glossMd = terms.length
     ? "## glossary — every defined term\n\n" +
-      terms.map(e => `- **${e.term}** — ${String(e.def).replace(/\s+/g, " ")}`).join("\n")
+      terms.map(e => {
+        const meta = fcReasonMeta(e.reason);
+        const label = meta ? `${e.term} (${meta.label})` : e.term;
+        return `- **${label}** — ${String(e.def).replace(/\s+/g, " ")}`;
+      }).join("\n")
     : "";
   return head + (sections.length ? "\n" + sections.join("\n\n") : "") +
          (glossMd ? "\n\n" + glossMd : "") + "\n";
@@ -7205,6 +7387,7 @@ document.addEventListener("keydown", (e) => {
     if ($("tutoreditor").classList.contains("open")){ closeTutorEditor(); return; }
     if (editGloss){ cancelEditDef(); return; }
     if (!$("gpop").hidden){ hideGloss(); return; }
+    if (!$("fcpop").hidden){ hideFcpop(); return; }
     if (!$("selchip").hidden){ hideSelchip(); return; }
     if (!$("qcap").hidden){ closeQCap(); return; }
     stopSpeech(); closePanel(true); closeMenu();
