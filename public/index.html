@@ -912,12 +912,12 @@
   }
   #notesbox .ntfoot, #srcbox .ntfoot{display:flex; align-items:center; gap:.7rem; margin-top:.7rem}
   #notesbox #ntmeta, #srcbox #srcmeta{flex:1}
-  /* the grow tab's paste-your-own-material fold */
-  #srcdetails{margin:.5rem 0 .2rem}
-  #srcdetails summary{cursor:pointer; color:var(--muted); font-size:.86rem}
-  #srcdetails summary:hover{color:var(--fg)}
-  #srcdetails[open] summary{color:var(--fg)}
-  #srcdetails textarea{
+  /* the grow tab's paste-your-own-material and already-know folds */
+  #srcdetails, #knowndetails{margin:.5rem 0 .2rem}
+  #srcdetails summary, #knowndetails summary{cursor:pointer; color:var(--muted); font-size:.86rem}
+  #srcdetails summary:hover, #knowndetails summary:hover{color:var(--fg)}
+  #srcdetails[open] summary, #knowndetails[open] summary{color:var(--fg)}
+  #srcdetails textarea, #knowndetails textarea{
     width:100%; min-height:7rem; resize:vertical; margin-top:.45rem;
     font-family:inherit; font-size:.92rem; line-height:1.6; padding:.6rem .7rem;
     color:var(--fg); background:var(--card); border:1px solid var(--line);
@@ -1280,6 +1280,14 @@
   never re-explaining what you have down, straightening the shaky bits as
   they come up. The map and the transcript stay on the tree
   (<b>🧭 baseline</b> in the header reopens them).</p>
+  <p><b>✓ skip what you already know</b> — the fold above <b>gaps</b>: a
+  faster, cheaper alternative for when you don't need a real interview, you
+  just want to say upfront what you've already got. List it, one per line,
+  and it applies to <b>new</b> or <b>full</b> — no extra model call, no
+  back-and-forth. The learner won't ask about it, the tutor won't
+  re-explain it, and both stay focused on what's actually still open. Also
+  reopens from <b>🧭 baseline</b> in the header, same as a real gaps
+  assessment.</p>
   <p><b>⤵ branch</b> under any tutor answer re-investigates that answer more
   deeply, growing the tree. Every turn is two real model calls (~5–7¢).
   <b>loose threads</b> (under the tree map) lists the words the learner
@@ -1517,6 +1525,14 @@
         <p class="hint">applies when you press <b>new</b> or <b>full</b> — the
         passage travels with the tree, every conversation on it stays
         grounded, and longer passages cost a little more per turn.</p>
+      </details>
+      <details id="knowndetails">
+        <summary>✓ skip what you already know</summary>
+        <textarea id="knownarea" maxlength="4000" aria-label="things you already know"
+          placeholder="One per line — whatever you can already answer yourself, e.g.:&#10;a hash function turns a key into an index&#10;collisions happen when two keys land on the same slot&#10;&#10;The learner won't ask about these, and the tutor won't re-explain them — both stay focused on what's actually still open."></textarea>
+        <p class="hint">applies when you press <b>new</b> or <b>full</b> — no
+        interview, no extra model call, just told upfront. For a real
+        assessment of what's solid vs. shaky, use <b>gaps</b> instead.</p>
       </details>
       <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
       related concepts to explore. Each turn is two real model calls (~5–7¢).
@@ -7322,6 +7338,32 @@ function rootThunk(topic, label="", source=""){
   };
 }
 
+/* ✓ skip what you already know — a lighter-weight cousin of gaps: instead
+   of a diagnostic interview (a model call per answer), the reader just
+   TYPES what they already have solid. Reuses the exact same "gaps" backend
+   contract and tree.baseline shape (so it syncs, exports, and reopens via
+   🧭 baseline exactly like a real gaps assessment does) with only "solid"
+   populated — no diagnosed level, no interview transcript, no focus. */
+function knownThunk(topic, known, label="", source=""){
+  let node = null, treeId = null;
+  return async () => {
+    runLabel = label;
+    if (!node){
+      const tree = newTree(topic, source);
+      tree.baseline = {text: known.join("\n"), solid: known, shaky: [], gaps: [],
+                       level: "", focus: "", when: nowIso()};
+      store[tree.id] = tree; currentId = tree.id; treeId = tree.id;
+      node = makeNode(tree, topic);
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    activeRun = {treeId, nodeId: node.id};
+    await runInvestigation(store[treeId], node,
+      {kind: "gaps", topic, baseline: baselineSummary(store[treeId].baseline),
+       focus: "", opening_question: ""});
+  };
+}
+
 function gapsThunk(topic, assess){
   let node = null, treeId = null;
   return async () => {
@@ -7597,9 +7639,13 @@ function globalBankInvestigateThunk(qid){
   };
 }
 
-function cmdNew(topic, source){ enqueue(rootThunk(topic, "", source)); }
-function cmdFull(topic, source){
-  enqueue(rootThunk(topic, "investigation 1 of 4", source),
+function cmdNew(topic, source, known){
+  enqueue((known && known.length) ? knownThunk(topic, known, "", source)
+                                   : rootThunk(topic, "", source));
+}
+function cmdFull(topic, source, known){
+  enqueue((known && known.length) ? knownThunk(topic, known, "investigation 1 of 4", source)
+                                   : rootThunk(topic, "investigation 1 of 4", source),
           followupThunk("investigation 2 of 4"),
           followupThunk("investigation 3 of 4"),
           followupThunk("investigation 4 of 4"));
@@ -7717,8 +7763,16 @@ function takeSource(){
   $("srcdetails").open = false;
   return v;
 }
-$("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t, takeSource()); };
-$("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t, takeSource()); };
+function takeKnown(){
+  // same guard-then-consume shape as takeSource() — an empty topic must
+  // not silently wipe a not-yet-submitted list
+  const lines = $("knownarea").value.split("\n").map(s => s.trim()).filter(Boolean).slice(0, 40);
+  $("knownarea").value = "";
+  $("knowndetails").open = false;
+  return lines;
+}
+$("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t, takeSource(), takeKnown()); };
+$("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t, takeSource(), takeKnown()); };
 $("surveybtn").onclick = () => { const t = guardTopic(); if (t) cmdSurvey(t); };
 $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") $("newbtn").click(); });
 $("stopbtn").onclick = () => { stopRequested = true; setStatus("stopping after this turn…"); };

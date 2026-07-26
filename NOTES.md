@@ -5,6 +5,64 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 40 — ✓ skip what you already know
+
+*(user-requested, not picked from the autonomous candidate list — logged
+here anyway since it's the running record of what changed and why.)*
+
+### What it is
+A new fold under the topic box, right above **gaps**: list what you've
+already got — one per line — before pressing **new** or **full**, and the
+learner won't ask about it, the tutor won't re-explain it, and both stay
+focused on what's actually still open. No interview, no extra model call —
+you're just telling it upfront instead of it figuring it out one diagnostic
+question at a time.
+
+### Design notes
+- **Not a new mechanism — the existing `gaps` contract, minus the
+  interview.** `tree.baseline` (`{text, solid, shaky, gaps, level, focus,
+  when}`) and the `kind: "gaps"` learner/tutor prompts already say exactly
+  "don't re-ask/re-explain what's solid" — that machinery didn't care
+  *how* the baseline was produced, an interview was just the only producer
+  that existed. `knownThunk()` builds the identical shape directly from the
+  textarea (`solid` = the typed lines, `shaky`/`gaps`/`level`/`focus` all
+  empty) and runs the exact same `kind: "gaps"` investigation `gapsThunk()`
+  already uses. Zero backend changes — this shipped as 100% frontend, and
+  the whole feature is already covered by the existing gaps test suite.
+  Bonus for free: **🧭 baseline** in the header reopens a typed list the
+  same way it reopens a real assessment, since `viewBaseline()` only ever
+  looked at the shape, never at how it was produced.
+- **Deliberately a sibling of gaps, not a merge into it.** Could have added
+  a "skip the interview" escape hatch inside the gaps dialog itself, but
+  that would've meant explaining the tradeoff (a typed list vs. an actual
+  diagnosed read, including a level and shaky-belief corrections) inside an
+  already-busy interview UI. A separate fold next to it, with its own hint
+  pointing at gaps for "a real assessment," keeps each one legible on its
+  own and lets the reader pick before committing to either.
+- **`known` threads through `cmdNew`/`cmdFull` as a third, optional
+  argument** exactly like `source` already does (`takeKnown()` mirrors
+  `takeSource()`'s guard-then-consume shape: only cleared once the topic
+  guard actually passes, so an empty topic can't silently wipe a
+  not-yet-submitted list). When empty, `cmdNew`/`cmdFull` fall through to
+  the original `rootThunk` path untouched — existing behavior is exactly
+  byte-for-byte preserved when the fold is never opened.
+- Verified with the real stack: booted the actual local server, drove the
+  real page over the Chrome DevTools Protocol, typed two facts about hash
+  tables into the fold, pressed **new** for real, and watched the actual
+  simulated learner's own "thinking" say *"ok so i've got the basic setup —
+  hash function maps to index, collisions are real. but like... if two
+  keys end up in the same slot, what actually happens to them?"* — it
+  visibly treated the typed facts as already known and asked about
+  collision resolution instead, never once re-asking what a hash function
+  is. Also confirmed `tree.baseline` persisted with exactly the typed
+  lines as `solid` and everything else empty, and that the header's
+  baseline reopener picks it up once the run isn't active (a `running`
+  flag is per-tab client state, so a stale check against the same tab
+  mid-run doesn't reflect reality — reopening in a fresh tab against the
+  synced tree confirmed the button was there all along).
+
+---
+
 ## Feature 39 — 🔬 look deeper: the same topic, re-investigated at real depth
 
 *(user-requested, not picked from the autonomous candidate list — logged

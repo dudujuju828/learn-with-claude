@@ -126,7 +126,13 @@ directly (a local `claude` login can't run on a server), so it needs an
   evident level, the tutor never re-explains what you have down and
   straightens your shaky beliefs as they come up, and the map and
   transcript stay on the tree (reopen them from the conversation header)
-  and sync and travel like everything else. **📚 ground it in your own
+  and sync and travel like everything else. When a real interview is more
+  than you need, **✓ skip what you already know** — the fold right above
+  **gaps** — is the fast path: list what you've already got, one per
+  line, no interview, no extra model call. It applies to `new`/`full` the
+  same way, feeding the identical "don't re-ask/re-explain this" contract
+  straight from what you typed instead of from a diagnosed assessment.
+  **📚 ground it in your own
   material** — a fold under the topic box — takes `new` or `full` in a
   different direction: paste a passage (a textbook section, an article,
   your notes) and the whole tree grounds itself in it — the learner's
