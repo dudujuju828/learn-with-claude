@@ -33,6 +33,8 @@ from .personas import (
     TUTOR_MODES,
     branch_learner_message,
     branch_tutor_context,
+    deepen_learner_message,
+    deepen_tutor_context,
     define_message,
     feedback_message,
     first_learner_message,
@@ -90,6 +92,8 @@ def learner_opening(body: dict) -> str:
             body["topic"], body.get("baseline", ""),
             body.get("focus", ""), body.get("opening_question", ""),
         )
+    elif kind == "deepen":
+        msg = deepen_learner_message(body["topic"], body.get("digest", ""))
     else:
         msg = first_learner_message(body["topic"])
     src = source_of(body)
@@ -107,6 +111,8 @@ def tutor_extra_context(body: dict) -> str:
         extra = followup_tutor_context(body.get("recap", ""), body.get("concept", ""))
     elif kind == "gaps":
         extra = gaps_tutor_context(body.get("baseline", ""))
+    elif kind == "deepen":
+        extra = deepen_tutor_context(body.get("digest", ""))
     else:
         extra = ""
     src = source_of(body)

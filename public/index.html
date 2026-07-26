@@ -1262,6 +1262,14 @@
   picks the one concept that best builds on it — a why/how/when angle, not
   another "what is" — then investigates it. Its one-line <i>why</i> stays on
   the new conversation.</p>
+  <p><b>🔬 look deeper</b> — next to <b>→ next</b> once a conversation is
+  finished, but the opposite move: not a new concept, the SAME one again,
+  much deeper. A fresh full investigation grows from it, seeded with
+  everything already covered so it never repeats itself, with the simulated
+  learner pushed to expert level and the tutor told to set its usual
+  brevity aside — internals, edge cases, tradeoffs, the "why this way and
+  not another," the kind of questions worth asking once the basics are
+  solid.</p>
   <p><b>🧭 gaps</b> — for a topic you half-know: a short interview before
   the digging. The tutor asks a few questions one at a time — following
   what your answers reveal, probing a belief that sounds off, sampling what
@@ -3987,6 +3995,10 @@ function renderConversation(keepScroll){
   if (!running && Object.values(tree.nodes).some(n => n.turns.some(t => t.tutor)))
     acts.push(`<button${canContinue(node) ? "" : ' class="primary"'} onclick="cmdNext()"` +
               ` title="the tutor reviews what this tree covered and picks the next best concept to build on it — one more investigation">${ico("→")}next</button>`);
+  if (!running && node.turns.some(t => t.tutor) && !canContinue(node))
+    acts.push(`<button onclick="cmdDeepen(${node.id})" title="re-investigate this SAME topic at real depth — ` +
+              `internals, edge cases, tradeoffs — as a full new conversation seeded with everything covered here">` +
+              `${ico("🔬")}look deeper</button>`);
   if (!running && node.turns.length){
     acts.push(`<button onclick="listenNode()" title="read the whole conversation aloud — Esc stops">${ico("🔊")}listen</button>`);
     acts.push(`<button onclick="copyLink(this)" title="copy a link straight to this conversation">${ico("🔗")}link</button>`);
@@ -6886,6 +6898,9 @@ function paletteActions(){
     acts.push({icon: "◉", label: "tree overview", sub: "the whole tree as a picture", run(){ openOverview(); }});
     if (Object.values(tree.nodes).some(n => n.turns.some(t => t.tutor)))
       acts.push({icon: "→", label: "what's next?", sub: "the tutor picks the next best concept and investigates it", run(){ cmdNext(); }});
+    if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor) && !canContinue(getNode(tree, currentNode)))
+      acts.push({icon: "🔬", label: "look deeper", sub: "the SAME topic, re-investigated at real depth",
+        run(){ cmdDeepen(currentNode); }});
     if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor))
       acts.push({icon: "🗣", label: "explain it back", sub: "teach it in your own words — the tutor checks it", run(){ openTeach(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
@@ -7386,6 +7401,38 @@ function branchThunk(treeId, nodeId, branchTurn, focus){
     if (!focus){ node.label = deriveLabel(node.turns, bt.tutor); saveStore(); renderAll(true); }
   };
 }
+
+/* 🔬 look into this deeper — for a COMPLETED investigation, re-run the SAME
+   topic as a brand-new full conversation, seeded with everything the node
+   already covered so it never repeats itself. Pushed hard toward depth on
+   two independent axes: the child node's learner is forced to "expert"
+   (regardless of the tree's ambient level — see LEARNER_LEVELS in
+   personas.py, it's the tier that asks about internals/edge cases/design
+   rationale) and deepen_tutor_context() explicitly tells the tutor to set
+   aside its usual length/simplicity habit for this one. A full multi-turn
+   investigation (runInvestigation), never a single exchange like ⛏ dig. */
+function deepenThunk(treeId, nodeId){
+  let node = null, ctx = null;
+  return async () => {
+    runLabel = "";
+    const tree = store[treeId];
+    const src = getNode(tree, nodeId);
+    if (!node){
+      ctx = {kind: "deepen", topic: src.label, digest: conversationDigest(src.turns)};
+      node = makeNode(tree, src.label + " — deeper dive", nodeId, src.turns.length || 1, "");
+      node.learner_level = "expert";
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    activeRun = {treeId, nodeId: node.id};
+    await runInvestigation(tree, node, ctx);
+  };
+}
+function cmdDeepen(nodeId){
+  const tree = cur(); if (!tree || running) return;
+  enqueue(deepenThunk(tree.id, nodeId));
+}
+window.cmdDeepen = cmdDeepen;
 
 function canContinue(node){
   if (!node || !node.turns.length || node.turns.length >= CONFIG.max_turns) return false;

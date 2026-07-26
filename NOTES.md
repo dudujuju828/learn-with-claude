@@ -5,6 +5,90 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 39 — 🔬 look deeper: the same topic, re-investigated at real depth
+
+*(user-requested, not picked from the autonomous candidate list — logged
+here anyway since it's the running record of what changed and why.)*
+
+### What it is
+A **🔬 look deeper** button sits next to **→ next** in the conversation
+header, once a conversation is finished — same spot, opposite move. **→
+next** picks a *new* concept to build on the tree; **🔬 look deeper** re-runs
+the *same* one, much deeper, as a full new investigation (never a single
+exchange like ⛏ dig): a fresh child node grows from the one being deepened,
+seeded with everything that node already covered so it never repeats
+itself, with the simulated learner forced to expert level and the tutor
+explicitly told to set its usual brevity/simplicity habit aside for this
+one. Verified against the real Copilot backend: the learner's first
+question on a "what a mutex is" deepen was *"when you unlock, how does the
+OS pick which waiting thread wakes up? is there a fairness guarantee like
+FIFO, or is that left to the scheduler?"* — real internals, not a rehash.
+
+### Design notes
+- **A new `kind`, threaded exactly like the existing four.** `webapi.py`'s
+  `learner_opening()`/`tutor_extra_context()` already switch on
+  `body["kind"]` (`root`/`branch`/`followup`/`gaps`); `"deepen"` is a fifth
+  branch, backed by two new persona functions
+  (`deepen_learner_message`/`deepen_tutor_context`). No new API route, no
+  change to `runInvestigation` or the request shape — the existing
+  `{kind, topic, digest}` ctx object was already exactly the right shape.
+- **Two independent levers for depth, not one.** A system-prompt
+  instruction alone wasn't going to be enough — if the tutor's *ambient*
+  style is "concise" (hard-capped at ~2 sentences), no amount of "go deep"
+  framing survives that constraint. So depth is forced on two axes at
+  once: the new node's `learner_level` is hard-set to `"expert"` (a normal
+  field on the node object, so it applies regardless of which `kind`
+  eventually answers it — see the `rebuildCtx` note below), which changes
+  what the *learner* asks; and `deepen_tutor_context()` explicitly tells
+  the tutor to set aside whatever brevity habit its current style carries,
+  which changes how the *tutor* answers. Neither alone reliably produces
+  "really detailed" — a sharp learner question still gets a two-sentence
+  answer under "concise" mode without the second lever, and a tutor told
+  to elaborate still won't if the simulated learner only ever asks
+  beginner questions.
+- **Deliberately did NOT force the tutor's `mode`.** The natural instinct
+  was `mode: "technical"` for the deepen call, but `runInvestigation`
+  spreads `...tutorParams()` *after* `...ctx` in the same object literal,
+  so a `mode` on `ctx` would just get silently overwritten by the user's
+  own `tutorParams()` — and even fixing that would override a custom
+  tutor's whole voice/personality just to get more depth. Used the
+  additive `tutor_extra_context()` channel instead (appended after the
+  style block, same as every other kind) with an explicit "override your
+  usual length habit" instruction — works whether the active tutor is a
+  built-in mode or someone's custom one, and doesn't touch a shared
+  function's contract to do it.
+- **Scoped to the node's OWN digest, not the whole tree's recap.** The ask
+  was "given what you already know from THAT chat" (singular) — deliberately
+  narrower than `followupThunk`'s tree-wide recap. `conversationDigest(src.turns)`
+  on just the node being deepened, not every node in the tree.
+- **`rebuildCtx`'s existing branch/followup simplification just... works
+  here too, unexamined at first but confirmed correct.** If a deepen
+  investigation gets interrupted and resumed later, `rebuildCtx` (which
+  already collapses a resumed *followup* into the "branch" context shape,
+  per its own comment) does the same for a resumed *deepen* — since both
+  set `branch_from_turn` to the parent's last turn number. This is fine:
+  `learner_level: "expert"` lives on the node object itself, not inside
+  `ctx`, so it survives regardless of which shape `rebuildCtx` picks; only
+  the tutor's extra-context wording gets slightly less emphatic
+  ("branch"'s "build on them and go deeper" instead of deepen's explicit
+  brevity override) on this rare resume-after-interruption path. Chose not
+  to special-case `rebuildCtx` for a fifth kind given the project's own
+  precedent already treats this exact simplification as acceptable for a
+  structurally identical case.
+- Verified past the unit tests (`learner_opening`/`tutor_extra_context`
+  threading, plus the existing sourced-tree test extended to cover
+  `"deepen"`) with the real stack: seeded a completed local tree directly
+  on disk (skipping a slow real root investigation), booted the actual
+  local server, drove the real page over the Chrome DevTools Protocol,
+  confirmed the button only appears once a node is genuinely finished
+  (gated on `!canContinue(node)`), clicked it for real, and watched a real
+  Copilot-backed investigation begin: correct parent/child linkage, the
+  `expert learner` chip, and a first question that was genuinely about
+  internals (OS wake-up fairness on unlock) rather than a repeat of the
+  original one-liner answer.
+
+---
+
 ## Feature 38 — two question banks: local (Shift+Q) and global (q)
 
 *(user-requested, not picked from the autonomous candidate list — logged

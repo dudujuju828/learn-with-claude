@@ -421,7 +421,7 @@ def test_source_threading():
     assert passage not in plain
 
     # every conversation kind in a sourced tree stays anchored
-    for kind in ("branch", "followup", "gaps"):
+    for kind in ("branch", "followup", "gaps", "deepen"):
         m = learner_opening({"topic": "t", "kind": kind, "source": passage})
         assert passage in m
 
@@ -442,6 +442,30 @@ def test_source_threading():
     print("ok  source threading (learner opening, tutor context, cap)")
 
 
+def test_deepen_threading():
+    """🔬 look deeper: same topic, re-investigated, seeded with what the node
+    already covered, and told explicitly to override the ambient brevity."""
+    from learn_with_claude.webapi import learner_opening, tutor_extra_context
+
+    digest = "  Q: what is it\n  A: an array plus a hash function"
+    body = {"kind": "deepen", "topic": "what a hash table is", "digest": digest}
+
+    msg = learner_opening(body)
+    assert "what a hash table is" in msg and digest.strip() in msg
+    assert "MUCH deeper" in msg
+    assert "Produce your FIRST turn now" in msg
+    assert '"thinking"' in msg  # CONTRACT_REMINDER is appended, same as every other kind
+
+    extra = tutor_extra_context(body)
+    assert digest.strip() in extra
+    assert "MUCH deeper" in extra
+    assert "Depth beats brevity" in extra
+    # topic doesn't leak into the tutor's context (only the learner needs it
+    # named — the tutor just gets told what's already covered)
+    assert tutor_extra_context({"kind": "root"}) == ""
+    print("ok  deepen threading (same-topic re-investigation, override wording)")
+
+
 if __name__ == "__main__":
     test_learner_levels()
     test_tutor_system_segments()
@@ -454,4 +478,5 @@ if __name__ == "__main__":
     test_handle_teachback()
     test_handle_survey()
     test_source_threading()
+    test_deepen_threading()
     print("\nall green")

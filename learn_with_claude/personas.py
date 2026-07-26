@@ -721,6 +721,43 @@ def branch_tutor_context(digest: str, branch_a: str) -> str:
     )
 
 
+def deepen_learner_message(topic: str, digest: str) -> str:
+    """Opening message for a 🔬 deeper-dive investigation: the SAME topic as an
+    already-completed node, re-run with an expert-level learner pushing past
+    the basics into internals, edge cases, and tradeoffs."""
+    return (
+        f'You already investigated "{topic}" and came away feeling solid on the '
+        "basics. Here is a recap of that conversation:\n"
+        f"{digest}\n\n"
+        "Now you want to go MUCH deeper. You're not satisfied with the "
+        "surface-level picture anymore — push past everything above into how it "
+        "actually works internally, the edge cases, the tradeoffs, and the "
+        '"why this way and not some other way." Ask the kind of sharp, '
+        "specific question a practitioner who has to actually work with this "
+        "would ask. Never re-ask anything already covered above — treat it as "
+        "solid ground and build past it.\n\n"
+        "Produce your FIRST turn now." + CONTRACT_REMINDER
+    )
+
+
+def deepen_tutor_context(digest: str) -> str:
+    """Extra tutor system context for a 🔬 deeper-dive investigation. Explicit
+    about overriding the ambient style's length/simplicity habits — the whole
+    point of this mode is more detail than usual, not the default amount."""
+    return (
+        "CONTEXT — the learner already covered the following on this exact "
+        "topic, so do NOT re-explain any of it; treat it as solid ground:\n"
+        f"{digest}\n\n"
+        "They have deliberately asked to go MUCH deeper this time — this is a "
+        "dedicated deep-dive, not a normal turn. Whatever length or simplicity "
+        "habit your style above would normally pull you toward, set it aside "
+        "here: give real technical substance — mechanisms, internals, edge "
+        "cases, precise tradeoffs, concrete numbers or examples where they "
+        "sharpen understanding — even if that runs several paragraphs. Depth "
+        "beats brevity for this one."
+    )
+
+
 SURVEY_SYSTEM = """\
 You map the territory of a broad topic for a learner planning a survey of it.
 Break the topic into the FOUNDATIONAL components it is built upon — the

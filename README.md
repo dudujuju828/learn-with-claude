@@ -139,7 +139,13 @@ directly (a local `claude` login can't run on a server), so it needs an
   and picks the single concept that best builds on it — a why/how/when
   angle rather than another "what is" — then runs that follow-up
   investigation, keeping its one-line *why* on the new conversation (the
-  same step `full` chains four of). Tutor
+  same step `full` chains four of). Next to it, **🔬 look deeper** (once a
+  conversation is finished) is the opposite move: the SAME concept again,
+  not a new one, as a full fresh investigation seeded with everything
+  already covered so it never repeats itself — the simulated learner is
+  pushed to expert level and the tutor is told to set its usual brevity
+  aside, so the result is internals, edge cases, and tradeoffs, not another
+  pass over the basics. Tutor
   answers arrive **marked up into
   parts**: the direct answer first, then each distinct aspect (the why, an
   example, a caveat…) as its own labelled fold-out card, so a long answer
