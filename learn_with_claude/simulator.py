@@ -115,6 +115,7 @@ def run_conversation(
     topic: str,
     *,
     learner_first_msg: str | None = None,
+    anchor: str | None = None,
     tutor_extra_system: str = "",
     max_turns: int = 20,
     learner_model: str = "claude-sonnet-5",
@@ -125,6 +126,15 @@ def run_conversation(
     timeout: int = 300,
     renderer: Renderer | None = None,
 ) -> ConversationResult:
+    """Run one investigation: learner and tutor alternating until done.
+
+    `anchor` is the question this investigation exists to answer, restated to
+    the learner every turn so it doesn't drift off into whatever the tutor's
+    last reply happened to mention. It defaults to `topic`, which is right
+    whenever `topic` IS the question being investigated — callers that pass a
+    `learner_first_msg` framing a different question (a branch, say) should
+    pass the matching anchor too.
+    """
     r = renderer or Renderer(color=True)
 
     learner = ClaudeSession(
@@ -192,7 +202,7 @@ def run_conversation(
 
         if done:
             break
-        message = feedback_message(tutor_text)
+        message = feedback_message(tutor_text, anchor or topic)
 
     result.cost = learner.total_cost + tutor.total_cost
     return result

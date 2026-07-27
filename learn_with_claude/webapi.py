@@ -103,6 +103,35 @@ def learner_opening(body: dict) -> str:
     return msg
 
 
+def anchor_question(body: dict) -> str:
+    """The one question THIS investigation exists to answer.
+
+    feedback_message() restates it to the learner every turn, which is what
+    keeps a session from wandering off into whatever the tutor's last reply
+    happened to mention. It is not always body["topic"]: on a branch, followup
+    or gaps node the topic is the ROOT of the whole tree while the node itself
+    was opened to answer something narrower, and anchoring those to the root
+    would drag the learner straight back out of the thread.
+    """
+    kind = body.get("kind", "root")
+    topic = (body.get("topic") or "").strip()
+
+    def field(name: str) -> str:
+        v = body.get(name)
+        return v.strip() if isinstance(v, str) else ""
+
+    if kind == "branch":
+        # No explicit focus means the learner chose its own thread on turn 1,
+        # so fall back to the answer it opened the branch to dig into.
+        branch_a = field("branch_a")
+        return field("focus") or (
+            f'going deeper on this point: "{branch_a[:160]}"' if branch_a else topic
+        )
+    if kind in ("followup", "gaps"):
+        return field("opening_question") or field("concept") or field("focus") or topic
+    return topic
+
+
 def tutor_extra_context(body: dict) -> str:
     kind = body.get("kind", "root")
     if kind == "branch":
@@ -142,9 +171,10 @@ def handle_learner(body: dict, call_model) -> dict:
     if level not in LEARNER_LEVELS:
         level = "student"
     messages = [{"role": "user", "content": learner_opening(body)}]
+    anchor = anchor_question(body)
     for t in body.get("turns", []):
         messages.append({"role": "assistant", "content": turn_json(t)})
-        messages.append({"role": "user", "content": feedback_message(t.get("tutor", ""))})
+        messages.append({"role": "user", "content": feedback_message(t.get("tutor", ""), anchor)})
     text, cost = call_model(learner_system(level), messages, "learner")
     data = extract_turn(text)
     return {

@@ -251,6 +251,7 @@ class Shell:
         result = run_conversation(
             concept,
             learner_first_msg=followup_learner_message(kb.root_topic, recap, concept, question),
+            anchor=question or concept,
             tutor_extra_system=followup_tutor_context(recap, concept),
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level, vault=self.vault,
@@ -306,6 +307,10 @@ class Shell:
         self.r.info(f'  re-investigating: "{one_line(bt["tutor"], 100)}"')
         result = run_conversation(
             focus or "deeper dive", learner_first_msg=learner_msg, tutor_extra_system=tutor_ctx,
+            # No explicit focus means the learner picks its own thread on turn 1,
+            # so anchor it to the point being re-investigated rather than to the
+            # placeholder topic.
+            anchor=focus or f'going deeper on this point: "{one_line(bt["tutor"], 160)}"',
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level, vault=self.vault,
             timeout=self.timeout, renderer=self.r,

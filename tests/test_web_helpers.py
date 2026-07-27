@@ -466,6 +466,54 @@ def test_deepen_threading():
     print("ok  deepen threading (same-topic re-investigation, override wording)")
 
 
+def test_question_anchoring():
+    """Every turn after the first has to be steered by the question the node was
+    opened to answer — otherwise the learner hill-climbs on whatever the tutor's
+    last reply happened to mention and drifts off the topic entirely."""
+    from learn_with_claude.personas import feedback_message
+    from learn_with_claude.webapi import anchor_question
+
+    # the anchor is restated verbatim in the per-turn message, with the
+    # answer-it-or-name-what's-missing instruction attached
+    m = feedback_message("some tutor reply", "what did galileo's ramp show?")
+    assert "what did galileo's ramp show?" in m
+    assert "ONLY THING YOU ARE HERE TO ANSWER" in m
+    assert "new_term" in m  # parking non-blocking curiosities is the escape hatch
+    # omitted (older callers) => the message still works, just unanchored
+    assert "ONLY THING YOU ARE HERE TO ANSWER" not in feedback_message("reply")
+
+    # root nodes anchor to the topic
+    assert anchor_question({"kind": "root", "topic": "hash tables"}) == "hash tables"
+    assert anchor_question({"topic": "hash tables"}) == "hash tables"
+    assert anchor_question({"kind": "deepen", "topic": "hash tables"}) == "hash tables"
+
+    # ...but on a sub-node "topic" is the ROOT of the whole tree, and anchoring
+    # to it would pull the learner back out of the thread it just opened
+    branch = {"kind": "branch", "topic": "hash tables", "focus": "why chaining?",
+              "branch_a": "Collisions are resolved by chaining."}
+    assert anchor_question(branch) == "why chaining?"
+    no_focus = dict(branch, focus="")
+    assert "Collisions are resolved by chaining." in anchor_question(no_focus)
+    assert "hash tables" != anchor_question(no_focus)
+    # a long branch answer gets capped — it is repeated on every single turn
+    assert len(anchor_question(dict(branch, focus="", branch_a="x" * 900))) < 260
+
+    fu = {"kind": "followup", "topic": "hash tables", "concept": "load factor",
+          "opening_question": "when does it resize?"}
+    assert anchor_question(fu) == "when does it resize?"
+    assert anchor_question(dict(fu, opening_question="")) == "load factor"
+    gaps = {"kind": "gaps", "topic": "hash tables", "focus": "resizing",
+            "opening_question": ""}
+    assert anchor_question(gaps) == "resizing"
+    # missing/blank sub-fields never produce an empty anchor
+    assert anchor_question({"kind": "branch", "topic": "hash tables"}) == "hash tables"
+    assert anchor_question({"kind": "followup", "topic": "hash tables"}) == "hash tables"
+
+    # and the learner prompt itself carries the blocking/parking rule
+    assert "BLOCKING" in LEARNER_SYSTEM and "PARK IT" in LEARNER_SYSTEM
+    print("ok  question anchoring (per-turn anchor, sub-node anchors, parking rule)")
+
+
 if __name__ == "__main__":
     test_learner_levels()
     test_tutor_system_segments()
@@ -479,4 +527,5 @@ if __name__ == "__main__":
     test_handle_survey()
     test_source_threading()
     test_deepen_threading()
+    test_question_anchoring()
     print("\nall green")
