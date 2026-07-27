@@ -72,6 +72,19 @@
     /* one scrim behind every modal — dark in every theme, so the dialog
        reads as a layer above the page instead of washing it out */
     --scrim:rgba(18,16,12,.44);
+    /* one type scale — every font-size in the app is a step on it */
+    --t-3xs:.64rem;
+    --t-2xs:.72rem;
+    --t-xs:.8rem;
+    --t-sm:.84rem;
+    --t-md:.9rem;
+    --t-lg:.95rem;
+    --t-xl:1.05rem;
+    --t-2xl:1.2rem;
+    --t-3xl:1.5rem;
+    --d-sm:1.75rem;
+    --d-md:2rem;
+    --d-lg:2.5rem;
   }
   *{box-sizing:border-box}
   /* stable gutter: the centred column doesn't lurch when the page grows a
@@ -89,7 +102,7 @@
     transition:background-color .2s ease, color .2s ease;
   }
   button{
-    font-family:inherit; font-size:.88rem; padding:.34rem .7rem; cursor:pointer;
+    font-family:inherit; font-size:var(--t-md); padding:.34rem .7rem; cursor:pointer;
     border:1px solid var(--line); background:var(--card); color:var(--fg);
     border-radius:var(--r-sm); letter-spacing:inherit;
     transition:border-color .15s ease, background-color .15s ease,
@@ -166,11 +179,11 @@
     background:var(--card); border:1px solid var(--line); border-radius:var(--r-xl);
     padding:2.1rem 2.2rem; width:min(26rem,94vw); text-align:center;
   }
-  #login .seed{font-size:2.4rem; line-height:1}
-  #login h1{font-size:1.3rem; font-weight:600; margin:.5rem 0 .2rem}
-  #login p.sub{color:var(--muted); font-size:.92rem; margin:.2rem 0 1.3rem}
+  #login .seed{font-size:var(--d-lg); line-height:1}
+  #login h1{font-size:var(--t-3xl); font-weight:600; margin:.5rem 0 .2rem}
+  #login p.sub{color:var(--muted); font-size:var(--t-md); margin:.2rem 0 1.3rem}
   #login input{text-align:center}
-  #login .err{color:var(--danger); min-height:1.7em; font-size:.9rem; margin:.35rem 0}
+  #login .err{color:var(--danger); min-height:1.7em; font-size:var(--t-md); margin:.35rem 0}
   #login button{width:100%; padding:.55rem}
 
   /* ---- layout ---- */
@@ -189,11 +202,11 @@
   }
   header .brand{font-weight:600; font-size:1rem; white-space:nowrap; margin:0}
   header .brand .with{color:var(--muted); font-weight:300}
-  header .treename{color:var(--muted); font-size:.9rem; overflow:hidden;
+  header .treename{color:var(--muted); font-size:var(--t-md); overflow:hidden;
     text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:3rem}
-  header .cost{color:var(--muted); font-size:.86rem; white-space:nowrap;
+  header .cost{color:var(--muted); font-size:var(--t-sm); white-space:nowrap;
     font-variant-numeric:tabular-nums}
-  #syncbtn{color:var(--muted); font-size:.85rem; padding:.34rem .3rem; white-space:nowrap}
+  #syncbtn{color:var(--muted); font-size:var(--t-sm); padding:.34rem .3rem; white-space:nowrap}
   #syncbtn.err{color:var(--danger)}
   /* logging out is rare — it shouldn't out-shout the everyday buttons */
   #logoutbtn{color:var(--muted); white-space:nowrap}
@@ -245,15 +258,15 @@
     }
     #tabbar button{
       flex:1; display:flex; flex-direction:column; align-items:center; gap:.1rem;
-      border:none; background:none; border-radius:var(--r-sm); font-size:.68rem;
+      border:none; background:none; border-radius:var(--r-sm); font-size:var(--t-2xs);
       color:var(--muted); padding:.3rem 0 .2rem; letter-spacing:.03em; min-height:3rem;
     }
-    #tabbar button .ico{font-size:1.15rem; line-height:1.15}
+    #tabbar button .ico{font-size:var(--t-2xl); line-height:1.15}
     #tabbar button{position:relative}
     .tabdue{   /* cards-due count riding the words tab */
       position:absolute; top:.1rem; left:50%; margin-left:.5rem;
       background:var(--primary); color:var(--onprim); border-radius:var(--r-sm);
-      font-size:.62rem; line-height:1; padding:.16rem .32rem; font-weight:600;
+      font-size:var(--t-3xs); line-height:1; padding:.16rem .32rem; font-weight:600;
     }
     #tabbar button.active{color:var(--fg);
       background:color-mix(in srgb, var(--accent) 16%, transparent)}
@@ -266,7 +279,7 @@
     #hopper button{
       width:2.7rem; height:2.7rem; padding:0; border-radius:50%;
       background:color-mix(in srgb, var(--card) 82%, transparent);
-      box-shadow:var(--shadow-md); color:var(--muted); font-size:.9rem;
+      box-shadow:var(--shadow-md); color:var(--muted); font-size:var(--t-md);
     }
     #askrow{
       position:sticky; bottom:calc(3.8rem + env(safe-area-inset-bottom));
@@ -278,7 +291,7 @@
   }
   @media (max-width:600px){
     .brand .bfull{display:none}
-    .brand .bmini{display:inline; font-size:1.15rem}
+    .brand .bmini{display:inline; font-size:var(--t-2xl)}
     header .cost{display:none}
   }
   /* touch niceties: real finger targets, no zoom on input focus */
@@ -295,7 +308,7 @@
     #terms details.gentry summary{min-height:2.5rem}
     .branchrow input{max-width:none; flex:1}
   }
-  h2{font-size:.8rem; font-weight:600; text-transform:lowercase; color:var(--muted);
+  h2{font-size:var(--t-xs); font-weight:600; text-transform:lowercase; color:var(--muted);
     letter-spacing:.07em; margin:1.25rem 0 .45rem}
   h2:first-child{margin-top:0}
   /* on desktop every sidebar section is visible at once — hairlines keep the
@@ -312,7 +325,7 @@
     right:.7rem; z-index:80;
     background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
     padding:1rem 1.1rem; width:min(21rem,92vw); box-shadow:var(--shadow-md);
-    font-size:.9rem;
+    font-size:var(--t-md);
   }
   #aapanel.open{display:block}
   #aapanel{max-height:calc(100vh - 4.5rem); overflow:auto}
@@ -320,7 +333,7 @@
   #aapanel .row label{flex:1; color:var(--muted)}
   #aapanel .row .val{min-width:3.2em; text-align:center; font-variant-numeric:tabular-nums}
   #aapanel .step{width:2rem; height:2rem; padding:0; border-radius:var(--r-sm); font-size:1rem}
-  #aapanel select{width:11rem; padding:.3rem .4rem; font-size:.9rem}
+  #aapanel select{width:11rem; padding:.3rem .4rem; font-size:var(--t-md)}
   .swatches{display:flex; gap:.5rem; margin:.3rem 0}
   .swatch{
     width:2rem; height:2rem; padding:0; border-radius:50%; border:2px solid var(--line);
@@ -333,19 +346,19 @@
   .newrow{display:flex; gap:.45rem; margin-bottom:.45rem}
   .newrow input{flex:1}
   .btnrow{display:flex; gap:.45rem; flex-wrap:wrap}
-  .hint{color:var(--muted); font-size:.8rem; margin:.35rem 0 0}
+  .hint{color:var(--muted); font-size:var(--t-xs); margin:.35rem 0 0}
   /* profile chips — interest areas the trees file under */
   #profilerow{display:flex; flex-wrap:wrap; gap:.35rem; margin:0 0 .45rem}
   #profilerow:empty{display:none}
   #profilerow .pchip{
-    font-size:.78rem; padding:.18rem .6rem; border-radius:var(--r-pill);
+    font-size:var(--t-xs); padding:.18rem .6rem; border-radius:var(--r-pill);
     color:var(--muted); border:1px solid var(--line); background:none;
   }
   #profilerow .pchip.on{
     color:var(--accent); border-color:var(--accent); background:var(--card);
   }
   #profilefile{display:flex; align-items:center; gap:.4rem; margin-top:.5rem}
-  #profilefile select{flex:1; font-size:.84rem; padding:.22rem .4rem; min-width:0}
+  #profilefile select{flex:1; font-size:var(--t-sm); padding:.22rem .4rem; min-width:0}
   #treelist .item{
     padding:.34rem .5rem; border-radius:var(--r-sm); cursor:pointer; margin:.15rem 0;
     border:1px solid transparent;
@@ -354,14 +367,14 @@
   #treelist .item.active{background:var(--card); border-color:var(--line)}
   #treelist .item .top{display:flex; align-items:center; gap:.4rem}
   #treelist .item .lbl{flex:1; overflow:hidden; text-overflow:ellipsis;
-    white-space:nowrap; font-size:.92rem}
-  #treelist .item .meta{color:var(--muted); font-size:.76rem;
+    white-space:nowrap; font-size:var(--t-md)}
+  #treelist .item .meta{color:var(--muted); font-size:var(--t-xs);
     font-variant-numeric:tabular-nums}
   #treelist .item .del, #treelist .item .ren{border:none; background:none;
-    color:var(--muted); padding:0 .2rem; font-size:.9rem}
+    color:var(--muted); padding:0 .2rem; font-size:var(--t-md)}
   #treelist .item .del:hover{color:var(--danger)}
   #treelist .item .ren:hover{color:var(--fg)}
-  #map{font-size:.88rem}
+  #map{font-size:var(--t-md)}
   #map .maptree, #map .maptree ul{list-style:none; margin:0; padding:0}
   #map .maptree ul{margin-left:.55rem; padding-left:.6rem; border-left:1px solid var(--line)}
   #map .noderow{
@@ -378,25 +391,25 @@
     animation:pulse 1.2s ease-in-out infinite}
   #map .mlabel{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
     white-space:nowrap}
-  #map .mbadge{flex:none; font-size:.7rem}
-  #map .noderow .meta{flex:none; color:var(--muted); font-size:.74rem;
+  #map .mbadge{flex:none; font-size:var(--t-2xs)}
+  #map .noderow .meta{flex:none; color:var(--muted); font-size:var(--t-2xs);
     font-variant-numeric:tabular-nums}
-  #map .maplinks{margin-top:.35rem; color:var(--muted); font-size:.8rem}
+  #map .maplinks{margin-top:.35rem; color:var(--muted); font-size:var(--t-xs)}
   #alltreescost{font-weight:300; text-transform:none; letter-spacing:0}
   #searchresults .hit{
     padding:.3rem .5rem; margin:.2rem 0; border-radius:var(--r-sm); cursor:pointer;
-    font-size:.84rem; border:1px solid transparent;
+    font-size:var(--t-sm); border:1px solid transparent;
   }
   #searchresults .hit:hover{background:var(--card); border-color:var(--line)}
-  #searchresults .hit .where{color:var(--muted); font-size:.78rem}
+  #searchresults .hit .where{color:var(--muted); font-size:var(--t-xs)}
   #searchresults .hit mark{background:var(--termbg); color:var(--term); border-radius:.2rem}
-  #searchresults .none{color:var(--muted); font-size:.84rem; padding:.2rem .5rem}
-  #searchresults .fuzhint{color:var(--muted); font-size:.78rem; padding:.1rem .5rem .3rem}
+  #searchresults .none{color:var(--muted); font-size:var(--t-sm); padding:.2rem .5rem}
+  #searchresults .fuzhint{color:var(--muted); font-size:var(--t-xs); padding:.1rem .5rem .3rem}
 
   /* ---- conversation ---- */
   .empty{color:var(--muted); margin:3rem auto 0; max-width:33rem}
-  .empty .seed{font-size:2.6rem; text-align:center}
-  .empty h3{color:var(--fg); font-weight:600; font-size:1.25rem; margin:.5rem 0 .4rem;
+  .empty .seed{font-size:var(--d-lg); text-align:center}
+  .empty h3{color:var(--fg); font-weight:600; font-size:var(--t-2xl); margin:.5rem 0 .4rem;
     text-align:center}
   .empty h3, #login h1, #quizbox .qq, .qsum p{text-wrap:balance}
   .empty > p{text-align:center}
@@ -404,14 +417,14 @@
   .empty .step{
     display:flex; align-items:baseline; gap:.7rem; background:var(--card);
     border:1px solid var(--line); border-radius:var(--r-md); padding:.65rem .9rem;
-    font-size:.92rem; box-shadow:var(--shadow-sm);
+    font-size:var(--t-md); box-shadow:var(--shadow-sm);
   }
   .empty .step > span{flex:none; width:1.4rem; text-align:center}
   .empty .step b{color:var(--fg); font-weight:600; margin-right:.35rem}
   .examples{display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1rem;
     justify-content:center}
-  .examples button{font-size:.86rem}
-  .empty .kbdhint{text-align:center; margin-top:1.2rem; font-size:.82rem}
+  .examples button{font-size:var(--t-sm)}
+  .empty .kbdhint{text-align:center; margin-top:1.2rem; font-size:var(--t-sm)}
   kbd{
     background:var(--card); border:1px solid var(--line); border-radius:.3rem;
     padding:0 .35rem; font-family:Consolas,monospace; font-size:.85em;
@@ -419,20 +432,20 @@
 
   .nodeinfo{
     background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
-    padding:.8rem 1.1rem .9rem; color:var(--muted); font-size:.88rem; margin-bottom:1.4rem;
+    padding:.8rem 1.1rem .9rem; color:var(--muted); font-size:var(--t-md); margin-bottom:1.4rem;
     box-shadow:var(--shadow-sm);
   }
-  .nodeinfo b{color:var(--fg); font-weight:600; font-size:1.08rem}
+  .nodeinfo b{color:var(--fg); font-weight:600; font-size:var(--t-xl)}
   .nodeinfo .crumb{margin-top:.15rem}
   .nodeinfo .nchips{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.55rem}
   .nodeinfo .chip{
     display:inline-flex; align-items:center; gap:.35rem;
     background:var(--bg); border:1px solid var(--line); border-radius:var(--r-pill);
-    padding:.12rem .65rem; font-size:.8rem; font-variant-numeric:tabular-nums;
+    padding:.12rem .65rem; font-size:var(--t-xs); font-variant-numeric:tabular-nums;
     white-space:nowrap;
   }
   .nodeinfo .nacts{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.6rem}
-  .nodeinfo .nacts button{font-size:.82rem; padding:.28rem .65rem}
+  .nodeinfo .nacts button{font-size:var(--t-sm); padding:.28rem .65rem}
   .nodeinfo .nacts button.kid{color:var(--muted)}
   .nodeinfo .nacts button.kid:hover{color:var(--fg)}
   .nodeinfo .nacts button.rm{color:var(--danger); border-color:transparent; background:none}
@@ -440,7 +453,7 @@
 
   .turn{margin:1.9rem 0}
   .turnhead{display:flex; align-items:center; gap:.7rem;
-    font-size:.78rem; color:var(--muted); letter-spacing:.05em}
+    font-size:var(--t-xs); color:var(--muted); letter-spacing:.05em}
   .confbar{
     width:5.2rem; height:.44rem; border-radius:.3rem; background:var(--card);
     border:1px solid var(--line); overflow:hidden; flex:none;
@@ -462,9 +475,9 @@
      make the whole conversation flicker */
   #conv .turn:last-child .block{animation:appear .3s ease-out}
   @keyframes appear{from{opacity:0; transform:translateY(6px)} to{opacity:1}}
-  .block .who{font-size:.76rem; letter-spacing:.06em; color:var(--muted);
+  .block .who{font-size:var(--t-xs); letter-spacing:.06em; color:var(--muted);
     margin-bottom:.3rem; display:flex; align-items:center; gap:.45rem; flex-wrap:wrap}
-  .thinking{border-left-color:var(--think); color:var(--muted); font-size:.93rem}
+  .thinking{border-left-color:var(--think); color:var(--muted); font-size:var(--t-md)}
   body.hide-think #conv .block.thinking{display:none}
   .action{border-left-color:var(--ask)}
   .action.user-q{border-left-color:var(--term)}
@@ -489,7 +502,7 @@
     letter-spacing:0; word-spacing:0}
   .tutor-b pre, .tutor-b pre code{background:var(--prebg); font-size:.9em}
   .term{display:inline-block; background:var(--termbg); color:var(--term);
-    border-radius:var(--r-sm); padding:.02rem .55rem; font-size:.82rem}
+    border-radius:var(--r-sm); padding:.02rem .55rem; font-size:var(--t-sm)}
 
   /* structured answer parts — one labelled card per aspect */
   .tutor-b details.part{
@@ -497,7 +510,7 @@
     background:var(--bg); overflow:hidden;
   }
   .tutor-b details.part summary{
-    cursor:pointer; padding:.5rem .8rem; font-size:.8rem; color:var(--muted);
+    cursor:pointer; padding:.5rem .8rem; font-size:var(--t-xs); color:var(--muted);
     letter-spacing:.05em; user-select:none; list-style:none;
     display:flex; align-items:center; gap:.5rem; min-height:2.2rem;
   }
@@ -517,12 +530,12 @@
   ::highlight(lwc-word){background-color:var(--primary); color:var(--onprim)}
   .donechip{
     display:inline-block; background:var(--card); border:1px solid var(--ask);
-    color:var(--ask); border-radius:var(--r-sm); padding:.15rem .7rem; font-size:.84rem;
+    color:var(--ask); border-radius:var(--r-sm); padding:.15rem .7rem; font-size:var(--t-sm);
     margin-top:.3rem;
   }
   .branchrow{margin:.25rem 0 0; display:flex; gap:.45rem; align-items:center; flex-wrap:wrap}
-  .branchrow input{max-width:18rem; font-size:.88rem; padding:.3rem .5rem}
-  .branchrow .why{color:var(--muted); font-size:.8rem}
+  .branchrow input{max-width:18rem; font-size:var(--t-md); padding:.3rem .5rem}
+  .branchrow .why{color:var(--muted); font-size:var(--t-xs)}
 
   /* live activity block — soft shimmer while a model call is in flight */
   .pending .who{color:var(--muted)}
@@ -572,9 +585,9 @@
     padding:1.4rem 1.5rem; width:min(30rem,94vw); box-shadow:var(--shadow-lg);
   }
   #tutoreditor h3{font-size:1rem; font-weight:600; margin:0 0 .8rem}
-  #tutoreditor label{display:block; font-size:.8rem; color:var(--muted); margin:.6rem 0 .2rem}
+  #tutoreditor label{display:block; font-size:var(--t-xs); color:var(--muted); margin:.6rem 0 .2rem}
   #tutoreditor textarea{
-    width:100%; font-family:inherit; font-size:.95rem; color:var(--fg);
+    width:100%; font-family:inherit; font-size:var(--t-lg); color:var(--fg);
     background:var(--bg); border:1px solid var(--line); border-radius:var(--r-sm);
     padding:.5rem .65rem; resize:vertical; line-height:1.5;
   }
@@ -594,20 +607,20 @@
     box-shadow:var(--shadow-lg);
   }
   #localsettings h3{font-size:1rem; font-weight:600; margin:0 0 .4rem}
-  #localsettings label{display:block; font-size:.8rem; color:var(--muted); margin:.7rem 0 .25rem}
+  #localsettings label{display:block; font-size:var(--t-xs); color:var(--muted); margin:.7rem 0 .25rem}
   #localsettings textarea{
-    width:100%; font-family:inherit; font-size:.85rem; color:var(--fg);
+    width:100%; font-family:inherit; font-size:var(--t-sm); color:var(--fg);
     background:var(--bg); border:1px solid var(--line); border-radius:var(--r-sm);
     padding:.4rem .6rem; resize:vertical; line-height:1.45;
   }
   #localsettings code{font-size:.85em; background:var(--bg); border-radius:.3rem; padding:.05rem .3rem}
   #localsettings .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
-  #localsettings .err{color:var(--danger); font-size:.85rem; margin:.5rem 0 0}
+  #localsettings .err{color:var(--danger); font-size:var(--t-sm); margin:.5rem 0 0}
   #localsettings .err:empty{display:none}
   .mcpcheckrow{display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem}
-  .mcpcheckrow .mcpname{min-width:6rem; font-size:.9rem}
-  .mcpcheckrow .mcpsrc{font-size:.72rem; color:var(--muted); flex:0 0 auto; white-space:nowrap}
-  .mcpcheckrow .mcpnote{flex:1; min-width:5rem; margin:0; font-size:.85rem}
+  .mcpcheckrow .mcpname{min-width:6rem; font-size:var(--t-md)}
+  .mcpcheckrow .mcpsrc{font-size:var(--t-2xs); color:var(--muted); flex:0 0 auto; white-space:nowrap}
+  .mcpcheckrow .mcpnote{flex:1; min-width:5rem; margin:0; font-size:var(--t-sm)}
 
   /* ---- tree overview ---- */
   #overview{
@@ -647,7 +660,7 @@
   }
   #pinput{
     width:100%; border:none; border-bottom:1px solid var(--line); border-radius:0;
-    padding:.85rem 1.1rem; font-size:1.05rem; background:var(--card);
+    padding:.85rem 1.1rem; font-size:var(--t-xl); background:var(--card);
   }
   #pinput:focus-visible{outline:none}
   #plist{max-height:min(24rem, 55dvh); overflow:auto; padding:.35rem}
@@ -657,14 +670,14 @@
   }
   #plist .pi .ic{flex:none; width:1.5rem; text-align:center}
   #plist .pi .lb{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  #plist .pi .sb{flex:none; max-width:45%; color:var(--muted); font-size:.8rem;
+  #plist .pi .sb{flex:none; max-width:45%; color:var(--muted); font-size:var(--t-xs);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #plist .pi .sb mark{background:var(--termbg); color:var(--term); border-radius:.2rem}
   #plist .pi.sel{background:var(--bg); outline:1px solid var(--line)}
-  #plist .pgroup{color:var(--muted); font-size:.72rem; letter-spacing:.07em;
+  #plist .pgroup{color:var(--muted); font-size:var(--t-2xs); letter-spacing:.07em;
     text-transform:lowercase; padding:.5rem .8rem .15rem}
-  #plist .pnone{color:var(--muted); padding:.7rem .9rem; font-size:.9rem}
-  #palbtn{font-family:Consolas,monospace; font-size:.8rem; color:var(--muted)}
+  #plist .pnone{color:var(--muted); padding:.7rem .9rem; font-size:var(--t-md)}
+  #palbtn{font-family:Consolas,monospace; font-size:var(--t-xs); color:var(--muted)}
   @media (max-width:900px){ #palbtn{display:none} }
 
   /* ---- quiz ---- */
@@ -681,10 +694,10 @@
     overflow:auto; box-shadow:var(--shadow-lg);
   }
   #quizbox .qhead{display:flex; align-items:center; gap:.7rem; margin-bottom:.6rem;
-    color:var(--muted); font-size:.85rem}
+    color:var(--muted); font-size:var(--t-sm)}
   #quizbox .qhead #quizscore{flex:1; text-align:right}
   .qdots{display:inline-flex; gap:.28rem; margin-left:.4rem; vertical-align:middle}
-  .qkbd{margin-left:.7rem; font-size:.76rem; white-space:nowrap}
+  .qkbd{margin-left:.7rem; font-size:var(--t-xs); white-space:nowrap}
   @media (max-width:900px){ .qkbd{display:none} }
   .qdot{width:.5rem; height:.5rem; border-radius:50%; background:var(--line)}
   .qdot.now{background:var(--accent)}
@@ -694,9 +707,9 @@
     display:inline-flex; align-items:center; justify-content:center;
     width:1.35rem; height:1.35rem; border-radius:.4rem; margin-right:.6rem;
     background:var(--bg); border:1px solid var(--line); color:var(--muted);
-    font-size:.78rem; flex:none; vertical-align:middle;
+    font-size:var(--t-xs); flex:none; vertical-align:middle;
   }
-  #quizbox .qq{font-weight:400; font-size:1.02rem; margin:.4rem 0 .9rem}
+  #quizbox .qq{font-weight:400; font-size:var(--t-xl); margin:.4rem 0 .9rem}
   #quizbox .qc{
     display:block; width:100%; text-align:left; margin:.45rem 0;
     padding:.6rem .8rem; border-radius:var(--r-md); line-height:1.5;
@@ -706,7 +719,7 @@
   #quizbox .qc:disabled{opacity:1; cursor:default}
   #quizbox .qc:disabled:not(.correct):not(.wrong){opacity:.55}
   #quizbox .qwhy{
-    margin:.7rem 0 0; padding:.6rem .8rem; border-radius:var(--r-md); font-size:.92rem;
+    margin:.7rem 0 0; padding:.6rem .8rem; border-radius:var(--r-md); font-size:var(--t-md);
     background:var(--bg); border:1px solid var(--line);
   }
   /* survey — the topic's foundations as a map to investigate from */
@@ -725,7 +738,7 @@
   #surveybox .shead{display:flex; align-items:center; gap:.7rem; margin-bottom:.3rem}
   #surveybox .shead #surveytitle{flex:1; font-weight:600; overflow:hidden;
     text-overflow:ellipsis; white-space:nowrap}
-  #surveybox .shead #surveyprog{color:var(--muted); font-size:.85rem; flex:none}
+  #surveybox .shead #surveyprog{color:var(--muted); font-size:var(--t-sm); flex:none}
   .svitem{margin:.5rem 0; padding:.55rem .7rem; border:1px solid var(--line);
     border-radius:var(--r-md)}
   .svitem.done{border-color:color-mix(in srgb, var(--ask) 55%, var(--line))}
@@ -733,21 +746,21 @@
   .svitem .svname{flex:1; min-width:0}
   .svitem.done > .svrow .svname{color:var(--ask)}
   .svitem .svacts{display:flex; gap:.35rem; flex:none}
-  .svitem .svacts button{font-size:.8rem; padding:.22rem .55rem}
-  .svitem .svwhy{color:var(--muted); font-size:.88rem; margin:.15rem 0 0; line-height:1.5}
+  .svitem .svacts button{font-size:var(--t-xs); padding:.22rem .55rem}
+  .svitem .svwhy{color:var(--muted); font-size:var(--t-md); margin:.15rem 0 0; line-height:1.5}
   .svitem .svkids{margin:.45rem 0 0 .35rem; padding-left:.65rem;
     border-left:1px solid var(--line)}
   .svitem .svkids .svitem{border:none; padding:.3rem 0; margin:.25rem 0}
   #quizbox .qnext{margin-top:.9rem; display:flex; gap:.5rem; justify-content:flex-end}
   #quizbox .qsum{text-align:center; padding:1rem 0 .4rem}
-  #quizbox .qsum .big{font-size:2rem; margin-bottom:.4rem}
+  #quizbox .qsum .big{font-size:var(--d-md); margin-bottom:.4rem}
   #quizbox .qmiss{
     text-align:left; margin:.55rem 0; padding:.6rem .8rem; border-radius:var(--r-md);
-    background:var(--bg); border:1px solid var(--line); font-size:.9rem;
+    background:var(--bg); border:1px solid var(--line); font-size:var(--t-md);
   }
   #quizbox .qmiss .qmq{font-weight:600; margin-bottom:.25rem}
   #quizbox .qmiss .qma{color:var(--ask)}
-  #quizbox .qmiss .qmw{color:var(--muted); margin-top:.2rem; font-size:.86rem}
+  #quizbox .qmiss .qmw{color:var(--muted); margin-top:.2rem; font-size:var(--t-sm)}
 
   /* ---- review (spaced flashcards over the glossary) ---- */
   #reviewbox{
@@ -766,7 +779,7 @@
      is, so the controls must never depend on there being room for one row */
   #reviewbox .rhead{display:flex; align-items:center; gap:.7rem; margin-bottom:.6rem;
     flex-wrap:wrap;
-    color:var(--muted); font-size:.85rem}
+    color:var(--muted); font-size:var(--t-sm)}
   #reviewbox .rhead #revprog{flex:1; min-width:0; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis}
   /* the hint drops to its own row (order + full basis) so progress and the
@@ -776,49 +789,49 @@
     text-align:center; padding:1.3rem .9rem 1.1rem; border:1px solid var(--line);
     border-radius:var(--r-md); background:var(--bg);
   }
-  .rcard .rtree{color:var(--muted); font-size:.8rem; margin-bottom:.7rem}
-  .rcard .rterm{font-size:1.3rem; color:var(--term); font-weight:600; line-height:1.35}
-  .rcard .rprompt{margin:.8rem 0 0; font-size:.84rem; color:var(--muted)}
-  .rcard .rdef{margin-top:.9rem; text-align:left; line-height:1.6; font-size:.95rem}
-  .rcard .rlinks{margin-top:.7rem; font-size:.82rem; color:var(--muted); text-align:left;
+  .rcard .rtree{color:var(--muted); font-size:var(--t-xs); margin-bottom:.7rem}
+  .rcard .rterm{font-size:var(--t-3xl); color:var(--term); font-weight:600; line-height:1.35}
+  .rcard .rprompt{margin:.8rem 0 0; font-size:var(--t-sm); color:var(--muted)}
+  .rcard .rdef{margin-top:.9rem; text-align:left; line-height:1.6; font-size:var(--t-lg)}
+  .rcard .rlinks{margin-top:.7rem; font-size:var(--t-sm); color:var(--muted); text-align:left;
     display:flex; gap:.8rem; flex-wrap:wrap}
   .rcard .rsay, #quizbox .rsay{
     border:none; background:none; color:var(--muted); cursor:pointer;
-    font-size:.9rem; padding:0 .3rem; line-height:1; vertical-align:2px;
+    font-size:var(--t-md); padding:0 .3rem; line-height:1; vertical-align:2px;
   }
   .rcard .rsay:hover, #quizbox .rsay:hover{color:var(--fg)}
   .rcard .redit{margin-top:.9rem; text-align:left}
   .rcard .redit textarea{
     width:100%; min-height:4.2rem; resize:vertical; font-family:inherit;
-    font-size:.95rem; line-height:1.6; padding:.5rem .65rem; color:var(--fg);
+    font-size:var(--t-lg); line-height:1.6; padding:.5rem .65rem; color:var(--fg);
     background:var(--card); border:1px solid var(--term); border-radius:var(--r-sm);
     letter-spacing:inherit;
   }
   .rcard .redit .rerow{display:flex; gap:.5rem; margin-top:.5rem; align-items:center}
-  .rcard .redit .rehint{color:var(--muted); font-size:.76rem; margin-left:auto}
+  .rcard .redit .rehint{color:var(--muted); font-size:var(--t-xs); margin-left:auto}
   #reviewbox .rflip{margin-top:.9rem; display:flex; justify-content:center}
   .rgrades{display:flex; gap:.5rem; margin-top:.9rem}
   .rgrades .rg{
     flex:1; padding:.55rem .4rem; border-radius:var(--r-md); line-height:1.3;
     display:flex; flex-direction:column; align-items:center; gap:.05rem;
   }
-  .rgrades .rg small{color:var(--muted); font-size:.72rem; font-weight:300}
+  .rgrades .rg small{color:var(--muted); font-size:var(--t-2xs); font-weight:300}
   .rgrades .rg.rg0{color:var(--danger)}
   #reviewbox .qsum{text-align:center; padding:1rem 0 .4rem}
-  #reviewbox .qsum .big{font-size:1.7rem; margin-bottom:.4rem}
+  #reviewbox .qsum .big{font-size:var(--d-sm); margin-bottom:.4rem}
   /* typed recall — the ⌨ mode: the definition asks, you type the term */
-  #revtypebtn{font-size:.8rem; color:var(--muted); white-space:nowrap; padding:.34rem .45rem}
+  #revtypebtn{font-size:var(--t-xs); color:var(--muted); white-space:nowrap; padding:.34rem .45rem}
   #revtypebtn:hover{color:var(--fg)}
   #revtypebtn.on{color:var(--accent)}
   .rcard .rtype{display:flex; gap:.5rem; margin-top:.9rem}
   .rcard .rtype input{flex:1; min-width:0; width:auto; border-color:var(--term);
     background:var(--card)}
-  .rcard .rverd{margin-top:.55rem; font-size:.88rem}
+  .rcard .rverd{margin-top:.55rem; font-size:var(--t-md)}
   .rcard .rverd.vok{color:var(--ask)}
   .rcard .rverd.vclose{color:var(--think)}
   .rcard .rverd.vmiss{color:var(--danger)}
   /* hands-free drill — the 🎧 mode: hear the term, recall, hear the answer */
-  #revdrillbtn{font-size:.8rem; color:var(--muted); white-space:nowrap; padding:.34rem .45rem}
+  #revdrillbtn{font-size:var(--t-xs); color:var(--muted); white-space:nowrap; padding:.34rem .45rem}
   #revdrillbtn:hover{color:var(--fg)}
   #revdrillbtn.on{color:var(--accent)}
   #drillwaitui{display:flex; align-items:center; gap:.15rem; white-space:nowrap}
@@ -828,7 +841,7 @@
   #drillwaitui[hidden]{display:none}
   #drillwaitui button{
     border:none; background:none; color:var(--muted); cursor:pointer;
-    font-size:.95rem; line-height:1; padding:.2rem .35rem;
+    font-size:var(--t-lg); line-height:1; padding:.2rem .35rem;
   }
   #drillwaitui button:hover{color:var(--fg)}
   #drillwaitval{min-width:1.7rem; text-align:center; font-variant-numeric:tabular-nums}
@@ -857,7 +870,7 @@
   }
   #statsbox .sthead, #hlbox .sthead, #docketbox .sthead, #qbankbox .sthead, #globalqbox .sthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.9rem}
   #statsbox #stattitle, #hlbox #hltitle, #docketbox #dktitle, #qbankbox #qbtitle, #globalqbox #gqtitle{font-weight:600}
-  #statsbox #statscope, #hlbox #hlscope, #docketbox #dkscope, #qbankbox #qbscope, #globalqbox #gqscope{flex:1; color:var(--muted); font-size:.82rem;
+  #statsbox #statscope, #hlbox #hlscope, #docketbox #dkscope, #qbankbox #qbscope, #globalqbox #gqscope{flex:1; color:var(--muted); font-size:var(--t-sm);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #hlbox .hltree, #docketbox .hltree{font-weight:600; margin:1rem 0 .4rem}
   #hlbox .hltree:first-child, #docketbox .hltree:first-child{margin-top:0}
@@ -868,12 +881,12 @@
   }
   #hlbox .hlrow:hover, #docketbox .hlrow:hover{border-color:var(--term)}
   #hlbox .hlrow mark{background:var(--termbg); color:inherit; border-radius:.25rem; padding:.02rem .15rem}
-  #hlbox .hlrow .where, #docketbox .hlrow .where{color:var(--muted); font-size:.76rem; margin-top:.25rem}
+  #hlbox .hlrow .where, #docketbox .hlrow .where{color:var(--muted); font-size:var(--t-xs); margin-top:.25rem}
   /* the docket's per-tree thread groups and its all-clear state */
-  #docketbox .dktree{color:var(--muted); font-size:.8rem; margin:.5rem 0 .2rem}
+  #docketbox .dktree{color:var(--muted); font-size:var(--t-xs); margin:.5rem 0 .2rem}
   #docketbox .dkthreads{margin:.35rem 0 .1rem}
   #docketbox .dkempty, #qbankbox .dkempty, #globalqbox .dkempty{text-align:center; padding:1.6rem 0 1rem; color:var(--muted)}
-  #docketbox .dkempty .big, #qbankbox .dkempty .big, #globalqbox .dkempty .big{font-size:1.7rem; margin-bottom:.5rem}
+  #docketbox .dkempty .big, #qbankbox .dkempty .big, #globalqbox .dkempty .big{font-size:var(--d-sm); margin-bottom:.5rem}
   /* question bank rows — a card per banked question: the text (tap to
      jump to where it came from), where it was raised, and its actions.
      Shared by both banks (#qbankbox = local, #globalqbox = global). */
@@ -885,11 +898,11 @@
   #qbankbox .qtext, #globalqbox .qtext{font-size:.95em; cursor:pointer}
   #qbankbox .qtext:hover, #globalqbox .qtext:hover{color:var(--term)}
   #qbankbox .qrow.done .qtext, #globalqbox .qrow.done .qtext{text-decoration:line-through; text-decoration-color:var(--muted)}
-  #qbankbox .qwhere, #globalqbox .qwhere{color:var(--muted); font-size:.76rem; margin-top:.3rem}
+  #qbankbox .qwhere, #globalqbox .qwhere{color:var(--muted); font-size:var(--t-xs); margin-top:.3rem}
   #qbankbox .qacts, #globalqbox .qacts{display:flex; gap:.4rem; margin-top:.5rem}
-  #qbankbox .qacts button, #globalqbox .qacts button{font-size:.82rem; padding:.28rem .6rem}
+  #qbankbox .qacts button, #globalqbox .qacts button{font-size:var(--t-sm); padding:.28rem .6rem}
   #qbankbox .qbdone, #globalqbox .qbdone{margin-top:1rem}
-  #qbankbox .qbdone summary, #globalqbox .qbdone summary{cursor:pointer; color:var(--muted); font-size:.85rem}
+  #qbankbox .qbdone summary, #globalqbox .qbdone summary{cursor:pointer; color:var(--muted); font-size:var(--t-sm)}
   #qbankbox .qbdone[open] summary, #globalqbox .qbdone[open] summary{margin-bottom:.3rem}
   #statsbox .st-tiles{
     display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; margin-bottom:1.1rem;
@@ -898,13 +911,13 @@
     border:1px solid var(--line); border-radius:var(--r-md); background:var(--bg);
     padding:.6rem .5rem; text-align:center;
   }
-  #statsbox .st-tile .n{font-size:1.5rem; line-height:1.1; font-weight:600}
+  #statsbox .st-tile .n{font-size:var(--t-3xl); line-height:1.1; font-weight:600}
   #statsbox .st-tile .n.due{color:var(--term)}
-  #statsbox .st-tile .l{color:var(--muted); font-size:.72rem; margin-top:.2rem;
+  #statsbox .st-tile .l{color:var(--muted); font-size:var(--t-2xs); margin-top:.2rem;
     text-transform:lowercase; letter-spacing:.02em}
   #statsbox .st-sec{margin:1.1rem 0 0}
   #statsbox .st-sec h4{
-    font-size:.76rem; font-weight:600; color:var(--muted); margin:0 0 .5rem;
+    font-size:var(--t-xs); font-weight:600; color:var(--muted); margin:0 0 .5rem;
     text-transform:lowercase; letter-spacing:.06em;
   }
   #statsbox .st-sec h4 .sub{font-weight:300; letter-spacing:0; margin-left:.35rem}
@@ -919,7 +932,7 @@
   #statsbox .sg-mature{background:var(--ask)}
   #statsbox .st-legend{
     display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin-top:.55rem;
-    font-size:.8rem; color:var(--muted);
+    font-size:var(--t-xs); color:var(--muted);
   }
   #statsbox .st-legend span{display:inline-flex; align-items:center; gap:.35rem}
   #statsbox .st-legend b{color:var(--fg); font-weight:600}
@@ -934,24 +947,24 @@
   #statsbox .fbar i{display:block; width:100%; border-radius:.25rem .25rem 0 0;
     background:color-mix(in srgb, var(--accent) 45%, var(--card)); min-height:2px}
   #statsbox .fbar.today i{background:var(--accent)}
-  #statsbox .fbar .fn{font-size:.62rem; color:var(--muted); line-height:1; margin-bottom:2px}
+  #statsbox .fbar .fn{font-size:var(--t-3xs); color:var(--muted); line-height:1; margin-bottom:2px}
   #statsbox .st-axis{display:flex; gap:2px; margin-top:.25rem}
-  #statsbox .st-axis span{flex:1; text-align:center; font-size:.64rem; color:var(--muted)}
-  #statsbox .st-note{color:var(--muted); font-size:.8rem; margin:.5rem 0 0}
+  #statsbox .st-axis span{flex:1; text-align:center; font-size:var(--t-3xs); color:var(--muted)}
+  #statsbox .st-note{color:var(--muted); font-size:var(--t-xs); margin:.5rem 0 0}
   /* habit / streak */
   #statsbox .st-streak{display:flex; align-items:baseline; gap:.5rem}
-  #statsbox .st-streak .big{font-size:1.7rem; font-weight:600; line-height:1}
-  #statsbox .st-streak .u{color:var(--muted); font-size:.85rem}
+  #statsbox .st-streak .big{font-size:var(--d-sm); font-weight:600; line-height:1}
+  #statsbox .st-streak .u{color:var(--muted); font-size:var(--t-sm)}
   /* quiz chips */
   #statsbox .st-quiz{display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.5rem}
   #statsbox .qpill{
     border:1px solid var(--line); border-radius:var(--r-pill); padding:.15rem .6rem;
-    font-size:.8rem; background:var(--bg);
+    font-size:var(--t-xs); background:var(--bg);
   }
   #statsbox .qpill.good{border-color:color-mix(in srgb, var(--ask) 55%, var(--line))}
   #statsbox .qpill.poor{border-color:color-mix(in srgb, var(--danger) 45%, var(--line))}
   #statsbox .st-empty{text-align:center; color:var(--muted); padding:1.4rem .5rem}
-  #statsbox .st-empty .big{font-size:1.8rem; margin-bottom:.4rem}
+  #statsbox .st-empty .big{font-size:var(--d-sm); margin-bottom:.4rem}
   @media (max-width:480px){
     #statsbox .st-tiles{grid-template-columns:repeat(2,1fr)}
     #statsbox .st-axis span:nth-child(even){visibility:hidden}
@@ -972,7 +985,7 @@
   }
   #notesbox .nthead, #srcbox .nthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.7rem}
   #notesbox #nttitle, #srcbox #srctitle{font-weight:600}
-  #notesbox #ntscope, #srcbox #srcscope{flex:1; color:var(--muted); font-size:.82rem;
+  #notesbox #ntscope, #srcbox #srcscope{flex:1; color:var(--muted); font-size:var(--t-sm);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #notesbox #ntarea, #srcbox #srcboxarea{
     flex:1; min-height:9rem; resize:vertical; width:100%; font-family:inherit;
@@ -984,12 +997,12 @@
   #notesbox #ntmeta, #srcbox #srcmeta{flex:1}
   /* the grow tab's paste-your-own-material and already-know folds */
   #srcdetails, #knowndetails{margin:.5rem 0 .2rem}
-  #srcdetails summary, #knowndetails summary{cursor:pointer; color:var(--muted); font-size:.86rem}
+  #srcdetails summary, #knowndetails summary{cursor:pointer; color:var(--muted); font-size:var(--t-sm)}
   #srcdetails summary:hover, #knowndetails summary:hover{color:var(--fg)}
   #srcdetails[open] summary, #knowndetails[open] summary{color:var(--fg)}
   #srcdetails textarea, #knowndetails textarea{
     width:100%; min-height:7rem; resize:vertical; margin-top:.45rem;
-    font-family:inherit; font-size:.92rem; line-height:1.6; padding:.6rem .7rem;
+    font-family:inherit; font-size:var(--t-md); line-height:1.6; padding:.6rem .7rem;
     color:var(--fg); background:var(--card); border:1px solid var(--line);
     border-radius:var(--r-sm); letter-spacing:inherit; word-spacing:inherit;
   }
@@ -1012,7 +1025,7 @@
   }
   #teachbox .nthead, #gapsbox .nthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.7rem}
   #teachbox #tbtitle, #gapsbox #gaptitle{font-weight:600}
-  #teachbox #tbscope, #gapsbox #gapscope{flex:1; color:var(--muted); font-size:.82rem;
+  #teachbox #tbscope, #gapsbox #gapscope{flex:1; color:var(--muted); font-size:var(--t-sm);
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   #teachbox #tbarea, #gapsbox #gaparea{
     min-height:7rem; resize:vertical; width:100%; font-family:inherit;
@@ -1029,16 +1042,16 @@
     margin:.55rem 0 0; padding:.6rem .75rem; border:1px solid var(--line);
     border-radius:var(--r-md); background:var(--bg); white-space:pre-wrap;
   }
-  #teachbox .tbcard b, #gapsbox .tbcard b{display:block; margin-bottom:.25rem; font-size:.82rem; color:var(--muted)}
-  #teachbox .tbwhen, #gapsbox .tbwhen{margin:.6rem 0 0; font-size:.82rem; color:var(--muted)}
+  #teachbox .tbcard b, #gapsbox .tbcard b{display:block; margin-bottom:.25rem; font-size:var(--t-sm); color:var(--muted)}
+  #teachbox .tbwhen, #gapsbox .tbwhen{margin:.6rem 0 0; font-size:var(--t-sm); color:var(--muted)}
   /* the visible recap of the thread so far — proof the tutor is judging
      the whole exchange, not just regrading the latest reply cold */
   #teachbox .tbthread{margin:.6rem 0 0}
   #teachbox .tbturn{margin:.5rem 0 0}
   #teachbox .tbturn-a{padding-left:.9rem; border-left:2px solid var(--line); white-space:pre-wrap}
-  #teachbox .tbturn-q{margin:.2rem 0 0 .9rem; color:var(--muted); font-size:.82rem}
+  #teachbox .tbturn-q{margin:.2rem 0 0 .9rem; color:var(--muted); font-size:var(--t-sm)}
   #gapsbox #gapchat:not(:empty){margin-bottom:.6rem}
-  #gapsbox #gapchat .gq{margin:.5rem 0 .1rem; color:var(--muted); font-size:.9rem}
+  #gapsbox #gapchat .gq{margin:.5rem 0 .1rem; color:var(--muted); font-size:var(--t-md)}
   #gapsbox #gapchat .ga{margin:0; padding-left:.9rem; border-left:2px solid var(--line);
     white-space:pre-wrap}
   #gapsbox #gapchat .tbcard{margin:.55rem 0 0}
@@ -1051,10 +1064,10 @@
     right:.7rem; z-index:80;
     background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
     padding:1rem 1.2rem; width:min(24rem,92vw); max-height:calc(100vh - 5rem);
-    overflow:auto; box-shadow:var(--shadow-md); font-size:.9rem;
+    overflow:auto; box-shadow:var(--shadow-md); font-size:var(--t-md);
   }
   #helppanel.open{display:block}
-  #helppanel h3{font-size:.82rem; font-weight:600; color:var(--muted);
+  #helppanel h3{font-size:var(--t-sm); font-weight:600; color:var(--muted);
     text-transform:lowercase; letter-spacing:.06em; margin:.9rem 0 .3rem}
   #helppanel h3:first-child{margin-top:0}
   #helppanel p{margin:.45rem 0}
@@ -1068,7 +1081,7 @@
   #terms details.gentry{margin:.1rem 0; border-radius:var(--r-sm)}
   #terms details.gentry summary{
     cursor:pointer; list-style:none; display:flex; align-items:center; gap:.45rem;
-    padding:.22rem .45rem; border-radius:var(--r-sm); font-size:.88rem; min-height:1.9rem;
+    padding:.22rem .45rem; border-radius:var(--r-sm); font-size:var(--t-md); min-height:1.9rem;
   }
   #terms details.gentry summary::-webkit-details-marker{display:none}
   #terms details.gentry summary:hover{background:var(--card)}
@@ -1078,25 +1091,25 @@
     border:1px solid var(--term); background:transparent}
   #terms .gdot.on{background:var(--term)}
   .gtag{
-    font-size:.72rem; color:var(--muted); border:1px solid var(--line);
+    font-size:var(--t-2xs); color:var(--muted); border:1px solid var(--line);
     border-radius:var(--r-pill); padding:.05rem .45rem; white-space:nowrap;
   }
   #terms .gdef{
-    margin:.1rem 0 .45rem 1.35rem; padding:.45rem .6rem; font-size:.85rem;
+    margin:.1rem 0 .45rem 1.35rem; padding:.45rem .6rem; font-size:var(--t-sm);
     background:var(--card); border:1px solid var(--line); border-radius:var(--r-sm);
     color:var(--fg);
   }
-  #terms .gdeflinks{margin-top:.3rem; color:var(--muted); font-size:.8rem}
+  #terms .gdeflinks{margin-top:.3rem; color:var(--muted); font-size:var(--t-xs)}
   #terms .gedit{margin:.1rem 0 .45rem 1.35rem}
   #terms .gedit textarea{
     width:100%; min-height:3.6rem; resize:vertical; font-family:inherit;
-    font-size:.85rem; line-height:1.5; padding:.45rem .6rem; color:var(--fg);
+    font-size:var(--t-sm); line-height:1.5; padding:.45rem .6rem; color:var(--fg);
     background:var(--card); border:1px solid var(--term); border-radius:var(--r-sm);
     letter-spacing:inherit;
   }
   #terms .gedit .grow{display:flex; gap:.4rem; margin-top:.35rem; align-items:center}
-  #terms .gedit .grow button{font-size:.8rem; padding:.24rem .6rem}
-  #terms .gedit .ghint{color:var(--muted); font-size:.74rem; margin-left:auto}
+  #terms .gedit .grow button{font-size:var(--t-xs); padding:.24rem .6rem}
+  #terms .gedit .ghint{color:var(--muted); font-size:var(--t-2xs); margin-left:auto}
   .cl{cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px}
   .cl:hover{color:var(--fg)}
   .term[role=button]{cursor:pointer}
@@ -1113,14 +1126,14 @@
   /* loose threads — terms flagged but never chased, under the tree map */
   #loose, #docketbox .dkthreads{display:flex; flex-wrap:wrap; gap:.35rem}
   #loose .thread, #docketbox .thread{
-    font-size:.82rem; padding:.25rem .65rem; border-radius:var(--r-pill);
+    font-size:var(--t-sm); padding:.25rem .65rem; border-radius:var(--r-pill);
     color:var(--term); border-color:color-mix(in srgb, var(--term) 40%, var(--line));
   }
   #loose .thread:hover:not(:disabled), #docketbox .thread:hover:not(:disabled){background:var(--termbg)}
   #loose .thpair, #docketbox .thpair{display:inline-flex}
   #loose .thpair .thread, #docketbox .thpair .thread{border-radius:var(--r-pill) 0 0 var(--r-pill)}
   #loose .thx, #docketbox .thx{
-    font-size:.82rem; padding:.25rem .5rem; border-radius:0 var(--r-pill) var(--r-pill) 0;
+    font-size:var(--t-sm); padding:.25rem .5rem; border-radius:0 var(--r-pill) var(--r-pill) 0;
     margin-left:-1px; color:var(--muted);
     border-color:color-mix(in srgb, var(--term) 40%, var(--line));
   }
@@ -1137,7 +1150,7 @@
   #selchip[hidden]{display:none}
   #selchip button{
     border:0; border-radius:0; background:none; color:var(--term);
-    padding:.32rem .75rem; font-size:.82rem; line-height:1.2; cursor:pointer;
+    padding:.32rem .75rem; font-size:var(--t-sm); line-height:1.2; cursor:pointer;
   }
   #selchip button + button{
     border-left:1px solid color-mix(in srgb, var(--term) 40%, var(--line));
@@ -1153,10 +1166,10 @@
     border-radius:var(--r-xl); box-shadow:var(--shadow-md); padding:.7rem .8rem;
   }
   #qcap[hidden]{display:none}
-  #qcap .qcaphead{color:var(--muted); font-size:.8rem; margin-bottom:.4rem}
+  #qcap .qcaphead{color:var(--muted); font-size:var(--t-xs); margin-bottom:.4rem}
   #qcap .qcaprow{display:flex; gap:.5rem}
   #qcap .qcaprow input{flex:1}
-  #qcap .qcapok{display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; font-size:.92rem}
+  #qcap .qcapok{display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; font-size:var(--t-md)}
   @media (max-width:900px){
     #qcap{bottom:calc(3.8rem + env(safe-area-inset-bottom))}
   }
@@ -1165,11 +1178,11 @@
   #gpop{
     position:fixed; z-index:85; background:var(--card); border:1px solid var(--term);
     border-radius:var(--r-md); box-shadow:var(--shadow-md);
-    padding:.8rem .95rem; font-size:.92rem;
+    padding:.8rem .95rem; font-size:var(--t-md);
   }
   #gpop .gname{color:var(--term); font-weight:600; margin-bottom:.3rem}
   #gpop .gbody{line-height:1.55}
-  #gpop .gfoot{margin-top:.45rem; color:var(--muted); font-size:.82rem}
+  #gpop .gfoot{margin-top:.45rem; color:var(--muted); font-size:var(--t-sm)}
   .flash{outline:3px solid var(--accent) !important; outline-offset:3px;
     transition:outline-color 1s}
 
@@ -1178,32 +1191,32 @@
   #fcpop{
     position:fixed; z-index:87; width:min(19rem,94vw); background:var(--card);
     border:1px solid var(--term); border-radius:var(--r-md);
-    box-shadow:var(--shadow-md); padding:.8rem .9rem; font-size:.9rem;
+    box-shadow:var(--shadow-md); padding:.8rem .9rem; font-size:var(--t-md);
   }
   #fcpop[hidden]{display:none}
   #fcpop .fchead{
     display:flex; align-items:center; justify-content:space-between; gap:.5rem;
-    color:var(--muted); font-size:.8rem; margin-bottom:.5rem;
+    color:var(--muted); font-size:var(--t-xs); margin-bottom:.5rem;
   }
   #fcpop .fcterm{color:var(--term); font-weight:600}
   #fcpop .fcreasons{display:flex; flex-direction:column; gap:.3rem}
   #fcpop .fcreasonbtn{
     display:flex; align-items:center; gap:.4rem; text-align:left;
     border:1px solid var(--line); background:var(--bg); color:var(--fg);
-    border-radius:var(--r-sm); padding:.4rem .6rem; font-size:.86rem; cursor:pointer;
+    border-radius:var(--r-sm); padding:.4rem .6rem; font-size:var(--t-sm); cursor:pointer;
   }
   #fcpop .fcreasonbtn:hover:not(:disabled){border-color:var(--term); background:var(--termbg)}
   #fcpop .fcreasonbtn:disabled{opacity:.6; cursor:default}
   #fcpop .fctext{
     width:100%; min-height:4.2rem; resize:vertical; font-family:inherit;
-    font-size:.86rem; line-height:1.5; padding:.45rem .6rem; color:var(--fg);
+    font-size:var(--t-sm); line-height:1.5; padding:.45rem .6rem; color:var(--fg);
     background:var(--bg); border:1px solid var(--term); border-radius:var(--r-sm);
     letter-spacing:inherit;
   }
   #fcpop .fcrow{display:flex; gap:.4rem; margin-top:.45rem}
-  #fcpop .fcrow button{font-size:.82rem; padding:.3rem .7rem}
-  #fcpop .fchint{color:var(--muted); font-size:.74rem; margin-top:.35rem}
-  #fcpop .fcback{font-size:.8rem}
+  #fcpop .fcrow button{font-size:var(--t-sm); padding:.3rem .7rem}
+  #fcpop .fchint{color:var(--muted); font-size:var(--t-2xs); margin-top:.35rem}
+  #fcpop .fcback{font-size:var(--t-xs)}
 
   /* ---- reading ruler + focus line ---- */
   /* the band is positioned over the current visual line; focus mode adds a
@@ -1232,7 +1245,7 @@
   /* drag-and-drop import */
   body.dragging::after{
     content:"drop a .know.json to import it"; position:fixed; inset:0; z-index:90;
-    display:flex; align-items:center; justify-content:center; font-size:1.2rem;
+    display:flex; align-items:center; justify-content:center; font-size:var(--t-2xl);
     background:color-mix(in srgb, var(--bg) 82%, transparent);
     border:3px dashed var(--accent); pointer-events:none;
   }
@@ -1253,7 +1266,7 @@
   .crumb .cl:hover{color:var(--fg)}
   .who .copy{
     margin-left:auto; border:none; background:none; color:var(--muted);
-    padding:0 .15rem; font-size:.95rem; cursor:pointer; line-height:1;
+    padding:0 .15rem; font-size:var(--t-lg); cursor:pointer; line-height:1;
   }
   .who .copy:hover{color:var(--fg)}
   .cl:focus-visible, summary:focus-visible, [role=button]:focus-visible{
@@ -1264,7 +1277,7 @@
   #statusbar{
     position:fixed; left:0; right:0; bottom:0; z-index:60;
     background:var(--card); border-top:2px solid var(--line);
-    padding:.5rem .9rem; display:none; align-items:center; gap:.8rem; font-size:.9rem;
+    padding:.5rem .9rem; display:none; align-items:center; gap:.8rem; font-size:var(--t-md);
   }
   #statusbar.on{display:flex}
   #statusbar .dot{width:.6rem; height:.6rem; border-radius:50%; background:var(--accent);
