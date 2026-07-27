@@ -69,6 +69,9 @@
     --shadow-sm:0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.05);
     --shadow-md:0 3px 8px rgba(0,0,0,.07), 0 10px 30px rgba(0,0,0,.14);
     --shadow-lg:0 6px 18px rgba(0,0,0,.09), 0 24px 60px rgba(0,0,0,.24);
+    /* one scrim behind every modal — dark in every theme, so the dialog
+       reads as a layer above the page instead of washing it out */
+    --scrim:rgba(18,16,12,.44);
   }
   *{box-sizing:border-box}
   /* stable gutter: the centred column doesn't lurch when the page grows a
@@ -172,7 +175,12 @@
 
   /* ---- layout ---- */
   header{
-    position:sticky; top:0; z-index:50; background:var(--bg);
+    position:sticky; top:0; z-index:50;
+    /* frosted: content slides under it with a soft blur (solid fallback
+       for browsers without backdrop-filter is at the end of the sheet) */
+    background:color-mix(in srgb, var(--bg) 84%, transparent);
+    -webkit-backdrop-filter:blur(14px) saturate(1.5);
+    backdrop-filter:blur(14px) saturate(1.5);
     border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:.7rem; padding:.5rem .9rem;
     /* installed as an app (display:standalone + viewport-fit=cover) the page
@@ -213,7 +221,8 @@
       border-radius:var(--r-xl) var(--r-xl) 0 0; box-shadow:0 -12px 40px rgba(0,0,0,.22);
       padding:.4rem 1rem 1rem;
     }
-    body.sheet-open aside{display:block}
+    body.sheet-open aside{display:block;
+      animation:sheetup .25s cubic-bezier(.16,1,.3,1)}
     aside::before{  /* grab handle */
       content:""; display:block; width:2.6rem; height:.3rem; border-radius:.2rem;
       background:var(--line); margin:.25rem auto .45rem;
@@ -227,7 +236,11 @@
     main{padding:1rem .9rem calc(8rem + env(safe-area-inset-bottom))}
     #tabbar{
       display:flex; position:fixed; left:0; right:0; bottom:0; z-index:75;
-      background:var(--card); border-top:2px solid var(--line);
+      background:color-mix(in srgb, var(--card) 88%, transparent);
+      -webkit-backdrop-filter:blur(14px) saturate(1.5);
+      backdrop-filter:blur(14px) saturate(1.5);
+      border-top:1px solid var(--line);
+      box-shadow:0 -4px 20px rgba(0,0,0,.08);
       padding:.25rem .35rem calc(.25rem + env(safe-area-inset-bottom));
     }
     #tabbar button{
@@ -242,8 +255,8 @@
       background:var(--primary); color:var(--onprim); border-radius:var(--r-sm);
       font-size:.62rem; line-height:1; padding:.16rem .32rem; font-weight:600;
     }
-    #tabbar button.active{color:var(--fg); background:var(--bg);
-      box-shadow:inset 0 2px 0 var(--accent)}
+    #tabbar button.active{color:var(--fg);
+      background:color-mix(in srgb, var(--accent) 16%, transparent)}
     /* thumb-reachable previous/next turn, shown when there's enough to hop */
     body.has-turns:not(.sheet-open):not(.running) #hopper{display:flex}
     #hopper{
@@ -521,6 +534,21 @@
     animation:shimmer 1.8s linear infinite;
   }
   @keyframes shimmer{from{transform:translateX(-100%)} to{transform:translateX(100%)}}
+  @keyframes sheetup{from{transform:translateY(12%); opacity:.4} to{transform:none; opacity:1}}
+  /* modals fade their scrim in and lift their dialog the last few pixels */
+  @keyframes scrimin{from{opacity:0} to{opacity:1}}
+  @keyframes dialogin{from{opacity:0; transform:translateY(8px) scale(.985)}
+                      to{opacity:1; transform:none}}
+  #tutoreditor.open, #localsettings.open, #overview.open, #palette.open,
+  #quizbox.open, #surveybox.open, #reviewbox.open, #statsbox.open, #hlbox.open,
+  #docketbox.open, #qbankbox.open, #globalqbox.open, #notesbox.open, #srcbox.open,
+  #teachbox.open, #gapsbox.open{animation:scrimin .18s ease-out}
+  #tutoreditor.open .box, #localsettings.open .box, #overview.open .obox,
+  #palette.open .pbox, #quizbox.open .box, #surveybox.open .box,
+  #reviewbox.open .box, #statsbox.open .box, #hlbox.open .box,
+  #docketbox.open .box, #qbankbox.open .box, #globalqbox.open .box,
+  #notesbox.open .box, #srcbox.open .box, #teachbox.open .box,
+  #gapsbox.open .box{animation:dialogin .22s cubic-bezier(.16,1,.3,1)}
   .pending .elapsed{font-variant-numeric:tabular-nums; margin-left:auto}
   .donechip{animation:pop .5s cubic-bezier(.34,1.56,.64,1)}
   @keyframes pop{from{transform:scale(.55); opacity:0} to{transform:scale(1); opacity:1}}
@@ -534,7 +562,8 @@
   /* ---- custom tutor editor ---- */
   #tutoreditor{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 72%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #tutoreditor.open{display:flex}
@@ -554,7 +583,8 @@
   /* ---- local settings (Copilot CLI transport only) ---- */
   #localsettings{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 72%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #localsettings.open{display:flex}
@@ -582,7 +612,8 @@
   /* ---- tree overview ---- */
   #overview{
     display:none; position:fixed; inset:0; z-index:94;
-    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #overview.open{display:flex}
@@ -604,7 +635,8 @@
   /* ---- command palette ---- */
   #palette{
     display:none; position:fixed; inset:0; z-index:96;
-    background:color-mix(in srgb, var(--bg) 70%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     justify-content:center; align-items:flex-start; padding:1rem;
   }
   #palette.open{display:flex}
@@ -638,7 +670,8 @@
   /* ---- quiz ---- */
   #quizbox{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #quizbox.open{display:flex}
@@ -679,7 +712,8 @@
   /* survey — the topic's foundations as a map to investigate from */
   #surveybox{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #surveybox.open{display:flex}
@@ -718,7 +752,8 @@
   /* ---- review (spaced flashcards over the glossary) ---- */
   #reviewbox{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #reviewbox.open{display:flex}
@@ -727,10 +762,16 @@
     padding:1.1rem 1.3rem 1.3rem; width:min(30rem,94vw); max-height:88dvh;
     overflow:auto; box-shadow:var(--shadow-lg);
   }
+  /* wraps rather than clips: the dialog is ~30rem wide whatever the viewport
+     is, so the controls must never depend on there being room for one row */
   #reviewbox .rhead{display:flex; align-items:center; gap:.7rem; margin-bottom:.6rem;
+    flex-wrap:wrap;
     color:var(--muted); font-size:.85rem}
   #reviewbox .rhead #revprog{flex:1; min-width:0; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis}
+  /* the hint drops to its own row (order + full basis) so progress and the
+     controls always share one tidy line */
+  #reviewbox .rhead #revkbd{order:1; flex:1 0 100%; margin-left:0}
   .rcard{
     text-align:center; padding:1.3rem .9rem 1.1rem; border:1px solid var(--line);
     border-radius:var(--r-md); background:var(--bg);
@@ -781,6 +822,10 @@
   #revdrillbtn:hover{color:var(--fg)}
   #revdrillbtn.on{color:var(--accent)}
   #drillwaitui{display:flex; align-items:center; gap:.15rem; white-space:nowrap}
+  /* display:flex outranks the hidden attribute's UA display:none — without
+     this the stepper keeps its width in the header while "hidden", pushing
+     the drill and close buttons out of the dialog */
+  #drillwaitui[hidden]{display:none}
   #drillwaitui button{
     border:none; background:none; color:var(--muted); cursor:pointer;
     font-size:.95rem; line-height:1; padding:.2rem .35rem;
@@ -800,7 +845,8 @@
           which share its skeleton ---- */
   #statsbox, #hlbox, #docketbox, #qbankbox, #globalqbox{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #statsbox.open, #hlbox.open, #docketbox.open, #qbankbox.open, #globalqbox.open{display:flex}
@@ -914,7 +960,8 @@
   /* ---- my notes (per-tree free-text synthesis) ---- */
   #notesbox, #srcbox{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #notesbox.open, #srcbox.open{display:flex}
@@ -952,7 +999,8 @@
   /* ---- explain it back (Feynman feedback) + gaps (baseline first) ---- */
   #teachbox, #gapsbox{
     display:none; position:fixed; inset:0; z-index:95;
-    background:color-mix(in srgb, var(--bg) 76%, transparent);
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
     align-items:center; justify-content:center; padding:1rem;
   }
   #teachbox.open, #gapsbox.open{display:flex}
@@ -1233,6 +1281,13 @@
     #statusbar{bottom:calc(3.55rem + env(safe-area-inset-bottom))}
     #jumpbtn{bottom:calc(7.6rem + env(safe-area-inset-bottom))}
     #helppanel,#aapanel{left:.4rem; right:.4rem; width:auto}
+  }
+
+  /* the frosted chrome needs a solid backdrop where blur isn't supported,
+     or the text underneath shows straight through it */
+  @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+    header{background:var(--bg)}
+    #tabbar{background:var(--card)}
   }
 </style>
 </head>
