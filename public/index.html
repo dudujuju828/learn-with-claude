@@ -388,6 +388,16 @@
   }
   #profilefile{display:flex; align-items:center; gap:.4rem; margin-top:.5rem}
   #profilefile select{flex:1; font-size:var(--t-sm); padding:.2rem .4rem; min-width:0}
+  /* the list is capped and scrolls on its own — without this it grows without
+     bound and shoves the "file" section below the fold, so on a browser with
+     any real number of trees the export buttons are simply unreachable.
+     position:relative makes children's offsetTop list-relative (renderTreeList
+     uses it to keep the open tree in view); overscroll-behavior stops a flick
+     past the end from carrying on into the sidebar behind it. */
+  #treelist{
+    max-height:min(21rem, 38dvh); overflow-y:auto; overscroll-behavior:contain;
+    position:relative;
+  }
   #treelist .item{
     padding:.35rem .5rem; border-radius:var(--r-sm); cursor:pointer; margin:.15rem 0;
     border:1px solid transparent;
@@ -4335,6 +4345,20 @@ function chaseThread(nodeId, turn, term){
 }
 window.chaseThread = chaseThread;
 
+/* The tree list is a capped scroller, so the open tree is easily rendered out
+   of sight. Nudge it back, touching only this list's own scrollTop — never an
+   ancestor's. Called on render AND when the mobile trees sheet opens: on mobile
+   the sidebar is display:none while renderTreeList runs, so clientHeight is 0
+   and the scroll has to be redone once the sheet is actually on screen. */
+function showActiveTree(){
+  const list = $("treelist");
+  const act = list && list.querySelector(".item.active");
+  if (!act || !list.clientHeight) return;
+  const top = act.offsetTop;
+  if (top < list.scrollTop || top + act.offsetHeight > list.scrollTop + list.clientHeight)
+    list.scrollTop = Math.max(0, top - (list.clientHeight - act.offsetHeight) / 2);
+}
+
 function renderTreeList(){
   const profiles = allProfiles();
   const active = activeProfile();
@@ -4362,8 +4386,12 @@ function renderTreeList(){
       (stamp(t) ? ` · ${fmtDate(stamp(t))}` : "") + `</div></div>`;
   }).join("") || `<span style="color:var(--muted);font-size:.86rem">` +
                  (active ? "no trees in this profile yet" : "none yet") + `</span>`;
+  showActiveTree();
   const all = items.reduce((s, t) => s + totalCost(t), 0);
-  $("alltreescost").textContent = items.length > 1 ? `· ${fmtCost(all)} total` : "";
+  // the count matters now that the list scrolls: it's the only cue that there
+  // are trees below the fold
+  $("alltreescost").textContent = items.length > 1
+    ? `· ${items.length} · ${fmtCost(all)} total` : "";
   // filing control for the open tree: its profile, or somewhere new
   const tree = cur();
   $("profilefile").style.display = tree ? "" : "none";
@@ -8060,6 +8088,9 @@ function setTab(tab){
     b.classList.toggle("active", on);
     b.setAttribute("aria-pressed", String(on));
   });
+  // the sheet was display:none when the list last rendered, so its scroll
+  // position could not be computed until now
+  if (tab === "tree") showActiveTree();
 }
 function closeMenu(){ setTab(""); }
 document.querySelectorAll("#tabbar button").forEach(b => {
