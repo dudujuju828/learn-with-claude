@@ -329,6 +329,13 @@
   }
   #aapanel.open{display:block}
   #aapanel{max-height:calc(100vh - 4.5rem); overflow:auto}
+  /* group headings: same visual language as the sidebar's h2 */
+  #aapanel h4{
+    font-size:var(--t-2xs); font-weight:600; text-transform:lowercase;
+    color:var(--muted); letter-spacing:.07em; margin:1.1rem 0 .45rem;
+    padding-bottom:.35rem; border-bottom:1px solid var(--line);
+  }
+  #aapanel h4:first-child{margin-top:0}
   #aapanel .row{display:flex; align-items:center; gap:.55rem; margin:.45rem 0}
   #aapanel .row label{flex:1; color:var(--muted)}
   #aapanel .row .val{min-width:3.2em; text-align:center; font-variant-numeric:tabular-nums}
@@ -339,7 +346,19 @@
     width:2rem; height:2rem; padding:0; border-radius:50%; border:2px solid var(--line);
   }
   .swatch.active{border-color:var(--accent); outline:2px solid var(--accent); outline-offset:2px}
-  #aapanel .toggle.on{border-color:var(--accent); background:var(--bg)}
+  /* toggle rows: a bold label with its explanation underneath, and the
+     switch pinned top-right so the switches line up in a column however
+     long the explanations wrap */
+  #aapanel .switchrow{align-items:flex-start}
+  #aapanel .switchrow label{display:flex; flex-direction:column; gap:.05rem;
+    line-height:1.45}
+  #aapanel .switchrow label b{color:var(--fg); font-weight:600}
+  #aapanel .switchrow label small{font-size:var(--t-2xs); color:var(--muted)}
+  #aapanel .toggle{flex:none; min-width:3.2rem; text-align:center;
+    border-radius:var(--r-pill)}
+  #aapanel .toggle.on{background:var(--primary); border-color:var(--primary);
+    color:var(--onprim); font-weight:600}
+  #aapanel .toggle.on:hover:not(:disabled){background:var(--primary)}
   #aapanel .foot{display:flex; justify-content:space-between; margin-top:.7rem}
 
   /* ---- sidebar ---- */
@@ -1534,6 +1553,7 @@
 </div>
 
 <div id="aapanel" role="dialog" aria-label="reading settings" tabindex="-1">
+  <h4>text</h4>
   <div class="row">
     <label for="fontsel">typeface</label>
     <select id="fontsel">
@@ -1564,10 +1584,12 @@
     <span class="val" id="wsval"></span>
     <button class="step" data-pref="ws" data-d="1" aria-label="wider words">+</button>
   </div>
-  <div class="row"><label>colours</label></div>
+  <h4>colours</h4>
   <div class="swatches" id="swatches" role="radiogroup" aria-label="colour theme"></div>
-  <div class="row" style="margin-top:.6rem">
-    <label for="speakbtn">🔊 read aloud — click any block to hear it; the word being spoken lights up (Esc stops)</label>
+  <h4>speech</h4>
+  <div class="row switchrow">
+    <label for="speakbtn"><b>🔊 read aloud</b>
+      <small>click any block to hear it; the word being spoken lights up (Esc stops)</small></label>
     <button id="speakbtn" class="toggle" role="switch">off</button>
   </div>
   <div class="row" id="voicerow">
@@ -1580,16 +1602,20 @@
     <button class="step" data-pref="rate" data-d="1" aria-label="faster speech">+</button>
     <button class="step" id="voicetry" title="hear a sample" aria-label="hear a sample of this voice and speed">▶</button>
   </div>
-  <div class="row">
-    <label for="thinkbtn">💭 show the learner's thinking blocks</label>
+  <h4>reading aids</h4>
+  <div class="row switchrow">
+    <label for="thinkbtn"><b>💭 thinking blocks</b>
+      <small>show what the learner was thinking before each question</small></label>
     <button id="thinkbtn" class="toggle" role="switch">on</button>
   </div>
-  <div class="row">
-    <label for="rulerbtn">🖍 reading ruler — ↑/↓ step line by line, keyboard only</label>
+  <div class="row switchrow">
+    <label for="rulerbtn"><b>🖍 reading ruler</b>
+      <small>↑/↓ step line by line, keyboard only</small></label>
     <button id="rulerbtn" class="toggle" role="switch">off</button>
   </div>
-  <div class="row">
-    <label for="focusbtn">🕶 focus line — hide everything except the current line</label>
+  <div class="row switchrow">
+    <label for="focusbtn"><b>🕶 focus line</b>
+      <small>hide everything except the current line</small></label>
     <button id="focusbtn" class="toggle" role="switch">off</button>
   </div>
   <div class="foot">
