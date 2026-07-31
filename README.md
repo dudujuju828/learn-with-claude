@@ -279,6 +279,11 @@ directly (a local `claude` login can't run on a server), so it needs an
   question in one pass, exactly like `full` queues its follow-ups; either
   way it's the same single question straight to the tutor as asking
   yourself, just saved for later instead of interrupting the moment.
+  Either bank, once two questions are waiting, offers **⇅ order by
+  dependency**: one cheap model call sorts them into the order they're best
+  learned in — where two touch the same idea, whichever the other one needs
+  answered first goes first, and unrelated ones keep roughly where they were.
+  The ordering sticks, and travels and syncs like everything else.
   Answered ones fold under a disclosure with a jump back to what they
   became, in both banks. Conversations
   interrupted mid-run offer **▶ continue**; URLs deep-link to the exact tree

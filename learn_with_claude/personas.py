@@ -696,6 +696,39 @@ def source_learner_context(source: str) -> str:
     )
 
 
+ORDER_QUESTIONS_SYSTEM = (
+    "You sequence questions for learning. Given a list, you return the order "
+    "someone should work through them so that each answer stands on the ones "
+    "before it. Output JSON only."
+)
+
+
+def order_questions_message(questions: list) -> str:
+    """Put a bank of banked questions into dependency order.
+
+    The rule that matters: where two questions touch the same idea, the one
+    whose answer the OTHER needs comes first. Questions that don't depend on
+    anything come early; questions that only make sense once something else
+    is understood come after it. Unrelated questions just keep their place —
+    there's nothing to gain from shuffling them.
+    """
+    listed = "\n".join(f"{i}. {q}" for i, q in enumerate(questions))
+    return (
+        "Put these questions into the order they are best learned in.\n\n"
+        f"{listed}\n\n"
+        "Order them by DEPENDENCY:\n"
+        "- If understanding one question's answer requires understanding "
+        "another first, the one it depends on comes first.\n"
+        "- Where two questions are about the same idea at different depths, "
+        "the broader or more basic one comes first.\n"
+        "- Questions that depend on nothing else here come early.\n"
+        "- Questions with no relationship to the rest keep roughly the "
+        "position they came in — don't shuffle for the sake of it.\n\n"
+        "Return every index exactly once, no additions, no omissions:\n"
+        '{"order": [<indices, best first>]}'
+    )
+
+
 SESSION_BRIEF_SYSTEM = (
     "You write orientation briefs. You are given a transcript of somebody's "
     "working session, and you describe the TERRAIN it covers — what it is "

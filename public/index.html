@@ -1571,8 +1571,11 @@
   <b>investigate</b> asks the tutor directly on the spot, or <b>run all</b>
   queues every pending one in a pass, exactly like "full" queues its
   follow-ups. The <b>❓ questions</b> button in the conversation header opens
-  the local bank for that tree; either bank folds answered questions under a
-  disclosure with a jump back to what they became.</p>
+  the local bank for that tree. Either bank, once two are waiting, offers
+  <b>⇅ order by dependency</b>: it sorts what's waiting into the order it's
+  best learned in — where two questions touch the same idea, whichever the
+  other one needs answered first goes first. Either bank folds answered
+  questions under a disclosure with a jump back to what they became.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
   another device or the CLI — the file format is identical. On a phone or
   tablet, saving opens the <b>share sheet</b> (AirDrop, Save to Files, Drive…)
@@ -3881,6 +3884,11 @@ function mergeTrees(local, server){
     const sq = qById.get(lq.id);
     if (!sq){ const clone = structuredClone(lq); outQ.push(clone); qById.set(lq.id, clone); continue; }
     if (lq.answered && !sq.answered){ sq.answered = true; sq.answerTurn = lq.answerTurn; }
+    // ⇅ order lives on `seq`, stamped so the more recent ordering wins —
+    // without this the union above would hand back the server's order
+    if (Number.isInteger(lq.seq) && (lq.ordered || "") > (sq.ordered || "")){
+      sq.seq = lq.seq; sq.ordered = lq.ordered;
+    }
   }
   if (outQ.length) out.questions = outQ; else delete out.questions;
   // teach-back attempts: append-only — union by node|when so an attempt
@@ -6543,11 +6551,56 @@ function jumpToTerm(nodeId, turn){
 /*     Stored in its own small synced doc (globalQDoc), same pattern as */
 /*     tutorsDoc, since it isn't part of any one tree.                 */
 /* ------------------------------------------------------------------ */
+/* ⇅ order — one cheap model call puts the pending questions into the order
+   they're best learned in: where two of them touch the same idea, whichever
+   the other one needs answered first goes first. Unrelated questions keep
+   roughly where they were. Both banks use it; the server always returns a
+   permutation of what it was sent (it repairs anything the model drops or
+   repeats), so pressing this can't lose a question. */
+let ordering = false;
+function orderBtnHtml(id, pending){
+  if (pending < 2) return "";
+  return `<button id="${id}" style="width:100%;margin-bottom:.7rem"` +
+    `${ordering || running ? " disabled" : ""}` +
+    ` title="sort them so each one builds on the ones before it">` +
+    `${ico("⇅")}${ordering ? "ordering…" : "order by dependency"}</button>`;
+}
+/* the model is given text only and answers with positions, so the questions
+   themselves never round-trip through it */
+async function orderBank(items, apply, rerender){
+  if (ordering || running || items.length < 2) return;
+  ordering = true; rerender();
+  try {
+    setStatus(`ordering ${items.length} questions…`);
+    const r = await api("order_questions", {questions: items.map(q => q.text)});
+    const order = Array.isArray(r.order) ? r.order : [];
+    const seen = new Set(), sorted = [];
+    for (const i of order)
+      if (Number.isInteger(i) && items[i] && !seen.has(i)){ seen.add(i); sorted.push(items[i]); }
+    for (let i = 0; i < items.length; i++) if (!seen.has(i)) sorted.push(items[i]);
+    apply(sorted, r.cost || 0);
+    clearStatus();
+  } catch (e){
+    if (e.message !== "logged out") setError(e.message);
+  } finally {
+    ordering = false; rerender(); renderHeader();
+  }
+}
+
 function questionsOf(tree){
   return Array.isArray(tree.questions) ? tree.questions : [];
 }
+/* pending questions read in the order ⇅ put them in. `seq` rather than array
+   order because the sync unions this list by id and keeps the server's order,
+   so a reorder made here would otherwise vanish on the next merge. Anything
+   never ordered keeps the order it was jotted in. */
 function pendingQuestions(tree){
-  return questionsOf(tree).filter(q => !q.answered && getNode(tree, q.node));
+  return questionsOf(tree)
+    .filter(q => !q.answered && getNode(tree, q.node))
+    .map((q, i) => ({q, i}))
+    .sort((a, b) => (Number.isInteger(a.q.seq) ? a.q.seq : a.i + 1e6) -
+                    (Number.isInteger(b.q.seq) ? b.q.seq : b.i + 1e6))
+    .map(x => x.q);
 }
 function answeredQuestions(tree){
   return questionsOf(tree).filter(q => q.answered && getNode(tree, q.node));
@@ -6773,6 +6826,17 @@ function wireQBankBody(){
   });
   const runAll = $("qbrunall");
   if (runAll) runAll.onclick = () => { runAllQuestions(); renderQBank(); };
+  const order = $("qborder");
+  if (order) order.onclick = () => {
+    const tree = cur(); if (!tree) return;
+    orderBank(pendingQuestions(tree), (sorted, cost) => {
+      const when = nowIso();
+      sorted.forEach((q, i) => { q.seq = i; q.ordered = when; });
+      const node = getNode(tree, currentNode);
+      if (node && cost) node.cost += cost;
+      persistTree(tree);
+    }, renderQBank);
+  };
 }
 function renderQBank(){
   if (!$("qbankbox").classList.contains("open")) return;
@@ -6791,7 +6855,7 @@ function renderQBank(){
   let h = "";
   if (pend.length > 1)
     h += `<button class="primary" id="qbrunall" style="width:100%;margin-bottom:.7rem" ${running ? "disabled" : ""}>` +
-         `${ico("▶")}run all ${pend.length} now</button>`;
+         `${ico("▶")}run all ${pend.length} now</button>` + orderBtnHtml("qborder", pend.length);
   h += pend.map(q => qrowHtml(q, false)).join("");
   if (done.length){
     h += `<details class="qbdone"${pend.length ? "" : " open"}><summary>${ico("✓")}answered · ${done.length}</summary>` +
@@ -6864,6 +6928,14 @@ function wireGlobalQBody(){
         if (e.key === "Enter" || e.key === " "){ e.preventDefault(); el.click(); }
       });
   });
+  const order = $("gqorder");
+  if (order) order.onclick = () => {
+    // this doc syncs whole and last-write-wins, so array order is the order
+    orderBank(pendingGlobalQuestions(), (sorted) => {
+      globalQDoc.questions = [...sorted, ...answeredGlobalQuestions()];
+      persistGlobalQDoc();
+    }, renderGlobalQBank);
+  };
 }
 function renderGlobalQBank(){
   if (!$("globalqbox").classList.contains("open")) return;
@@ -6879,7 +6951,7 @@ function renderGlobalQBank(){
       `<b>new</b>.</p></div>`;
     return;
   }
-  let h = pend.map(q => gqRowHtml(q, false)).join("");
+  let h = orderBtnHtml("gqorder", pend.length) + pend.map(q => gqRowHtml(q, false)).join("");
   if (done.length){
     h += `<details class="qbdone"${pend.length ? "" : " open"}><summary>${ico("✓")}investigated · ${done.length}</summary>` +
          done.map(q => gqRowHtml(q, true)).join("") + `</details>`;

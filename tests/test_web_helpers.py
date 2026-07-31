@@ -18,6 +18,7 @@ from learn_with_claude.personas import (  # noqa: E402
     define_message,
     learner_system,
     local_grounding_system,
+    order_questions_message,
     quiz_message,
     tutor_system,
 )
@@ -501,6 +502,69 @@ def test_learner_brief_threading():
     print("ok  learner brief threading (scenery block, ordering, cost, hosted unchanged)")
 
 
+def test_order_questions():
+    """Whatever the model returns, the result is a permutation — the button
+    must never lose, duplicate, or invent a question."""
+    from learn_with_claude.webapi import (
+        MAX_ORDER_QUESTIONS,
+        ApiError,
+        handle_order_questions,
+    )
+
+    qs = ["what is a bloom filter?", "why does STARLING use one?",
+          "what is a hash function?", "what is a false positive?"]
+
+    def reply(text, cost=0.02):
+        return lambda system, messages, role, **kw: (text, cost)
+
+    # the happy path: the model's order is honoured
+    out = handle_order_questions({"questions": qs}, reply('{"order": [2, 0, 3, 1]}'))
+    assert out["order"] == [2, 0, 3, 1] and out["cost"] == 0.02
+
+    # dropped indices are appended in their original order, never lost
+    assert handle_order_questions({"questions": qs}, reply('{"order": [3]}'))["order"] \
+        == [3, 0, 1, 2]
+    # duplicates and out-of-range are ignored
+    assert handle_order_questions(
+        {"questions": qs}, reply('{"order": [1, 1, 9, -2, 0]}'))["order"] == [1, 0, 2, 3]
+    # digit strings are accepted; booleans are not indices
+    assert handle_order_questions(
+        {"questions": qs}, reply('{"order": ["2", true, "0"]}'))["order"] == [2, 0, 1, 3]
+    # unusable replies degrade to the order it was given, not to chaos
+    for junk in ["not json at all", '{"order": "nope"}', "{}", '{"order": []}']:
+        assert handle_order_questions({"questions": qs}, reply(junk))["order"] == [0, 1, 2, 3]
+
+    # fewer than two questions never reaches the model
+    def explode(*a, **k):
+        raise AssertionError("must not call the model")
+
+    assert handle_order_questions({"questions": ["only one"]}, explode) \
+        == {"order": [0], "cost": 0.0}
+    assert handle_order_questions({"questions": []}, explode) == {"order": [], "cost": 0.0}
+    # blanks are dropped before the model sees them
+    assert handle_order_questions({"questions": ["  ", "a", "b"]},
+                                  reply('{"order": [1, 0]}'))["order"] == [1, 0]
+
+    # a bank bigger than the cap is truncated, and the answer still fits it
+    many = [f"question {i}" for i in range(MAX_ORDER_QUESTIONS + 10)]
+    out = handle_order_questions({"questions": many}, reply('{"order": [5]}'))
+    assert len(out["order"]) == MAX_ORDER_QUESTIONS and out["order"][0] == 5
+    assert sorted(out["order"]) == list(range(MAX_ORDER_QUESTIONS))
+
+    for bad in [{}, {"questions": "nope"}]:
+        try:
+            handle_order_questions(bad, explode)
+            assert False, f"must reject {bad!r}"
+        except ApiError:
+            pass
+
+    # the prompt actually asks for dependency order
+    msg = order_questions_message(qs)
+    assert "DEPENDENCY" in msg and all(q in msg for q in qs)
+    assert '"order"' in msg
+    print("ok  order questions (permutation repair, guards, cap, prompt)")
+
+
 def test_deepen_threading():
     """🔬 look deeper: same topic, re-investigated, seeded with what the node
     already covered, and told explicitly to override the ambient brevity."""
@@ -586,6 +650,7 @@ if __name__ == "__main__":
     test_handle_survey()
     test_source_threading()
     test_learner_brief_threading()
+    test_order_questions()
     test_deepen_threading()
     test_question_anchoring()
     print("\nall green")

@@ -5,6 +5,58 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 45 — ⇅ order the question bank by dependency
+
+*(user-requested: "the AI will organize the questions in dependency order
+(both global bank and local) — if there are two questions on a related
+concept, which question is best to understand first? (make it a button you
+press to organize)".)*
+
+### What it is
+A button in both question banks, shown once two questions are waiting. One
+cheap model call sorts the pending list into the order it's best learned in:
+where two questions touch the same idea, whichever the other one needs
+answered first goes first; unrelated questions keep roughly where they were.
+
+### Design notes
+- **The model returns positions, never the questions.** `handle_order_questions`
+  sends the text and gets back `{"order": [indices]}`, then *repairs* the
+  result: out-of-range, duplicate, and non-integer entries are dropped, and
+  anything the model omitted is appended in its original order. The output is
+  always a permutation of the input, so pressing the button can never lose,
+  duplicate, or invent a question — worst case (an unusable reply) it returns
+  the order you already had. Tested against six malformed replies.
+- **The local bank needed a `seq`, the global one didn't.** `mergeTrees`
+  unions `tree.questions` by id and keeps the *server's* order, so a reorder
+  made on one device would have vanished at the next sync. Pending questions
+  now sort by a stamped `seq`, merged by recency the way a hand-edited
+  glossary definition already is. The global bank is its own whole-document
+  last-write-wins doc, so there the array order simply *is* the order.
+- **Shared route, so both deployments get it.** It lives in `webapi.py`'s
+  route table, which means the hosted Vercel app has it as much as
+  `learn --web` — the one extra step was adding `order_questions` to
+  `vercel.json`'s rewrite list, which is easy to miss.
+- Runs on the cheap `glossary` role at `effort: none`; the local bank charges
+  it to the node so the header stays honest.
+- Verified with a real call on five hash-table questions, deliberately jotted
+  out of order: it returned hash function → collisions/chaining → open
+  addressing → resizing → consistent hashing. Plus 18 browser assertions over
+  both banks (reorder, nothing lost, seq stamped, survives a merge against a
+  server copy holding the old order, persists across reopen, no button for a
+  single question).
+
+---
+
+## Feature 44 — Shift+N opens my notes
+
+*(user-requested.)* Shifted like Shift+Q, and for the same reason: it belongs
+to the tree you're reading and needs one open, so plain `n` stays free for
+something that works with nothing open. Listed in the help table, on the notes
+button's tooltip, and beside the ⌘K palette entry. Browser-tested including
+that typing `N` inside the notes textarea doesn't re-fire it.
+
+---
+
 ## Removal — Excalidraw diagrams
 
 *(user-requested: "remove the excalidraw feature entirely from the

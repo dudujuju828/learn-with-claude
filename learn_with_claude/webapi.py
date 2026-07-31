@@ -27,6 +27,7 @@ from .personas import (
     INTERVIEW_SYSTEM,
     LEARNER_LEVELS,
     NEXT_CONCEPT_SYSTEM,
+    ORDER_QUESTIONS_SYSTEM,
     QUIZ_SYSTEM,
     SURVEY_SYSTEM,
     TEACHBACK_SYSTEM,
@@ -46,6 +47,7 @@ from .personas import (
     interview_opening,
     learner_system,
     next_concept_message,
+    order_questions_message,
     quiz_message,
     session_brief_learner_context,
     source_learner_context,
@@ -416,6 +418,49 @@ def handle_define(body: dict, call_model) -> dict:
     return {"definition": definition[:600], "cost": cost}
 
 
+MAX_ORDER_QUESTIONS = 40
+
+
+def handle_order_questions(body: dict, call_model) -> dict:
+    """Sort a bank of questions into dependency order, on the cheap model.
+
+    Returns the permutation as indices into the list that was sent, so the
+    caller doesn't have to trust the model with ids or text round-tripping.
+    Anything the model leaves out, repeats, or invents is repaired here: the
+    result is always every index exactly once, in the model's order where it
+    made sense and the original order for the rest. Worst case (an unusable
+    reply) that repair yields the input order, so the button can never lose
+    or duplicate a question.
+    """
+    raw = body.get("questions")
+    if not isinstance(raw, list):
+        raise ApiError("missing 'questions'")
+    questions = [str(q or "").strip()[:500] for q in raw[:MAX_ORDER_QUESTIONS]]
+    questions = [q for q in questions if q]
+    if len(questions) < 2:
+        return {"order": list(range(len(questions))), "cost": 0.0}
+
+    text, cost = call_model(
+        ORDER_QUESTIONS_SYSTEM,
+        [{"role": "user", "content": order_questions_message(questions)}],
+        "glossary", effort="none", max_tokens=600,
+    )
+    data = first_json_object(text)
+    proposed = data.get("order") if isinstance(data, dict) else None
+
+    order, seen = [], set()
+    for i in proposed if isinstance(proposed, list) else []:
+        if isinstance(i, bool):          # bool is an int in python; not an index
+            continue
+        if isinstance(i, str) and i.strip().lstrip("-").isdigit():
+            i = int(i)
+        if isinstance(i, int) and 0 <= i < len(questions) and i not in seen:
+            seen.add(i)
+            order.append(i)
+    order += [i for i in range(len(questions)) if i not in seen]   # never drop one
+    return {"order": order, "cost": cost}
+
+
 def handle_quiz(body: dict, call_model) -> dict:
     """3-8 multiple-choice questions built from the tree's conversations —
     retrieval practice on what the learner actually covered."""
@@ -544,6 +589,7 @@ def model_routes(call_model, tutor_grounding=None, learner_grounding=None) -> di
         "teachback": lambda body: handle_teachback(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
+        "order_questions": lambda body: handle_order_questions(body, call_model),
         "survey": lambda body: handle_survey(body, call_model),
         "export_md": handle_export_md,
         "export_html": handle_export_html,
