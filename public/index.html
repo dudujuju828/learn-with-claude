@@ -4120,6 +4120,10 @@ function renameProfile(){
   if (!name || name === from) return;
   for (const t of Object.values(store))
     if (treeProfile(t) === from){ t.profile = name; persistTree(t); }
+  let movedQ = false;
+  for (const q of globalQuestionsOf())
+    if (cleanProfileName(q.profile) === from){ q.profile = name; movedQ = true; }
+  if (movedQ) persistGlobalQDoc();
   prefs.profile = name;
   savePrefs();
   renderAll(true);
@@ -4448,7 +4452,7 @@ async function syncFromServer(){
   // honoured now that the merge brought it in
   if (!hadHashTree && !running) applyHash();
   if (!currentId){
-    const latest = Object.values(store)
+    const latest = profileTrees()
       .sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
     if (latest){ currentId = latest.id; currentNode = latest.root_id; }
   }
@@ -5071,9 +5075,11 @@ function findHit(text, q, fuzzy){
   return fuzzy ? fuzzyFind(lc, q) : null;
 }
 function searchHits(q, cap, fuzzy){
+  // every pass below walks profileTrees(), not the whole store: a search is
+  // a search of what you're currently working on
   const hits = [];
   outer:
-  for (const tree of Object.values(store)){
+  for (const tree of profileTrees()){
     for (const id of Object.keys(tree.nodes).map(Number).sort((a, b) => a - b)){
       const node = getNode(tree, id);
       for (const t of node.turns){
@@ -5094,7 +5100,7 @@ function searchHits(q, cap, fuzzy){
   // glossary definitions match too
   if (hits.length < cap){
     glossHits:
-    for (const tree of Object.values(store)){
+    for (const tree of profileTrees()){
       for (const e of Object.values(tree.glossary || {})){
         if (!e || !e.term) continue;
         const text = e.term + " — " + (e.def || "");
@@ -5110,7 +5116,7 @@ function searchHits(q, cap, fuzzy){
   // …and the words you wrote yourself: passage highlights, then "my notes"
   if (hits.length < cap){
     hlHits:
-    for (const tree of Object.values(store)){
+    for (const tree of profileTrees()){
       for (const h of highlightsOf(tree)){
         const text = h.text || "";
         const hit = findHit(text, q, fuzzy);
@@ -5123,7 +5129,7 @@ function searchHits(q, cap, fuzzy){
     }
   }
   if (hits.length < cap){
-    for (const tree of Object.values(store)){
+    for (const tree of profileTrees()){
       const text = (tree.note || "").replace(/\s+/g, " ").trim();
       const hit = findHit(text, q, fuzzy);
       if (!hit) continue;
@@ -5299,7 +5305,7 @@ function renderTerms(){
   let items;
   if (glossAll){
     items = [];
-    for (const t of Object.values(store))
+    for (const t of profileTrees())
       for (const i of glossaryItems(t)) items.push({...i, tree: t});
     items.sort((a, b) => a.term.toLowerCase().localeCompare(b.term.toLowerCase()));
   } else {
@@ -5307,7 +5313,7 @@ function renderTerms(){
   }
   const empty = !items.length;
   const anyAnywhere = empty
-    ? Object.values(store).some(t => glossaryItems(t).length) : true;
+    ? profileTrees().some(t => glossaryItems(t).length) : true;
   $("glossempty").classList.toggle("on", empty && !anyAnywhere);
   $("glossscope").textContent = glossAll ? "this tree" : "all trees";
   if (empty && !anyAnywhere){ wrap.style.display = "none"; return; }
@@ -7049,18 +7055,27 @@ let globalQDoc = loadGlobalQDoc();
 function globalQuestionsOf(){
   return Array.isArray(globalQDoc.questions) ? globalQDoc.questions : [];
 }
+/* the global bank is filed by profile too, so "questions I want to chase"
+   means the ones for the interest you're actually in. Questions from other
+   profiles stay in the document untouched — only the views filter. */
+function inProfileQ(q){
+  const p = activeProfile();
+  return !p || cleanProfileName(q && q.profile) === p;
+}
+function profileGlobalQuestions(){ return globalQuestionsOf().filter(inProfileQ); }
+function otherProfileQuestions(){ return globalQuestionsOf().filter(q => !inProfileQ(q)); }
 function pendingGlobalQuestions(){
-  return globalQuestionsOf().filter(q => !q.answered);
+  return profileGlobalQuestions().filter(q => !q.answered);
 }
 /* is this exact question already in the global bank? (answered ones count —
    banking it twice helps nobody). Normalised so punctuation and casing
    don't produce a duplicate of something you already have. */
 function isBanked(text){
   const k = normTerm(text);
-  return !!k && globalQuestionsOf().some(q => normTerm(q.text) === k);
+  return !!k && profileGlobalQuestions().some(q => normTerm(q.text) === k);
 }
 function answeredGlobalQuestions(){
-  return globalQuestionsOf().filter(q => q.answered);
+  return profileGlobalQuestions().filter(q => q.answered);
 }
 async function persistGlobalQDoc(){
   globalQDoc.saved_at = new Date().toISOString();
@@ -7074,6 +7089,7 @@ function addGlobalQuestion(text){
   const qs = globalQuestionsOf().slice();
   if (qs.length >= 300) return null;   // a sane ceiling for the whole bank
   const q = {id: randHex(8), text: t, added: nowIso()};
+  if (activeProfile()) q.profile = activeProfile();
   qs.push(q);
   globalQDoc.questions = qs;
   persistGlobalQDoc();
@@ -7337,7 +7353,7 @@ async function suggestQuestions(){
   try {
     setStatus("looking for questions you haven't asked…");
     const r = await api("suggest_questions", {questions: pend.map(q => q.text)});
-    const have = new Set(globalQuestionsOf().map(q => normTerm(q.text)));
+    const have = new Set(profileGlobalQuestions().map(q => normTerm(q.text)));
     suggestions = (Array.isArray(r.questions) ? r.questions : [])
       .map(t => String(t || "").trim())
       .filter(t => t && !have.has(normTerm(t)))
@@ -7400,7 +7416,10 @@ function wireGlobalQBody(){
   if (order) order.onclick = () => {
     // this doc syncs whole and last-write-wins, so array order is the order
     orderBank(pendingGlobalQuestions(), (sorted) => {
-      globalQDoc.questions = [...sorted, ...answeredGlobalQuestions()];
+      // rebuild the whole document: other profiles' questions are not on
+      // screen and must survive the rewrite untouched
+      globalQDoc.questions = [...otherProfileQuestions(), ...sorted,
+                              ...answeredGlobalQuestions()];
       persistGlobalQDoc();
     }, renderGlobalQBank);
   };
@@ -7464,7 +7483,7 @@ $("globalqbtn").onclick = () => openGlobalQBank();
 $("globalqbox").addEventListener("click", (e) => { if (e.target === $("globalqbox")) closeGlobalQBank(); });
 function updateGlobalQRow(){
   const n = pendingGlobalQuestions().length;
-  $("globalqwrap").style.display = (n || globalQuestionsOf().length) ? "" : "none";
+  $("globalqwrap").style.display = (n || profileGlobalQuestions().length) ? "" : "none";
   $("globalqbtn").innerHTML = `${ico("❓")}global questions` + (n ? ` · ${n}` : "");
 }
 
@@ -7924,7 +7943,7 @@ function paletteBuild(q){
   const push = (group, it) => items.push({...it, group});
   for (const a of paletteActions()) if (match(a.label)) push("commands", a);
   const stamp = (t) => t.saved_at || t.created || "";
-  const trees = Object.values(store).sort((a, b) => stamp(b).localeCompare(stamp(a)))
+  const trees = profileTrees().sort((a, b) => stamp(b).localeCompare(stamp(a)))
     .filter(t => match(t.root_topic)).slice(0, ql ? 12 : 5);
   for (const t of trees){
     const n = Object.keys(t.nodes).length;
@@ -9209,7 +9228,7 @@ async function boot(){
   // deep link first, else reopen the most recent local tree; the server sync
   // then merges in anything grown on other devices
   if (!applyHash() && !currentId){
-    const latest = Object.values(store)
+    const latest = profileTrees()
       .sort((a, b) => (b.created || "").localeCompare(a.created || ""))[0];
     if (latest){ currentId = latest.id; currentNode = latest.root_id; }
   }
