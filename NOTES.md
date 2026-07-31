@@ -5,6 +5,36 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 47 — ❓ bank it, from an explain-it-back probe
+
+*(user-requested: "when doing an explain-it-back it may end up asking a
+question that you don't know the answer to, in which case there should be an
+option to add it to your global question-bank".)*
+
+### What it is
+A second button beside **⤳ chase it** on the tutor's probing question. Chase
+spends a model call and closes the box; **❓ bank it** files the question in
+the global bank and leaves the thread exactly where it was.
+
+### Design notes
+- **The point is that it doesn't interrupt.** Chasing was the only existing
+  answer to "I don't know this", and it ends the explain-back to go answer it
+  elsewhere. Banking is the opposite move: park it, keep explaining, come back
+  to it whenever. So this deliberately does *not* close the box, costs no
+  model call, and re-renders in place.
+- **Global, not the tree's own bank** — as asked, and it's the right home: the
+  probe surfaces something *you* don't know, which is what the global bank is
+  for, rather than a note about this particular conversation.
+- **It reads ✓ banked once it's in**, computed from the bank itself
+  (`isBanked`, normalised for case and punctuation) rather than from a stored
+  flag — so it survives a re-render, revisiting an old attempt from the trail,
+  and a sync from another device, with nothing new persisted anywhere.
+- 15 browser assertions over the real flow: the question reaches the global
+  bank verbatim, the box stays open with its thread intact, the button flips,
+  it can't be filed twice, and it turns up investigable in the bank UI.
+
+---
+
 ## Feature 46 — ✨ suggest questions (global bank)
 
 *(user-requested: "a 'suggest questions' feature that looks at the current

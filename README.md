@@ -255,7 +255,11 @@ directly (a local `claude` login can't run on a server), so it needs an
   hidden. Every reply is kept (synced, travelling in `.know.json`), the
   verdict trail shows the thread narrowing, and **⤳ chase it** sends
   the tutor's probing question into the conversation as your own turn
-  instead, if you'd rather have it answered there. A clean explanation comes due
+  instead, if you'd rather have it answered there. When the probe lands on
+  something you simply don't know, **❓ bank it** parks that question in your
+  global question bank and leaves the thread running — no model call, no
+  breaking off; answer it whenever you like. It reads **✓ banked** once it's
+  in, so you can't file it twice. A clean explanation comes due
   again on a spaced ladder (3d → 7d → longer), surfaced as a **🗣 explain
   again** nudge beside the review button — re-explaining just before you'd
   forget is the strongest rehearsal there is. The 🔊 (or **s**) reads the

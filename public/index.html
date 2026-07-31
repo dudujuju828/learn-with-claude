@@ -1504,8 +1504,11 @@
   attempt brings its words back.
   <b>⤳ chase it</b> sends the tutor's
   probing question into the conversation as your own turn instead, if
-  you'd rather have it answered there; the <b>🔊</b> (or <b>s</b>) reads the
-  feedback aloud. A <b>clean</b> explanation comes due again later —
+  you'd rather have it answered there. If the probe lands on something you
+  just don't know, <b>❓ bank it</b> parks that question in your global
+  question bank and leaves the thread running — no model call, nothing
+  interrupted; it reads <b>✓ banked</b> once it's in. The <b>🔊</b> (or
+  <b>s</b>) reads the feedback aloud. A <b>clean</b> explanation comes due again later —
   3 days, then 7, then longer — and the <b>🗣 explain again</b> nudge in
   the words tab (and ⌘K) takes you straight to what's due: re-explaining
   just before you'd forget is the strongest rehearsal there is. Your
@@ -3238,7 +3241,15 @@ function teachFeedbackHtml(a, label){
     : "";
   const chase = a.question
     ? `<div style="margin-top:.35rem"><button class="copy" onclick="chaseTeach()"` +
-      ` title="send this question to the tutor — the answer lands in the conversation as your turn (🧑)">⤳ chase it</button></div>`
+      ` title="send this question to the tutor — the answer lands in the conversation as your turn (🧑)">⤳ chase it</button>` +
+      // the tutor's probe often lands on something you simply don't know.
+      // Park it in the global bank and carry on with the thread rather than
+      // breaking off to chase it.
+      (isBanked(a.question)
+        ? `<button class="copy" disabled title="already in your question bank">✓ banked</button>`
+        : `<button class="copy" onclick="bankTeachQuestion()"` +
+          ` title="don't know it? park it in your global question bank and keep going">❓ bank it</button>`) +
+      `</div>`
     : "";
   return (label ? `<p class="tbwhen">${esc(label)}</p>` : "") + v +
          card("✓ what's solid", a.right) +
@@ -3290,6 +3301,34 @@ function showTeachAttempt(i){
   renderTeach(past, a, `attempt ${i + 1} of ${past.length} · ${(a.when || "").slice(0, 10)}:`);
 }
 window.showTeachAttempt = showTeachAttempt;
+/* the question the currently-shown teach-back attempt ended on */
+function shownTeachQuestion(){
+  const tree = cur();
+  if (!tree || teachNodeId == null) return null;
+  const past = teachAttempts(tree, teachNodeId);
+  const a = past[teachShown >= 0 ? teachShown : past.length - 1];
+  return a && a.question ? a : null;
+}
+/* ❓ bank it — chase's quieter sibling. Chasing spends a model call and
+   closes the box; this just parks the question in the global bank so you
+   can keep explaining, and answer it whenever. Global rather than the
+   tree's own bank because it's a thing YOU don't know, not a note about
+   this conversation — and the global bank is where unanswered curiosity
+   already lives. */
+function bankTeachQuestion(){
+  const a = shownTeachQuestion();
+  if (!a || isBanked(a.question)) return;
+  if (!addGlobalQuestion(a.question)) return;
+  updateGlobalQRow();
+  const tree = cur();
+  const past = tree && teachNodeId != null ? teachAttempts(tree, teachNodeId) : [];
+  renderTeach(past, a, teachShown >= 0 && past.length > 1
+    ? `attempt ${teachShown + 1} of ${past.length} · ${(a.when || "").slice(0, 10)}:` : "");
+  setStatus("banked — press q any time to see your questions");
+  setTimeout(() => { if (!running) clearStatus(); }, 2200);
+}
+window.bankTeachQuestion = bankTeachQuestion;
+
 function chaseTeach(){
   const tree = cur(); if (!tree || running || teachBusy || teachNodeId == null) return;
   const past = teachAttempts(tree, teachNodeId);
@@ -6663,6 +6702,13 @@ function globalQuestionsOf(){
 }
 function pendingGlobalQuestions(){
   return globalQuestionsOf().filter(q => !q.answered);
+}
+/* is this exact question already in the global bank? (answered ones count —
+   banking it twice helps nobody). Normalised so punctuation and casing
+   don't produce a duplicate of something you already have. */
+function isBanked(text){
+  const k = normTerm(text);
+  return !!k && globalQuestionsOf().some(q => normTerm(q.text) === k);
 }
 function answeredGlobalQuestions(){
   return globalQuestionsOf().filter(q => q.answered);
