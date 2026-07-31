@@ -183,7 +183,14 @@ directly (a local `claude` login can't run on a server), so it needs an
   definition isn't enough: the tutor is
   asked what that thing actually **is** in this context, and the answer
   lands in the conversation as your own turn (🧑), where you can read it,
-  define terms inside it, or branch from it. The same chip also offers
+  define terms inside it, or branch from it. **▶ investigate** is dig's big
+  sibling: it takes exactly what you selected — a term or a whole sentence —
+  and starts a fresh investigation on it in **its own tree**, carrying
+  nothing over from what you were reading (no digest, no breadcrumb, no
+  grounding passage), precisely as if you'd typed that text into the topic
+  box and pressed *new*. It inherits only what a new tree always inherits:
+  the active profile, the tutor style, and the learner level.
+  The same chip also offers
   **★ highlight** — a highlighter over the tutor's words
   that stays put across reloads and devices (tap a mark to lift it), travels
   in `.know.json`, and shows up in both exports — the Markdown quotes each

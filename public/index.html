@@ -1188,7 +1188,7 @@
      separators become a grid gap the card colour shows through */
   #selchip{
     position:fixed; z-index:86; display:flex; align-items:stretch; flex-wrap:wrap;
-    max-width:min(94vw, 34rem); gap:1px;
+    max-width:min(94vw, 42rem); gap:1px;
     border:1px solid var(--term); background:color-mix(in srgb, var(--term) 40%, var(--line));
     border-radius:var(--r-pill); box-shadow:var(--shadow-md); overflow:hidden;
   }
@@ -1447,7 +1447,11 @@
   all. Dotted-underlined words in answers are defined glossary terms — tap
   one to read it right there. <b>⛏ dig</b> is for when a definition isn't
   enough: the tutor is asked what that thing actually is in this context,
-  and the answer lands in the conversation as your turn.
+  and the answer lands in the conversation as your turn. <b>▶ investigate</b>
+  is dig's big sibling — it takes exactly what you selected (a word or a
+  whole sentence) and starts a fresh investigation on it in its own tree,
+  carrying nothing over from what you were reading, just as if you'd typed
+  it into the topic box and pressed <b>new</b>.
   <b>✕ forget</b> in the sidebar takes a term back out for good.
   <b>anki cards</b> downloads the defined terms as a file Anki imports
   directly.</p>
@@ -2090,6 +2094,7 @@
   <button id="seladd"></button>
   <button id="seldef"></button>
   <button id="seldig"></button>
+  <button id="selinv"></button>
   <button id="selhi"></button>
   <button id="selfc"></button>
 </div>
@@ -6847,6 +6852,15 @@ document.addEventListener("selectionchange", () => {
       $("seldig").setAttribute("aria-label",
         `dig into “${info.text}” — ask the tutor what it is in this context`);
     }
+    // investigate takes a passage as happily as a term — a highlighted
+    // sentence makes a perfectly good topic for its own tree
+    $("selinv").innerHTML = `${ico("▶")}investigate`;
+    $("selinv").disabled = running;
+    $("selinv").title = running
+      ? "finish the investigation that's running first"
+      : "start a whole new investigation on exactly this — its own tree, its own context";
+    $("selinv").setAttribute("aria-label",
+      `investigate “${oneLine(info.text, 40)}” in a new tree`);
     $("selhi").innerHTML = `${ico("★")}highlight`;
     $("selhi").setAttribute("aria-label", `highlight “${oneLine(info.text, 40)}”`);
     $("selfc").innerHTML = `${ico("➕")}flashcard`;
@@ -6941,6 +6955,22 @@ $("seldig").onclick = (ev) => {
   // take the reader to it (a queued dig lands later; no jump then)
   const t = getNode(tree, nodeId)?.turns.at(-1);
   if (t && t.user && t.action === q) jumpToTerm(nodeId, t.turn);
+};
+/* ▶ investigate — dig's big sibling. Where dig asks one question inside
+   this conversation, this takes exactly what you selected and starts a
+   whole new investigation on it: its own tree, its own root, nothing
+   carried over from what you were reading. Identical to typing that text
+   into the topic box and pressing "new" (the global question bank's
+   investigate does the same), so it inherits the active profile, the
+   tutor style, and the learner level, and nothing else. */
+$("selinv").onclick = (ev) => {
+  ev.stopPropagation();
+  const topic = (selchip.dataset.term || "").trim();
+  hideSelchip();
+  document.getSelection()?.removeAllRanges();
+  if (!topic || running) return;   // a run in flight owns the reader's view
+  closeMenu();
+  cmdNew(topic);
 };
 $("selhi").onclick = (ev) => {
   ev.stopPropagation();

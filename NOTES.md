@@ -5,6 +5,70 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 42 — ▶ investigate, from a selection
+
+*(user-requested: "on highlight — an investigate button, along with the
+other 'on highlight' buttons — that just takes that exact thing you
+highlighted and puts it into a new fresh investigation (separate
+context)".)*
+
+### What it is
+A sixth action on the selection chip. Select a word or a whole sentence in
+any answer, press **▶ investigate**, and that exact text becomes the topic
+of a brand-new tree — its own root, its own context, nothing carried over
+from what you were reading.
+
+### Design notes
+- **Zero new machinery.** `rootThunk(topic)` already does exactly this,
+  and the global question bank's *investigate* already uses it for the
+  same purpose ("a brand-new root investigation with the question's own
+  text as the topic, exactly as if you'd typed it into the topic box and
+  pressed new"). The handler is four lines: guard, `closeMenu()`,
+  `cmdNew(topic)`. No backend change, no new tree field, nothing new to
+  merge, sync, or export.
+- **"Separate context" is enforced by using the ordinary root path, not
+  by stripping anything.** `runInvestigation` only adds a grounding
+  `source` when the *tree* has one, and a fresh tree has none; the
+  branch/deepen paths are what inject a breadcrumb and digest, and those
+  aren't involved. The probe asserts this at the wire: the `/api/learner`
+  body is `kind: "root"` with `topic` exactly the selected text, empty
+  `turns`, and no `source`/`breadcrumb`/`digest`/`baseline`.
+- **It does inherit the three things a new tree always inherits** — the
+  active profile (so it files where you're working), the tutor style, and
+  the learner level. Those are device/session preferences, not context
+  from the tree you were reading.
+- **Blocked while a run is in flight**, matching the topic box
+  (`guardTopic` returns null when `running`) and the global bank's
+  disabled investigate button — `rootThunk` switches the reader to the
+  new tree the moment it starts, which would yank you out of whatever is
+  currently growing. The button renders `disabled` with a title saying
+  why, rather than vanishing.
+- **Offered for long selections too**, unlike add/define/dig. A
+  highlighted sentence is often a *better* topic than a single term, and
+  `selInfo` already caps a selection at 300 characters, so the topic
+  can't run away.
+- **The chip's max-width needed loosening** from 34rem to 42rem: six
+  buttons measure ~590px, so the old cap forced a wrap even on a wide
+  desktop. It still wraps to two rows at phone width (verified at a
+  366px cap: 58px tall, nothing clipped).
+- 57 assertions now run against the real page, including that the new
+  tree is a root and not a branch, that its glossary starts empty, that
+  the tree you came from is untouched, and that the stub tutor's answer
+  lands in the new tree.
+
+### Candidates rejected (this cycle)
+- **Carrying a provenance link back to the source tree** — tempting, but
+  it's a new tree field to merge, sync, and export for something the tree
+  list already makes findable, and it quietly contradicts "separate".
+- **A confirm dialog before spending** — a full investigation is several
+  model calls, but the global bank sets the precedent of starting one on
+  a single tap, and `stop` is always right there in the status bar.
+- **Queueing it behind a running investigation** instead of disabling —
+  `enqueue` would accept it, but the reader would be teleported to a new
+  tree minutes later with no idea why.
+
+---
+
 ## Feature 41 — the glossary is strictly what you put in it
 
 *(user-requested: "no words should ever be added automatically to the
