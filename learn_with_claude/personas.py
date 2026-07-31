@@ -696,6 +696,44 @@ def source_learner_context(source: str) -> str:
     )
 
 
+SUGGEST_QUESTIONS_SYSTEM = (
+    "You propose the questions someone has not thought to ask yet. You read "
+    "what they have already banked, work out what is missing around it, and "
+    "answer with a few questions in their own voice. Output JSON only."
+)
+
+
+def suggest_questions_message(questions: list, want: int = 4) -> str:
+    """Suggest questions the global bank implies but nobody wrote down.
+
+    The bank is the whole context here — it has no tree behind it, just the
+    things this person has wondered about. The value is in the gaps rather
+    than more of the same: the prerequisite none of them covers, the obvious
+    next step past them, the case they all quietly assume. Suggestions are
+    proposals the reader accepts or discards one by one, so a few sharp ones
+    beat a padded list.
+    """
+    listed = "\n".join(f"- {q}" for q in questions)
+    return (
+        f"Someone has been banking questions they want to investigate:\n{listed}\n\n"
+        f"Suggest up to {want} more questions worth asking. Aim at what is "
+        "MISSING:\n"
+        "- a prerequisite none of the banked questions covers, but which they "
+        "all lean on\n"
+        "- the obvious next step once the banked ones are answered\n"
+        "- an assumption, edge case, or tradeoff the existing questions skate "
+        "over\n\n"
+        "Rules:\n"
+        "- Never restate a banked question, however differently worded.\n"
+        "- Each one must be a single, concrete, answerable question — the kind "
+        "with an actual answer, not 'what should I know about X?'.\n"
+        "- Write them in the same plain first-person voice as the banked ones.\n"
+        "- Fewer good ones beats filling the quota. Suggest none if there is "
+        "genuinely nothing worth adding.\n\n"
+        '{"questions": ["...", "..."]}'
+    )
+
+
 ORDER_QUESTIONS_SYSTEM = (
     "You sequence questions for learning. Given a list, you return the order "
     "someone should work through them so that each answer stands on the ones "

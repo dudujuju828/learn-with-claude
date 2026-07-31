@@ -4,6 +4,7 @@ Run with:  python tests/test_web_helpers.py
 (no test framework needed — asserts throughout, prints ok per group)
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from learn_with_claude.personas import (  # noqa: E402
     local_grounding_system,
     order_questions_message,
     quiz_message,
+    suggest_questions_message,
     tutor_system,
 )
 
@@ -565,6 +567,79 @@ def test_order_questions():
     print("ok  order questions (permutation repair, guards, cap, prompt)")
 
 
+def test_suggest_questions():
+    """Suggestions are proposals — this only has to return a short, clean,
+    non-duplicate list. Nothing is added anywhere by the call itself."""
+    from learn_with_claude.webapi import (
+        MAX_SUGGESTIONS,
+        ApiError,
+        handle_suggest_questions,
+    )
+
+    have = ["what is a B-tree?", "why do B-trees have high fanout?"]
+
+    def reply(payload, cost=0.02):
+        return lambda system, messages, role, **kw: (payload, cost)
+
+    out = handle_suggest_questions({"questions": have}, reply(
+        '{"questions": ["how does a node split when it fills up?",'
+        ' "what is a disk page, and why does it matter here?"]}'))
+    assert len(out["questions"]) == 2 and out["cost"] == 0.02
+    assert out["questions"][0].startswith("how does a node split")
+
+    # a re-worded duplicate of something banked is dropped — word order,
+    # case, punctuation and filler words all ignored
+    out = handle_suggest_questions({"questions": have}, reply(
+        '{"questions": ["A B-tree — what IS it?",'
+        ' "Why is the fanout of B-trees high?",'
+        ' "what happens on a delete?"]}'))
+    assert out["questions"] == ["what happens on a delete?"], out["questions"]
+
+    # suggestions that duplicate each other collapse too
+    out = handle_suggest_questions({"questions": have}, reply(
+        '{"questions": ["what happens on a delete?", "on a delete, what happens?"]}'))
+    assert len(out["questions"]) == 1
+
+    # capped, trimmed, and stripped of junk
+    out = handle_suggest_questions({"questions": have}, reply(
+        '{"questions": ' + json.dumps([f"question number {i} about trees?" for i in range(10)]) + "}"))
+    assert len(out["questions"]) == MAX_SUGGESTIONS
+    out = handle_suggest_questions({"questions": have}, reply(
+        '{"questions": ["  spaced   out    question about pages?  ", "no", "", 42, null]}'))
+    assert out["questions"] == ["spaced out question about pages?"], out["questions"]
+
+    # an unusable reply is simply no suggestions, never an error
+    for junk in ["not json", "{}", '{"questions": "nope"}', '{"questions": []}']:
+        assert handle_suggest_questions({"questions": have}, reply(junk))["questions"] == []
+
+    # nothing to go on -> refuse rather than invent
+    def explode(*a, **k):
+        raise AssertionError("must not call the model")
+
+    for bad in [{}, {"questions": "nope"}, {"questions": []}, {"questions": ["  "]}]:
+        try:
+            handle_suggest_questions(bad, explode)
+            assert False, f"must reject {bad!r}"
+        except ApiError:
+            pass
+
+    # the overlap bar is deliberate: a re-wording is caught, a genuinely
+    # narrower question about the same thing is not
+    from learn_with_claude.webapi import _question_words, _same_question
+    assert _same_question(_question_words("why do B-trees have high fanout?"),
+                          _question_words("Why is the fanout of B-trees high?"))
+    assert not _same_question(_question_words("what is a B-tree?"),
+                              _question_words("what is a B-tree node?"))
+    assert not _same_question(_question_words("what is a heap?"),
+                              _question_words("what is a stack?"))
+
+    # the prompt aims at gaps and forbids restating
+    msg = suggest_questions_message(have, 4)
+    assert "MISSING" in msg and "Never restate" in msg
+    assert all(q in msg for q in have) and '"questions"' in msg
+    print("ok  suggest questions (dedupe by meaning, cap, junk, guards)")
+
+
 def test_deepen_threading():
     """🔬 look deeper: same topic, re-investigated, seeded with what the node
     already covered, and told explicitly to override the ambient brevity."""
@@ -651,6 +726,7 @@ if __name__ == "__main__":
     test_source_threading()
     test_learner_brief_threading()
     test_order_questions()
+    test_suggest_questions()
     test_deepen_threading()
     test_question_anchoring()
     print("\nall green")

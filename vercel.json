@@ -13,7 +13,7 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:route(login|logout|me|learner|tutor|next_concept|interview|teachback|define|quiz|order_questions|survey|export_md|export_html|digest)",
+      "source": "/api/:route(login|logout|me|learner|tutor|next_concept|interview|teachback|define|quiz|order_questions|suggest_questions|survey|export_md|export_html|digest)",
       "destination": "/api/index"
     }
   ]

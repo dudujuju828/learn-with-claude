@@ -659,6 +659,20 @@
   #localsettings .foot{display:flex; gap:.5rem; align-items:center; margin-top:.9rem}
   #localsettings .err{color:var(--danger); font-size:var(--t-sm); margin:.5rem 0 0}
   #localsettings .err:empty{display:none}
+  /* ✨ suggested questions — visibly provisional until you keep one: dashed
+     edge, tinted, and set apart from the bank proper above it */
+  .sugg{
+    border:1px dashed var(--term); border-radius:var(--r-md);
+    background:var(--termbg); padding:.55rem .6rem; margin-bottom:.8rem;
+  }
+  .sugg .sugghead{
+    display:flex; align-items:center; gap:.4rem; margin-bottom:.45rem;
+    font-size:var(--t-xs); color:var(--muted); letter-spacing:.04em;
+  }
+  .sugg .suggclear{margin-left:auto; font-size:var(--t-2xs); padding:.15rem .45rem}
+  .sugg .sugrow{background:var(--card)}
+  .sugg .suggall{width:100%; margin-top:.15rem; font-size:var(--t-sm)}
+
   /* the picker of past Copilot sessions — one tap instead of hunting for a hash */
   #lssessionpick{max-height:9rem; overflow-y:auto; margin:.15rem 0 .3rem}
   .sessrow{
@@ -1571,7 +1585,12 @@
   <b>investigate</b> asks the tutor directly on the spot, or <b>run all</b>
   queues every pending one in a pass, exactly like "full" queues its
   follow-ups. The <b>❓ questions</b> button in the conversation header opens
-  the local bank for that tree. Either bank, once two are waiting, offers
+  the local bank for that tree. In the global bank, <b>✨ suggest questions</b>
+  reads what you've banked and proposes a few it implies but you never wrote
+  down — the prerequisite underneath them, the obvious next step, the case
+  they all assume. They're proposals: nothing joins the bank until you press
+  <b>+</b> on that one, and <b>✕</b> throws it away.
+  Either bank, once two are waiting, offers
   <b>⇅ order by dependency</b>: it sorts what's waiting into the order it's
   best learned in — where two questions touch the same idea, whichever the
   other one needs answered first goes first. Either bank folds answered
@@ -6889,6 +6908,60 @@ $("qbankbox").addEventListener("click", (e) => { if (e.target === $("qbankbox"))
    bank's. Answered ones fold under a disclosure with a cross-tree jump to
    whatever investigation they became (openSearchHit, not jumpToTerm — the
    result usually isn't the tree you're currently looking at). */
+/* ✨ suggest — reads the global bank and proposes a few questions it implies
+   but nobody wrote down. They are PROPOSALS: nothing joins the bank until
+   you press + on that one, so they live in memory only (no doc, no sync, no
+   export) and vanish when you dismiss them or reload. */
+let suggestions = [];          // [{id, text}] awaiting your verdict
+let suggesting = false;
+function suggestBlockHtml(pending){
+  let h = "";
+  if (pending >= 1)
+    h += `<button id="gqsuggest" style="width:100%;margin-bottom:.7rem"` +
+      `${suggesting || running ? " disabled" : ""}` +
+      ` title="questions your bank implies but you haven't asked — you decide which to keep">` +
+      `${ico("✨")}${suggesting ? "thinking…" : "suggest questions"}</button>`;
+  if (!suggestions.length) return h;
+  h += `<div class="sugg"><div class="sugghead">${ico("✨")}suggested — keep the ones you want` +
+       `<button class="ghost suggclear" data-sact="none">${ico("✕")}dismiss all</button></div>` +
+       suggestions.map(s =>
+         `<div class="qrow sugrow" data-sid="${esc(s.id)}">` +
+         `<div class="qtext">${esc(s.text)}</div>` +
+         `<div class="qacts">` +
+         `<button class="primary" data-sact="add" data-sid="${esc(s.id)}">${ico("➕")}add</button>` +
+         `<button class="ghost" data-sact="drop" data-sid="${esc(s.id)}">${ico("✕")}no</button>` +
+         `</div></div>`).join("") +
+       `<button class="suggall" data-sact="all">${ico("➕")}add all ${suggestions.length}</button>` +
+       `</div>`;
+  return h;
+}
+async function suggestQuestions(){
+  const pend = pendingGlobalQuestions();
+  if (suggesting || running || !pend.length) return;
+  suggesting = true; renderGlobalQBank();
+  try {
+    setStatus("looking for questions you haven't asked…");
+    const r = await api("suggest_questions", {questions: pend.map(q => q.text)});
+    const have = new Set(globalQuestionsOf().map(q => normTerm(q.text)));
+    suggestions = (Array.isArray(r.questions) ? r.questions : [])
+      .map(t => String(t || "").trim())
+      .filter(t => t && !have.has(normTerm(t)))
+      .map(t => ({id: randHex(6), text: t}));
+    clearStatus();
+    if (!suggestions.length) setStatus("nothing worth adding — your bank covers it");
+  } catch (e){
+    if (e.message !== "logged out") setError(e.message);
+  } finally {
+    suggesting = false; renderGlobalQBank();
+  }
+}
+function takeSuggestion(id){
+  const s = suggestions.find(x => x.id === id);
+  if (s) addGlobalQuestion(s.text);          // only now does it become real
+  suggestions = suggestions.filter(x => x.id !== id);
+  renderGlobalQBank();
+}
+
 function gqRowHtml(q, done){
   const where = done
     ? (store[q.treeId] ? oneLine(store[q.treeId].root_topic, 40) : "…")
@@ -6936,6 +7009,23 @@ function wireGlobalQBody(){
       persistGlobalQDoc();
     }, renderGlobalQBank);
   };
+  const sug = $("gqsuggest");
+  if (sug) sug.onclick = suggestQuestions;
+  $("gqbody").querySelectorAll("[data-sact]").forEach(el => {
+    el.onclick = () => {
+      const act = el.dataset.sact;
+      if (act === "add"){ takeSuggestion(el.dataset.sid); return; }
+      if (act === "drop"){
+        suggestions = suggestions.filter(x => x.id !== el.dataset.sid);
+        renderGlobalQBank(); return;
+      }
+      if (act === "all"){
+        for (const s of [...suggestions]) addGlobalQuestion(s.text);
+        suggestions = []; renderGlobalQBank(); return;
+      }
+      if (act === "none"){ suggestions = []; renderGlobalQBank(); }
+    };
+  });
 }
 function renderGlobalQBank(){
   if (!$("globalqbox").classList.contains("open")) return;
@@ -6951,7 +7041,8 @@ function renderGlobalQBank(){
       `<b>new</b>.</p></div>`;
     return;
   }
-  let h = orderBtnHtml("gqorder", pend.length) + pend.map(q => gqRowHtml(q, false)).join("");
+  let h = suggestBlockHtml(pend.length) +
+          orderBtnHtml("gqorder", pend.length) + pend.map(q => gqRowHtml(q, false)).join("");
   if (done.length){
     h += `<details class="qbdone"${pend.length ? "" : " open"}><summary>${ico("✓")}investigated · ${done.length}</summary>` +
          done.map(q => gqRowHtml(q, true)).join("") + `</details>`;

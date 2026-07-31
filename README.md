@@ -279,6 +279,12 @@ directly (a local `claude` login can't run on a server), so it needs an
   question in one pass, exactly like `full` queues its follow-ups; either
   way it's the same single question straight to the tutor as asking
   yourself, just saved for later instead of interrupting the moment.
+  In the global bank, **✨ suggest questions** reads what you've banked and
+  proposes a few it implies but you never wrote down — the prerequisite
+  underneath them, the obvious next step past them, the case they all quietly
+  assume. They arrive as proposals in a dashed panel: **+** keeps one, **✕**
+  throws it away, and nothing reaches the bank (or the sync, or an export)
+  until you say so.
   Either bank, once two questions are waiting, offers **⇅ order by
   dependency**: one cheap model call sorts them into the order they're best
   learned in — where two touch the same idea, whichever the other one needs

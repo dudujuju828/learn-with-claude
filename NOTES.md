@@ -5,6 +5,49 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 46 — ✨ suggest questions (global bank)
+
+*(user-requested: "a 'suggest questions' feature that looks at the current
+questions and suggests a few questions to be added or not — the user
+ultimately decides whether or not to keep it". Global bank only, per the
+follow-up.)*
+
+### What it is
+A button in the global bank: it reads what you've banked and proposes up to
+four questions it implies but you never wrote down — the prerequisite
+underneath them, the obvious next step, the case they all quietly assume.
+They arrive in a dashed, visibly-provisional panel with **+** and **✕** per
+suggestion, plus add-all and dismiss-all.
+
+### Design notes
+- **Nothing is added by the call.** The route returns text and the UI holds it
+  in a module-level array — no tree field, no synced doc, no export, no merge
+  rule. A suggestion becomes real only when `takeSuggestion()` runs
+  `addGlobalQuestion()` on it. That kept the whole feature to one route and
+  one render block, and it's why "dismissed suggestions never touch the synced
+  doc" is trivially true rather than something to police.
+- **Session-only was the right call for provisional data.** Persisting them
+  would mean a new synced field for things the reader hasn't agreed to keep;
+  losing them on reload costs one cheap call.
+- **Duplicate rejection needed to be fuzzy, and the test caught that.** An
+  exact normalised-key match let "Why is the fanout of B-trees high?" through
+  against a banked "why do B-trees have high fanout?" — one filler word apart.
+  It now compares content-word sets by Jaccard overlap at 0.7, which catches
+  the re-wording while leaving "what is a B-tree?" and "what is a B-tree
+  node?" (0.67) as the genuinely different questions they are. Suggestions are
+  also deduped against each other within a batch.
+- **Global only, as asked.** The local bank already has a tree behind it —
+  `→ next`, `🔬 look deeper` and the survey map all propose what to cover
+  next there. The global bank had nothing of the kind, and its banked
+  questions are the only context it has.
+- Real call on three B-tree/postgres questions returned MVCC and index
+  visibility, page size versus fanout, and planner statistics — three things
+  the bank plainly implied and none of them a restatement. 19 browser
+  assertions cover keep, reject, add-all, dismiss-all, the already-banked
+  filter, and that nothing leaks into the doc.
+
+---
+
 ## Feature 45 — ⇅ order the question bank by dependency
 
 *(user-requested: "the AI will organize the questions in dependency order

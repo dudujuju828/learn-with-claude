@@ -29,6 +29,7 @@ from .personas import (
     NEXT_CONCEPT_SYSTEM,
     ORDER_QUESTIONS_SYSTEM,
     QUIZ_SYSTEM,
+    SUGGEST_QUESTIONS_SYSTEM,
     SURVEY_SYSTEM,
     TEACHBACK_SYSTEM,
     TUTOR_MODES,
@@ -52,6 +53,7 @@ from .personas import (
     session_brief_learner_context,
     source_learner_context,
     source_tutor_context,
+    suggest_questions_message,
     survey_message,
     teachback_message,
     tutor_system,
@@ -419,6 +421,74 @@ def handle_define(body: dict, call_model) -> dict:
 
 
 MAX_ORDER_QUESTIONS = 40
+MAX_SUGGESTIONS = 4
+QUESTION_MAX = 500
+
+
+_STOPWORDS = {"a", "an", "the", "is", "are", "was", "were", "be", "do", "does",
+              "did", "have", "has", "had", "what", "why", "how", "when", "where",
+              "which", "of", "to", "in", "on", "at", "for", "with", "it", "its",
+              "that", "this", "these", "those", "and", "or", "but", "if", "so",
+              "i", "my", "me", "you", "your", "we", "our", "s"}
+
+# how much two questions must overlap to count as the same one. Exact key
+# equality is too brittle — "why do B-trees have high fanout?" and "why is the
+# fanout of B-trees high?" differ by one filler word and are plainly the same
+# question — while a lower bar would swallow genuinely different ones ("what
+# is a B-tree?" vs "what is a B-tree node?" sits at 0.67 and must survive).
+SAME_QUESTION_OVERLAP = 0.7
+
+
+def _question_words(text: str) -> frozenset:
+    """The content words of a question: case, punctuation, word order, and
+    grammatical filler all discarded."""
+    return frozenset(w for w in re.findall(r"[a-z0-9]+", text.lower())
+                     if w not in _STOPWORDS)
+
+
+def _same_question(a: frozenset, b: frozenset) -> bool:
+    if not a or not b:
+        return a == b
+    return len(a & b) / len(a | b) >= SAME_QUESTION_OVERLAP
+
+
+def handle_suggest_questions(body: dict, call_model) -> dict:
+    """A few questions the global bank implies but nobody wrote down.
+
+    Suggestions only — nothing is added anywhere by this call. The caller
+    shows them and the reader keeps or discards each one, so the handler's
+    job is just to return a short, clean, non-duplicate list.
+    """
+    raw = body.get("questions")
+    if not isinstance(raw, list):
+        raise ApiError("missing 'questions'")
+    existing = [str(q or "").strip()[:QUESTION_MAX] for q in raw[:MAX_ORDER_QUESTIONS]]
+    existing = [q for q in existing if q]
+    if not existing:
+        raise ApiError("no questions to suggest from")
+
+    text, cost = call_model(
+        SUGGEST_QUESTIONS_SYSTEM,
+        [{"role": "user", "content": suggest_questions_message(existing, MAX_SUGGESTIONS)}],
+        "glossary", effort="none", max_tokens=600,
+    )
+    data = first_json_object(text)
+    proposed = data.get("questions") if isinstance(data, dict) else None
+
+    seen = [_question_words(q) for q in existing]
+    out = []
+    for q in proposed if isinstance(proposed, list) else []:
+        q = " ".join(str(q or "").split())[:QUESTION_MAX]
+        words = _question_words(q)
+        # too short to be a question, or one they already have in other words
+        # (including one an earlier suggestion in this same batch already made)
+        if len(q) < 8 or not words or any(_same_question(words, s) for s in seen):
+            continue
+        seen.append(words)
+        out.append(q)
+        if len(out) >= MAX_SUGGESTIONS:
+            break
+    return {"questions": out, "cost": cost}
 
 
 def handle_order_questions(body: dict, call_model) -> dict:
@@ -590,6 +660,7 @@ def model_routes(call_model, tutor_grounding=None, learner_grounding=None) -> di
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
         "order_questions": lambda body: handle_order_questions(body, call_model),
+        "suggest_questions": lambda body: handle_suggest_questions(body, call_model),
         "survey": lambda body: handle_survey(body, call_model),
         "export_md": handle_export_md,
         "export_html": handle_export_html,
