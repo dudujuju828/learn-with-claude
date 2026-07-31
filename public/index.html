@@ -1167,6 +1167,84 @@
   #teachbox .tbwhen button.copy{vertical-align:baseline}
   #teachbox .tbwhen button.copy.sel{outline:2px solid var(--accent); outline-offset:1px}
 
+  /* ---- written exam (essay paper, 10 marks a question) ----
+     Wider than the other modals and scrolled in the body rather than the
+     box: writing five essays is a long sitting, and the footer's "2 of 5
+     answered" plus submit must stay put instead of scrolling away. */
+  #exambox{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #exambox.open{display:flex}
+  #exambox .box{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r-xl);
+    padding:1.1rem 1.3rem; width:min(46rem,95vw); max-height:90dvh;
+    display:flex; flex-direction:column; box-shadow:var(--shadow-lg);
+  }
+  #exambox .nthead{display:flex; align-items:center; gap:.6rem; margin-bottom:.7rem}
+  #exambox #extitle{font-weight:600}
+  #exambox #exscope{flex:1; color:var(--muted); font-size:var(--t-sm);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  #exambox #exbody{overflow-y:auto; flex:1; min-height:0}
+  #exambox .ntfoot{display:flex; align-items:center; gap:.6rem; margin-top:.8rem;
+    padding-top:.75rem; border-top:1px solid var(--line); flex-wrap:wrap}
+  #exambox #exmeta{flex:1; min-width:9rem; margin:0}
+  #exambox #exacts{display:flex; gap:.5rem; flex-wrap:wrap}
+  #exambox .exq{margin:0 0 1.1rem; padding-bottom:1.1rem; border-bottom:1px solid var(--line)}
+  #exambox .exq:last-child{border-bottom:0; padding-bottom:.2rem; margin-bottom:0}
+  #exambox .exqh{display:flex; align-items:center; gap:.5rem; flex-wrap:wrap;
+    margin-bottom:.3rem; font-size:var(--t-sm); color:var(--muted)}
+  #exambox .exqh .exn{font-weight:600; color:var(--fg)}
+  #exambox .exkind{border:1px solid var(--line); border-radius:var(--r-pill);
+    padding:.05rem .55rem; font-size:var(--t-xs)}
+  #exambox .exqt{font-size:var(--t-xl); line-height:1.65; margin:.15rem 0 .6rem;
+    text-wrap:pretty}
+  #exambox textarea.exa{
+    min-height:9rem; resize:vertical; width:100%; font-family:inherit;
+    font-size:1rem; line-height:1.7; padding:.7rem .8rem; color:var(--fg);
+    background:var(--bg); border:1px solid var(--line); border-radius:var(--r-md);
+    letter-spacing:inherit; word-spacing:inherit;
+  }
+  #exambox .exfoot{display:flex; align-items:center; gap:.6rem; margin-top:.4rem;
+    font-size:var(--t-sm); color:var(--muted); flex-wrap:wrap}
+  #exambox .exfoot .exwc{flex:1; font-variant-numeric:tabular-nums}
+  #exambox .exmark{font-weight:600; color:var(--fg); font-variant-numeric:tabular-nums}
+  #exambox .exbar{height:.35rem; border-radius:var(--r-pill); background:var(--line);
+    overflow:hidden; margin:.35rem 0 .55rem}
+  #exambox .exbar i{display:block; height:100%; border-radius:var(--r-pill);
+    background:var(--ask)}
+  #exambox .exbar.mid i{background:var(--accent)}
+  #exambox .exbar.low i{background:var(--danger)}
+  #exambox .excard{margin:.55rem 0 0; padding:.6rem .75rem; border:1px solid var(--line);
+    border-radius:var(--r-md); background:var(--bg); white-space:pre-wrap}
+  #exambox .excard b{display:block; margin-bottom:.25rem; font-size:var(--t-sm); color:var(--muted)}
+  /* the examiner's whole-script comment is a header for what follows, not
+     part of question 1 — give it room to read as its own thing */
+  #exambox .excard.exoverall{margin:0 0 1.2rem}
+  #exambox details.exans{margin:.55rem 0 0}
+  #exambox details.exans summary{cursor:pointer; color:var(--muted); font-size:var(--t-sm)}
+  #exambox details.exans .exyou{white-space:pre-wrap; margin:.4rem 0 0; padding-left:.9rem;
+    border-left:2px solid var(--line)}
+  #exambox .exchips{display:flex; flex-wrap:wrap; gap:.35rem; margin:.55rem 0 0}
+  /* a scheme point can run long enough to wrap; a pill radius on two lines
+     reads as a balloon, so these stay a small card shape at any length */
+  #exambox .exchip{font-size:var(--t-sm); border:1px solid var(--line);
+    border-radius:var(--r-sm); padding:.2rem .6rem; line-height:1.5;
+    color:var(--muted)}
+  #exambox .exchip.hit{border-color:color-mix(in srgb, var(--ask) 60%, var(--line)); color:var(--fg)}
+  #exambox .exchip.miss{border-color:color-mix(in srgb, var(--danger) 50%, var(--line))}
+  #exambox .exsum{text-align:center; padding:.3rem 0 .8rem}
+  #exambox .exsum .big{font-size:var(--d-md); font-variant-numeric:tabular-nums}
+  #exambox .exsum p{text-wrap:balance}
+  #exambox .excount{display:flex; gap:.4rem; flex-wrap:wrap; margin:.55rem 0 0}
+  #exambox .excount button[aria-pressed="true"]{border-color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 15%, var(--card)); color:var(--fg)}
+  #exambox .expast{margin-top:1rem; border-top:1px solid var(--line); padding-top:.7rem}
+  #exambox .expast button{margin:.3rem .3rem 0 0}
+  #exambox .exbank[disabled]{opacity:.65}
+
   /* ---- help panel ---- */
   #helppanel{
     display:none; position:fixed; top:calc(3.3rem + env(safe-area-inset-top));
@@ -1373,7 +1451,7 @@
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
     #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #fcpop, #selchip, #palette, #qcap,
-    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #gapsbox, #tutoreditor, #overview, #qbankbox, #globalqbox, .who .copy{display:none !important}
+    #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #exambox, #gapsbox, #tutoreditor, #overview, #qbankbox, #globalqbox, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
   }
@@ -1572,6 +1650,22 @@
   The <b>🔊</b> beside the question (or the <b>s</b> key) reads it and each
   choice aloud in your chosen voice — and after you answer, the explanation
   too.</p>
+  <p><b>📄 exam</b> — the quiz's harder sibling: a written paper on the
+  conversation you have open. Essay questions (3–8 of them, 5 by default),
+  one box each, one submit at the end. The examiner sets them without ever
+  quoting the conversation, so nothing on the paper can be answered by
+  remembering a sentence of it — expect to explain a mechanism, apply the
+  idea to a case that never came up, and take apart a claim that sounds
+  right. Each is out of <b>10</b>, marked against the scheme it was set
+  with, and what comes back per question is two paragraphs: what your
+  answer earned, and what a full-mark answer would have said. Marks go to
+  the ideas and the reasoning first, with credit for using the technical
+  vocabulary correctly — never for name-dropping it, and never lost for
+  explaining the right thing in plain words. Answers save as you type, so
+  a paper survives closing the tab; an unfinished one waits in
+  <b>📅 today</b>. No idea on a question? <b>❓ bank it</b> parks it in your
+  global question bank and you carry on. <b>📊 progress</b> keeps your
+  papers, and both exports carry the marked script.</p>
   <p><b>🗺 survey</b> — for a broad topic, map before diving: the tutor breaks
   it into the foundations it's built on (each with a one-line why, two levels
   deep). <b>investigate</b> any piece to run a normal conversation on it —
@@ -2200,6 +2294,22 @@
   </div>
 </div>
 
+<div id="exambox" role="dialog" aria-modal="true" aria-label="written exam">
+  <div class="box">
+    <div class="nthead">
+      <span id="extitle">📄 exam</span>
+      <span id="exscope"></span>
+      <button id="exclose" class="ghost" aria-label="close exam">✕</button>
+    </div>
+    <div id="exbody"></div>
+    <div class="ntfoot">
+      <span id="exmeta" class="hint"></span>
+      <span id="exacts"></span>
+      <button id="exsend" class="primary">write the paper</button>
+    </div>
+  </div>
+</div>
+
 <div id="gapsbox" role="dialog" aria-modal="true" aria-label="what you already know">
   <div class="box">
     <div class="nthead">
@@ -2401,7 +2511,7 @@ const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
                        tmode: "balanced", think: true, llevel: "auto", profile: "",
-                       revtype: false, drill: false, drillwait: 5};
+                       revtype: false, drill: false, drillwait: 5, examq: 5};
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -4332,6 +4442,23 @@ function mergeTrees(local, server){
   if (outTb.length)
     out.teach = outTb.sort((x, y) => (x.when || "").localeCompare(y.when || ""));
   else delete out.teach;
+  // written exams: union by id. A submitted paper is the expensive,
+  // unrepeatable artifact — it always beats an unsubmitted copy of itself
+  // (another device may still be holding the draft it was marked from);
+  // between two drafts the later `saved` stamp wins, so answers typed on
+  // the phone survive a merge with the laptop's older copy of the same paper.
+  const localEx = Array.isArray(local.exams) ? local.exams : [];
+  const outEx = Array.isArray(out.exams) ? out.exams.slice() : [];
+  const exById = new Map(outEx.map(e => [e.id, e]));
+  for (const le of localEx){
+    const se = exById.get(le.id);
+    if (!se){ const c = structuredClone(le); outEx.push(c); exById.set(le.id, c); continue; }
+    const bothSame = !!le.submitted === !!se.submitted;
+    if ((le.submitted && !se.submitted) ||
+        (bothSame && (le.saved || "") > (se.saved || "")))
+      Object.assign(se, structuredClone(le));
+  }
+  if (outEx.length) out.exams = outEx; else delete out.exams;
   if ((local.saved_at || "") > (server.saved_at || "")){
     if (local.quiz) out.quiz = structuredClone(local.quiz);
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
@@ -4777,6 +4904,9 @@ function renderConversation(keepScroll){
               ` the tutor says what's solid, what's missing, and asks one question to push deeper` +
               `${sym === "✓" ? " (best attempt so far: clean)" : ""}">` +
               `${ico("🗣")}explain${sym ? ` ${sym}` : ""}${tb.length ? ` · ${tb.length}` : ""}</button>`);
+    acts.push(`<button onclick="openExam()" title="a written paper on this conversation —` +
+              ` essay questions, 10 marks each, marked with real feedback">` +
+              `${ico("📄")}exam${examBadge(tree, node.id)}</button>`);
   }
   const totalTurns = Object.values(tree.nodes).reduce((s, n) => s + n.turns.length, 0);
   if (!running && totalTurns >= 2){
@@ -5700,6 +5830,457 @@ function nextQuiz(){ if (quiz){ quiz.i++; renderQuiz(); } }
 window.nextQuiz = nextQuiz;
 
 /* ------------------------------------------------------------------ */
+/* written exam — essay questions on ONE conversation, 10 marks each,  */
+/* marked by the examiner model against the scheme the paper was set   */
+/* with.                                                               */
+/*                                                                     */
+/* The quiz next door asks whether the ideas are still there; this     */
+/* asks whether they are HELD. Multiple choice can be passed on        */
+/* recognition, and recognition is exactly what a tidy explanation     */
+/* leaves behind — so the paper is set from the conversation without   */
+/* ever quoting it, and every answer has to be built rather than       */
+/* picked out of four.                                                 */
+/*                                                                     */
+/* Scope is the open conversation, not the whole tree: a tree spans    */
+/* several investigations and an exam that roamed across all of them   */
+/* would test breadth, which the quiz already does. Papers live on the */
+/* tree (tree.exams, one record per sitting) so they sync, travel in   */
+/* .know.json, and reach both exports — and inherit the tree's         */
+/* profile, which is what keeps them scoped to the interest you're in. */
+/* ------------------------------------------------------------------ */
+const EXAM_COUNTS = [3, 4, 5, 6, 7, 8];
+const EXAM_MARKS = 10;         // per question — webapi.py fixes this too
+const EXAM_MAX_PAPERS = 40;    // per tree; far past any realistic use
+/* what each question was probing — shown once it's marked, because
+   knowing which move you fell over on is worth more than the mark */
+const EXAM_KIND_WORDS = {
+  mechanism: "mechanism — the causal chain",
+  discriminate: "discrimination — where two ideas part",
+  transfer: "transfer — a case you hadn't met",
+  counterfactual: "counterfactual — what your model predicts",
+  claim: "a claim to assess",
+  judgement: "judgement — choosing, and defending it",
+};
+let examId = null;             // the paper on screen, by id
+let examNodeId = null;
+let examBusy = false, examPrevFocus = null, examConfirm = false;
+let examSaveTimer = null;
+
+function examsOf(tree){ return Array.isArray(tree.exams) ? tree.exams : []; }
+function nodeExams(tree, nodeId){
+  return examsOf(tree).filter(e => e && e.node === nodeId)
+    .sort((a, b) => String(a.made || "").localeCompare(String(b.made || "")));
+}
+/* the paper the 📄 button opens: an unfinished one is what you're in the
+   middle of, so it wins over however many marked ones sit behind it */
+function liveExam(tree, nodeId){
+  const list = nodeExams(tree, nodeId);
+  return list.find(e => !e.submitted) || list[list.length - 1] || null;
+}
+function examById(tree, id){ return examsOf(tree).find(e => e && e.id === id) || null; }
+function curExam(){
+  const tree = cur();
+  return tree && examId ? examById(tree, examId) : null;
+}
+function examAnswers(e){ return Array.isArray(e.answers) ? e.answers : []; }
+function examWritten(e){ return examAnswers(e).filter(a => String(a || "").trim()).length; }
+function examWords(s){
+  const t = String(s || "").trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+/* the conversation in full — deliberately NOT conversationDigest(), which
+   clips every tutor answer to 240 characters. That's fine for reminding
+   you what was covered and useless as a syllabus: the examiner needs the
+   real substance both to set a fair paper and to judge whether what you
+   wrote is actually right. */
+function examMaterial(node){
+  const out = [];
+  for (const t of node.turns){
+    if (t.action) out.push((t.user ? "Q (the student's own question): " : "Q: ") + t.action);
+    if (t.tutor) out.push("A: " + t.tutor);
+  }
+  return out.join("\n\n");
+}
+function examBadge(tree, nodeId){
+  const e = liveExam(tree, nodeId);
+  if (!e) return "";
+  if (e.submitted) return ` · ${e.total}/${e.max}`;
+  const n = examWritten(e), total = (e.questions || []).length;
+  return n ? ` · ${n}/${total} written` : " · paper set";
+}
+
+function openExam(){
+  const tree = cur(); if (!tree || running || currentNode == null) return;
+  const node = getNode(tree, currentNode);
+  if (!node || !node.turns.some(t => t.tutor)) return;
+  examPrevFocus = document.activeElement;
+  examNodeId = node.id;
+  const live = liveExam(tree, node.id);
+  examId = live ? live.id : null;
+  examConfirm = false;
+  $("exscope").textContent = "· " + oneLine(node.label, 60);
+  $("exambox").classList.add("open");
+  renderExam();
+  $("exbody").scrollTop = 0;
+}
+window.openExam = openExam;
+
+function renderExam(){
+  if (!$("exambox").classList.contains("open")) return;
+  const e = curExam();
+  if (!e) renderExamSetup();
+  else if (e.submitted) renderExamResults(e);
+  else renderExamPaper(e);
+}
+
+function renderExamSetup(){
+  const tree = cur();
+  const past = tree && examNodeId != null
+    ? nodeExams(tree, examNodeId).filter(x => x.submitted) : [];
+  const want = EXAM_COUNTS.includes(prefs.examq) ? prefs.examq : 5;
+  $("exbody").innerHTML =
+    `<p style="margin:0">Essay questions on this conversation — nothing you can answer ` +
+    `by remembering a sentence of it. Each is out of ${EXAM_MARKS} and marked against ` +
+    `the scheme it was set with, so what comes back is feedback you can act on, not ` +
+    `just a score.</p>` +
+    `<p class="hint">how many questions?</p>` +
+    `<div class="excount" role="group" aria-label="number of questions">` +
+    EXAM_COUNTS.map(n =>
+      `<button onclick="setExamCount(${n})" aria-pressed="${n === want}">${n}</button>`).join("") +
+    `</div>` +
+    (past.length
+      ? `<div class="expast"><p class="hint" style="margin:0">papers you've already sat:</p>` +
+        past.slice().reverse().map(x =>
+          `<button onclick="showExam('${esc(x.id)}')" title="reopen this marked paper">` +
+          `${x.total}/${x.max}` +
+          `${x.submitted ? " · " + esc(fmtDate(x.submitted)) : ""}</button>`).join("") +
+        `</div>`
+      : "");
+  $("exacts").innerHTML = "";
+  const send = $("exsend");
+  send.style.display = ""; send.disabled = false;
+  send.textContent = "write the paper";
+  send.onclick = writeExamPaper;
+  $("exmeta").textContent = `${want} question${want === 1 ? "" : "s"} · one model call`;
+}
+
+function setExamCount(n){
+  if (examBusy) return;
+  prefs.examq = EXAM_COUNTS.includes(n) ? n : 5;
+  savePrefs();
+  renderExamSetup();
+}
+window.setExamCount = setExamCount;
+
+async function writeExamPaper(){
+  const tree = cur(); if (!tree || examBusy || running || examNodeId == null) return;
+  const node = getNode(tree, examNodeId); if (!node) return;
+  if (examsOf(tree).length >= EXAM_MAX_PAPERS){
+    $("exmeta").textContent = "this tree already holds a lot of papers — open an older one instead.";
+    return;
+  }
+  examBusy = true;
+  $("exsend").disabled = true;
+  $("exmeta").textContent = provName() + " is setting the paper…";
+  try {
+    const r = await api("exam", {
+      root_topic: tree.root_topic, label: node.label,
+      material: examMaterial(node), count: prefs.examq,
+    });
+    examBusy = false;
+    node.cost += r.cost || 0;
+    const exam = {
+      id: randHex(8), node: node.id,
+      made: new Date().toISOString(), saved: new Date().toISOString(),
+      questions: r.questions, answers: r.questions.map(() => ""),
+    };
+    tree.exams = examsOf(tree).concat([exam]);
+    persistTree(tree);
+    examId = exam.id;
+    renderExam();
+    $("exbody").scrollTop = 0;
+    $("exbody").querySelector("textarea.exa")?.focus();
+  } catch (err){
+    examBusy = false;
+    $("exsend").disabled = false;
+    if (err.message !== "logged out")
+      $("exmeta").textContent = oneLine(err.message, 140) + " — try again.";
+  }
+}
+
+function examSayHtml(id){
+  return canSpeak()
+    ? `<button class="copy" onclick="speakExamQuestion('${id}')"` +
+      ` title="hear the question read aloud" aria-label="hear the question read aloud">🔊</button>`
+    : "";
+}
+function speakExamQuestion(id){
+  const el = document.getElementById(id);
+  if (el) speakBlock(el);
+}
+window.speakExamQuestion = speakExamQuestion;
+
+function renderExamPaper(e){
+  const qs = e.questions || [];
+  const answers = examAnswers(e);
+  $("exbody").innerHTML = qs.map((q, i) => {
+    const banked = isBanked(q.q);
+    return `<div class="exq">` +
+      `<div class="exqh"><span class="exn">Question ${i + 1}</span>` +
+      `<span>${q.marks || EXAM_MARKS} marks</span></div>` +
+      `<div class="exqt" id="exq${i}">${esc(q.q)}</div>` +
+      `<textarea class="exa" data-i="${i}" spellcheck="true"` +
+      ` aria-label="your answer to question ${i + 1}"` +
+      ` placeholder="Your answer…">${esc(answers[i] || "")}</textarea>` +
+      `<div class="exfoot"><span class="exwc" data-wc="${i}"></span>` +
+      examSayHtml(`exq${i}`) +
+      `<button class="copy exbank" data-bank="${i}"${banked ? " disabled" : ""}` +
+      ` title="${banked ? "already in your question bank"
+        : "no idea on this one? park it in your global question bank and keep going"}">` +
+      `${banked ? "✓ banked" : "❓ bank it"}</button></div></div>`;
+  }).join("");
+  $("exbody").querySelectorAll("textarea.exa").forEach(ta => {
+    ta.addEventListener("input", () => examChanged(+ta.dataset.i, ta.value));
+    ta.addEventListener("blur", flushExamAnswers);
+  });
+  $("exbody").querySelectorAll("[data-bank]").forEach(b => {
+    b.onclick = () => bankExamQuestion(+b.dataset.bank, b);
+  });
+  qs.forEach((q, i) => updateExamWordCount(i));
+  $("exacts").innerHTML = "";
+  const send = $("exsend");
+  send.style.display = "";
+  send.onclick = submitExam;
+  updateExamMeta();
+}
+
+function updateExamWordCount(i){
+  const el = $("exbody").querySelector(`[data-wc="${i}"]`);
+  const e = curExam();
+  if (!el || !e) return;
+  const n = examWords(examAnswers(e)[i]);
+  el.textContent = n ? `${n} word${n === 1 ? "" : "s"}` : "100–250 words is about right";
+}
+function updateExamMeta(){
+  if (examBusy) return;
+  const e = curExam(); if (!e || e.submitted) return;
+  const total = (e.questions || []).length;
+  const done = examWritten(e);
+  const send = $("exsend");
+  $("exmeta").textContent = examConfirm
+    ? `${total - done} unanswered — each scores 0 and gets a model answer instead. submit anyway?`
+    : `${done} of ${total} answered · your answers save as you type`;
+  send.textContent = examConfirm ? "submit anyway" : "submit for marking";
+  send.disabled = !done;
+}
+/* answers are held on the record as you type and written to storage on a
+   debounce. An essay half-written and lost to a phone evicting the tab
+   would be the worst bug this feature could have, so every exit path —
+   blur, close, hide, unload — flushes too. */
+function examChanged(i, value){
+  const e = curExam(); if (!e || e.submitted) return;
+  const answers = examAnswers(e).slice();
+  while (answers.length < (e.questions || []).length) answers.push("");
+  answers[i] = value;
+  e.answers = answers;
+  updateExamWordCount(i);
+  updateExamMeta();
+  clearTimeout(examSaveTimer);
+  examSaveTimer = setTimeout(flushExamAnswers, 800);
+}
+function flushExamAnswers(){
+  clearTimeout(examSaveTimer); examSaveTimer = null;
+  const tree = cur(), e = curExam();
+  if (!tree || !e || e.submitted) return;
+  e.saved = new Date().toISOString();
+  persistTree(tree);
+}
+
+async function submitExam(){
+  const tree = cur(), e = curExam();
+  if (!tree || !e || examBusy || e.submitted) return;
+  const total = (e.questions || []).length;
+  const done = examWritten(e);
+  if (!done) return;
+  // one deliberate confirmation, not a nag: leaving a question blank is a
+  // legitimate move (it comes back as a model answer), it just shouldn't
+  // happen by a mis-click on a paper you meant to finish
+  if (done < total && !examConfirm){ examConfirm = true; updateExamMeta(); return; }
+  const node = getNode(tree, e.node); if (!node) return;
+  flushExamAnswers();
+  examBusy = true; examConfirm = false;
+  $("exsend").disabled = true;
+  $("exbody").querySelectorAll("textarea.exa").forEach(t => { t.readOnly = true; });
+  $("exmeta").textContent = provName() + " is marking your script — this one takes a minute…";
+  try {
+    const r = await api("mark_exam", {
+      root_topic: tree.root_topic, label: node.label,
+      material: examMaterial(node),
+      questions: e.questions, answers: examAnswers(e),
+    });
+    examBusy = false;
+    node.cost += r.cost || 0;
+    e.results = r.results;
+    e.overall = r.overall || "";
+    e.total = r.total; e.max = r.max;
+    e.submitted = new Date().toISOString();
+    e.saved = e.submitted;
+    persistTree(tree);
+    renderExam();
+    $("exbody").scrollTop = 0;
+  } catch (err){
+    examBusy = false;
+    $("exsend").disabled = false;
+    $("exbody").querySelectorAll("textarea.exa").forEach(t => { t.readOnly = false; });
+    if (err.message !== "logged out")
+      $("exmeta").textContent = oneLine(err.message, 140) +
+        " — nothing was lost, your answers are still here. Try again.";
+  }
+}
+
+function examFace(frac){
+  return frac >= 0.9 ? "🌳" : frac >= 0.75 ? "🌿" : frac >= 0.5 ? "🌱" : "🍂";
+}
+function examBarCls(frac){ return frac >= 0.75 ? "" : frac >= 0.45 ? " mid" : " low"; }
+
+function renderExamResults(e){
+  const qs = e.questions || [];
+  const results = Array.isArray(e.results) ? e.results : [];
+  const answers = examAnswers(e);
+  const max = e.max || qs.length * EXAM_MARKS;
+  const frac = max ? (e.total || 0) / max : 0;
+  const verdict = frac >= 0.9
+      ? "you could hold this up in front of someone who knows the subject."
+    : frac >= 0.75
+      ? "solid. the marks you dropped are all named below — that's the next hour's work."
+    : frac >= 0.5
+      ? "the shape is there and the reasoning isn't yet. read what each answer was missing."
+      : "worth another pass over the conversation before the next paper. the feedback says where.";
+  let h =
+    `<div class="exsum"><div class="big"><span aria-hidden="true">${examFace(frac)}</span> ` +
+    `${e.total} / ${max}</div><p class="hint">${verdict}</p></div>` +
+    (e.overall
+      ? `<div class="excard exoverall"><b>the examiner, on the script as a whole` +
+        (canSpeak() ? ` <button class="copy" onclick="speakExamCard(this)"` +
+          ` title="hear this read aloud" aria-label="hear this read aloud">🔊</button>` : "") +
+        `</b>${esc(e.overall)}</div>` : "");
+
+  h += qs.map((q, i) => {
+    const r = results[i] || {};
+    const marks = Number.isInteger(r.marks) ? r.marks : 0;
+    const out = q.marks || EXAM_MARKS;
+    const f = out ? marks / out : 0;
+    const banked = isBanked(q.q);
+    const chips = [
+      ...(r.hit || []).map(p => `<span class="exchip hit">✓ ${esc(p)}</span>`),
+      ...(r.missed || []).map(p => `<span class="exchip miss">✗ ${esc(p)}</span>`),
+    ].join("");
+    const answer = String(answers[i] || "").trim();
+    return `<div class="exq">` +
+      `<div class="exqh"><span class="exn">Question ${i + 1}</span>` +
+      `<span class="exmark">${marks} / ${out}</span>` +
+      (EXAM_KIND_WORDS[q.kind] ? `<span class="exkind">${esc(EXAM_KIND_WORDS[q.kind])}</span>` : "") +
+      `</div>` +
+      `<div class="exbar${examBarCls(f)}" role="img"` +
+      ` aria-label="${marks} out of ${out}"><i style="width:${(f * 100).toFixed(1)}%"></i></div>` +
+      `<div class="exqt" id="exr${i}">${esc(q.q)}</div>` +
+      `<details class="exans"><summary>what you wrote` +
+      `${answer ? ` · ${examWords(answer)} words` : " · left blank"}</summary>` +
+      `<div class="exyou">${esc(answer || "(nothing written)")}</div></details>` +
+      (r.earned ? `<div class="excard"><b>✓ what you earned` +
+        (canSpeak() ? ` <button class="copy" onclick="speakExamCard(this)"` +
+          ` title="hear this read aloud" aria-label="hear this read aloud">🔊</button>` : "") +
+        `</b>${esc(r.earned)}</div>` : "") +
+      (r.improve ? `<div class="excard"><b>△ what would have earned more</b>${esc(r.improve)}</div>` : "") +
+      (chips ? `<div class="exchips">${chips}</div>` : "") +
+      ((q.terms || []).length
+        ? `<p class="hint">vocabulary that carried marks here: ${esc((q.terms || []).join(" · "))}</p>` : "") +
+      `<div class="exfoot"><span class="exwc"></span>` +
+      examSayHtml(`exr${i}`) +
+      `<button class="copy exbank" data-bank="${i}"${banked ? " disabled" : ""}` +
+      ` title="${banked ? "already in your question bank"
+        : "still not sure of this one? park it in your global question bank"}">` +
+      `${banked ? "✓ banked" : "❓ bank it"}</button></div></div>`;
+  }).join("");
+
+  $("exbody").innerHTML = h;
+  $("exbody").querySelectorAll("[data-bank]").forEach(b => {
+    b.onclick = () => bankExamQuestion(+b.dataset.bank, b);
+  });
+  $("exacts").innerHTML =
+    `<button onclick="sitNewExam()" title="a fresh paper on this conversation — one model call">` +
+    `sit a new paper</button>`;
+  const send = $("exsend");
+  send.style.display = ""; send.disabled = false;
+  send.textContent = "close";
+  send.onclick = closeExam;
+  $("exmeta").textContent = `marked ${fmtDate(e.submitted)} · ${e.total}/${max}`;
+}
+function speakExamCard(btn){
+  const card = btn.closest(".excard");
+  if (card) speakBlock(card);
+}
+window.speakExamCard = speakExamCard;
+
+function showExam(id){
+  const tree = cur(); if (!tree || examBusy || !examById(tree, id)) return;
+  examId = id; examConfirm = false;
+  renderExam();
+  $("exbody").scrollTop = 0;
+}
+window.showExam = showExam;
+function sitNewExam(){
+  if (examBusy) return;
+  examId = null; examConfirm = false;
+  renderExam();
+  $("exbody").scrollTop = 0;
+}
+window.sitNewExam = sitNewExam;
+
+/* an exam question you can't answer is the purest "something I don't know"
+   this app ever produces — park it in the global bank (profile-scoped like
+   every other banked question) and carry on with the paper, instead of
+   abandoning the sitting to go and look it up. */
+function bankExamQuestion(i, btn){
+  const e = curExam(); if (!e) return;
+  const q = (e.questions || [])[i];
+  if (!q || isBanked(q.q)) return;
+  if (!addGlobalQuestion(q.q)) return;
+  updateGlobalQRow();
+  if (btn){
+    btn.disabled = true;
+    btn.textContent = "✓ banked";
+    btn.title = "already in your question bank";
+  }
+  setStatus("banked — press q any time to see your questions");
+  setTimeout(() => { if (!running) clearStatus(); }, 2200);
+}
+window.bankExamQuestion = bankExamQuestion;
+
+function closeExam(){
+  if (examBusy) return;   // mid-marking: the script is seconds from coming back
+  flushExamAnswers();
+  stopSpeech();
+  $("exambox").classList.remove("open");
+  examId = null; examNodeId = null; examConfirm = false;
+  if (examPrevFocus && examPrevFocus.focus && document.contains(examPrevFocus))
+    examPrevFocus.focus();
+  examPrevFocus = null;
+  renderConversation(true);   // the 📄 button's badge picks up the new score
+}
+window.closeExam = closeExam;
+$("exclose").onclick = closeExam;
+$("exambox").addEventListener("click", (e) => { if (e.target === $("exambox")) closeExam(); });
+/* any of these could be the last moment before the tab goes away */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && $("exambox").classList.contains("open"))
+    flushExamAnswers();
+});
+window.addEventListener("pagehide", () => {
+  if ($("exambox").classList.contains("open")) flushExamAnswers();
+});
+
+/* ------------------------------------------------------------------ */
 /* survey — map a broad topic into the foundations it's built upon,    */
 /* then investigate them piece by piece. The map lives on the tree     */
 /* (tree.survey, synced like everything else), remembers which pieces  */
@@ -6410,6 +6991,35 @@ function quizAttempts(){
   out.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   return out;
 }
+/* every MARKED paper in the profile, oldest first. profileTrees() like every
+   other aggregate here, so switching profile switches these too. A paper
+   whose conversation was later pruned is skipped, matching teachStats(). */
+function examAttempts(){
+  const out = [];
+  for (const t of profileTrees())
+    for (const e of examsOf(t)){
+      if (!e || !e.submitted || !Number.isInteger(e.total) || !e.max) continue;
+      const node = getNode(t, e.node);
+      if (!node) continue;
+      out.push({ts: e.submitted, total: e.total, max: e.max, label: node.label});
+    }
+  out.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return out;
+}
+/* papers set and not yet handed in — actionable, so 📅 today wants them */
+function examDueList(){
+  const out = [];
+  for (const t of profileTrees())
+    for (const e of examsOf(t)){
+      if (!e || e.submitted || !Array.isArray(e.questions) || !e.questions.length) continue;
+      const node = getNode(t, e.node);
+      if (!node) continue;
+      out.push({treeId: t.id, nodeId: e.node, label: node.label,
+                written: examWritten(e), total: e.questions.length, when: e.made || ""});
+    }
+  out.sort((a, b) => String(b.when).localeCompare(String(a.when)));
+  return out;
+}
 /* the set of distinct days on which a card was last graded — the basis
    for the current streak. rev.last keeps only each card's most recent
    review day, so this is exact for recent days (which is what a streak
@@ -6431,7 +7041,8 @@ function currentStreak(){
   return {len, today};
 }
 function progHasData(){
-  return progCards().length > 0 || quizAttempts().length > 0 || teachStats().attempts > 0;
+  return progCards().length > 0 || quizAttempts().length > 0 ||
+         teachStats().attempts > 0 || examAttempts().length > 0;
 }
 
 /* the small sidebar entry point, shown once there's anything to show */
@@ -6540,10 +7151,11 @@ function docketData(){
     if (covered < total)
       surveys.push({treeId: t.id, topic: t.root_topic, covered, total});
   }
-  return {cards: dueCards().length, teach: teachDueList(), threads, surveys};
+  return {cards: dueCards().length, teach: teachDueList(), threads, surveys,
+          exams: examDueList()};
 }
 function docketCount(d){
-  return d.cards + d.teach.length + d.threads.length +
+  return d.cards + d.teach.length + d.threads.length + d.exams.length +
          d.surveys.reduce((s, x) => s + (x.total - x.covered), 0);
 }
 let dkPrevFocus = null;
@@ -6572,6 +7184,15 @@ function renderDocket(){
         `${esc(oneLine(x.label, 60))}` +
         `<div class="where">a clean explanation fades too — say it fresh</div></button>`).join("") +
       (d.teach.length > 6 ? `<div class="where">+${d.teach.length - 6} more due</div>` : "");
+  }
+  if (d.exams.length){
+    h += `<div class="hltree">${ico("📄")}papers to finish</div>` +
+      d.exams.slice(0, 6).map(x =>
+        `<button class="hlrow" data-act="exam" data-tree="${esc(x.treeId)}" data-node="${x.nodeId}"` +
+        ` title="pick this paper back up where you left it">` +
+        `${esc(oneLine(x.label, 60))}` +
+        `<div class="where">${x.written} of ${x.total} answered — not submitted yet</div></button>`).join("") +
+      (d.exams.length > 6 ? `<div class="where">+${d.exams.length - 6} more waiting</div>` : "");
   }
   if (d.threads.length){
     h += `<div class="hltree">${ico("⛏")}loose threads</div>`;
@@ -6616,6 +7237,7 @@ function renderDocket(){
       closeDocket();
       if (currentId !== tid) openTree(tid);
       if (act === "teach"){ selectNode(+b.dataset.node); openTeach(); }
+      else if (act === "exam"){ selectNode(+b.dataset.node); openExam(); }
       else if (act === "chase") chaseThread(+b.dataset.node, +b.dataset.turn, b.dataset.term);
       else if (act === "survey") openSurvey();
     };
@@ -6656,7 +7278,8 @@ function renderStats(){
   const attempts = quizAttempts();
   $("statscope").textContent = activeProfile() ? "· " + activeProfile() : "· all trees";
 
-  if (!cards.length && !attempts.length && !teachStats().attempts){
+  const exams = examAttempts();
+  if (!cards.length && !attempts.length && !teachStats().attempts && !exams.length){
     $("statsbody").innerHTML =
       `<div class="st-empty"><div class="big">🌱</div>` +
       `<p>Grow a tree and let the glossary fill in — your recall strength, ` +
@@ -6781,7 +7404,28 @@ function renderStats(){
       `</div></div>`;
   }
 
-  $("statsbody").innerHTML = tiles + strength + forecast + habit + quizzes + teach;
+  // ---- written exams ----
+  let written = "";
+  if (exams.length){
+    const frac = exams.map(a => a.total / a.max);
+    const avg = Math.round(frac.reduce((x, y) => x + y, 0) / frac.length * 100);
+    const best = Math.round(Math.max(...frac) * 100);
+    const pending = examDueList().length;
+    const pill = (a) => {
+      const f = a.total / a.max;
+      const cls = f >= 0.75 ? "good" : f < 0.5 ? "poor" : "";
+      return `<span class="qpill ${cls}" title="${esc(oneLine(a.label, 60))}` +
+             `${a.ts ? " · " + fmtDate(a.ts) : ""}">${a.total}/${a.max}</span>`;
+    };
+    written =
+      `<div class="st-sec"><h4>written exams` +
+        `<span class="sub">${exams.length} paper${exams.length === 1 ? "" : "s"} · ` +
+        `avg ${avg}% · best ${best}%` +
+        (pending ? ` · ${pending} unfinished` : "") + `</span></h4>` +
+      `<div class="st-quiz">${exams.slice(-6).reverse().map(pill).join("")}</div></div>`;
+  }
+
+  $("statsbody").innerHTML = tiles + strength + forecast + habit + quizzes + teach + written;
 }
 
 /* in-text references: occurrences of defined terms inside tutor answers
@@ -9053,6 +9697,7 @@ document.addEventListener("keydown", (e) => {
     if ($("docketbox").classList.contains("open")){ closeDocket(); return; }
     if ($("gapsbox").classList.contains("open")){ closeGaps(); return; }
     if ($("teachbox").classList.contains("open")){ closeTeach(); return; }
+    if ($("exambox").classList.contains("open")){ closeExam(); return; }
     if ($("notesbox").classList.contains("open")){ closeNotes(); return; }
     if ($("srcbox").classList.contains("open")){ closeSrcbox(); return; }
     if ($("qbankbox").classList.contains("open")){ closeQBank(); return; }
