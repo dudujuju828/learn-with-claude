@@ -84,6 +84,14 @@ _settings = local_settings.default()
 _memory_lock = threading.Lock()
 _memory_cache: dict = {"stamp": None, "text": ""}
 
+# the learner's orientation brief — generated, so cached by how much the
+# session has grown rather than by mtime: a live session must not buy a new
+# brief every turn just because another sentence was added
+BRIEF_REFRESH_CHARS = 6000
+BRIEF_REFRESH_RATIO = 0.25
+_brief_lock = threading.Lock()
+_brief_cache: dict = {"session": "", "size": 0, "text": ""}
+
 
 def configure(settings: dict) -> None:
     """Install a new live settings overlay. `settings` must already be
@@ -130,6 +138,49 @@ def session_memory() -> str:
     with _memory_lock:
         _memory_cache["stamp"], _memory_cache["text"] = stamp, text
     return text
+
+
+def learner_brief() -> tuple:
+    """(orientation brief, cost) for the anchored session — or ("", 0.0).
+
+    The tutor gets the session verbatim; the learner must NOT. It drives every
+    question, so it needs to recognise the domain's vocabulary or it misreads
+    a term and aims the whole investigation somewhere useless — but hand it
+    the transcript and it stops being ignorant, which is the one thing that
+    makes this tool work. So it gets a generated brief: the names in play and
+    what kind of thing each is, never the explanations.
+
+    Generated once on the cheap model and cached. A session that is still
+    running would otherwise re-generate every single turn, so a grown session
+    only earns a fresh brief once it has moved materially — the vocabulary of
+    a domain doesn't change every time somebody asks another question.
+    """
+    session_id = _snapshot()["tutor_session"]
+    if not session_id:
+        return "", 0.0
+    transcript = copilot_sessions.transcript(session_id)
+    if not transcript:
+        return "", 0.0
+    size = len(transcript)
+    with _brief_lock:
+        cached = dict(_brief_cache)
+    if cached.get("session") == session_id and cached.get("text"):
+        grew = size - cached["size"]
+        if grew < max(BRIEF_REFRESH_CHARS, cached["size"] * BRIEF_REFRESH_RATIO):
+            return cached["text"], 0.0
+    try:
+        text, cost = call_model(
+            personas.SESSION_BRIEF_SYSTEM,
+            [{"role": "user", "content": personas.session_brief_message(transcript)}],
+            "glossary", effort="none", max_tokens=1200,
+        )
+    except ApiError:
+        # no brief is survivable; a failed investigation is not
+        return cached.get("text", "") if cached.get("session") == session_id else "", 0.0
+    text = text.strip()
+    with _brief_lock:
+        _brief_cache.update(session=session_id, size=size, text=text)
+    return text, cost
 
 
 def grounding_text() -> str:

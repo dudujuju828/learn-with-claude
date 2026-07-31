@@ -341,7 +341,12 @@ How it differs from the Vercel deployment:
   **You don't have to leave the session first:** the CLI writes each turn out
   as it happens, so a session you're in right now is already in that list, and
   an anchored session that's still going keeps up — every tutor reply re-reads
-  it, so what you covered a minute ago is already known here and everything you worked through
+  it, so what you covered a minute ago is already known here. The **learner**
+  gets something different and deliberately thinner: a generated *orientation
+  brief* — the names in play and what kind of thing each one is, never the
+  explanations — so it recognises your vocabulary instead of misreading a term
+  and aiming the whole investigation at the wrong thing, while staying as
+  ignorant of the actual answers as it has to be to ask good questions and everything you worked through
   in it — a codebase you explored, a design you argued out — is already known
   to the tutor, so you can ask about it here without setting it up again. The
   **whole session** goes over, not a summary of it — the panel tells you its

@@ -715,6 +715,85 @@ def source_learner_context(source: str) -> str:
     )
 
 
+SESSION_BRIEF_SYSTEM = (
+    "You write orientation briefs. You are given a transcript of somebody's "
+    "working session, and you describe the TERRAIN it covers — what it is "
+    "about and what the things in it are called — without ever explaining "
+    "how any of it works. Plain prose, no markdown, no preamble."
+)
+
+
+def session_brief_message(transcript: str) -> str:
+    """Turn an anchored Copilot session into an orientation brief for the
+    simulated learner.
+
+    The learner drives every question, so without this it meets a domain term
+    it has never heard, mistakes it for something else, and aims the whole
+    investigation at the wrong thing. What it needs is a map legend, not the
+    map: the names in play and what KIND of thing each one is, so its
+    questions land on the right subject — never the explanations, which are
+    exactly what it is supposed to be ignorant of and go on to ask about.
+    """
+    return (
+        "Below is a transcript of a working session. Write a brief that "
+        "orients someone who is about to ask questions in this same "
+        "territory but knows nothing about it yet.\n\n"
+        "Include:\n"
+        "1. Two to four sentences on what the session was about — the "
+        "system, project, or subject area, and what was being worked on.\n"
+        "2. A list of the specific names that came up — services, "
+        "components, tools, files, codenames, jargon — each with a SHORT tag "
+        "for what kind of thing it is. Like: \"STARLING — a quarantine "
+        "queue\", \"tenant_id — an identifier on each event\". Cover every "
+        "name someone would otherwise misread.\n\n"
+        "Hard limits:\n"
+        "- Never explain how anything WORKS, why it was built that way, or "
+        "what was concluded. No mechanisms, no reasoning, no decisions, no "
+        "numbers or configuration values. Name the thing; stop there.\n"
+        "- If the transcript settles a question, do not include the answer — "
+        "only that the subject came up.\n"
+        "- Don't mention 'the transcript', 'the session', or the people in "
+        "it. Write it as a standing description of the territory.\n\n"
+        'Transcript:\n"""\n'
+        f"{transcript}\n"
+        '"""'
+    )
+
+
+def session_brief_learner_context(brief: str) -> str:
+    """Prepended to the learner's opening when a Copilot session is anchored.
+
+    Deliberately framed as *setting*, not as knowledge: the learner needs to
+    recognise the vocabulary so its questions land on the right thing, and
+    must go on being genuinely ignorant of everything else — that ignorance
+    is the entire engine of this tool.
+    """
+    return (
+        "SETTING — your questions here are about a particular system you "
+        "have been around, so you recognise its vocabulary:\n"
+        '"""\n'
+        f"{brief}\n"
+        '"""\n'
+        "This is scenery, not knowledge. It tells you what things are CALLED "
+        "and roughly what kind of thing each one is — nothing more. You do "
+        "not understand how any of it works, and that is exactly why you are "
+        "here.\n"
+        "So, while you investigate:\n"
+        "- Never quote it, never mention it, never say 'as we discussed', "
+        "'from before', or 'I already know'. It is not part of this "
+        "conversation and the tutor has not seen you read it.\n"
+        "- Recognising a name is not understanding it. If a term from up "
+        "there is what you actually need explained, ask about it like the "
+        "stranger to it you are.\n"
+        "- Never let it supply an answer. If you catch yourself assuming "
+        "something because it appeared above, treat that as a thing to ask "
+        "about, not a thing you know.\n"
+        "- It never sets your agenda. The question you were given is what "
+        "you are investigating; this only stops you asking about the wrong "
+        "thing entirely."
+    )
+
+
 def source_tutor_context(source: str) -> str:
     """Extra tutor system context when the learner brought material."""
     return (

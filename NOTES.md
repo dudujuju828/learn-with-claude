@@ -84,6 +84,35 @@ re-explaining it. Tutor only — the learner and glossary personas never see it.
   live session, type `parser-work` here. The *id* is what gets stored, so
   renaming the session later can't break the anchor. The YAML is hand-parsed
   (flat keys plus the odd block scalar) to keep the package stdlib-only.
+- **The learner needed its own, thinner version of this — and finding that
+  out took using it.** Giving the memory to the tutor alone looked right (the
+  learner must stay uncontaminated roleplay) but was wrong in practice: the
+  learner *drives every question*, so it met a domain term it had never seen,
+  misread it, and aimed the whole investigation somewhere useless. Handing it
+  the transcript would fix that and destroy the tool — a naive learner reading
+  expert Q&A stops being naive, and its ignorance is the entire engine here.
+  So it gets a **generated orientation brief**: two to four sentences on what
+  the territory is, then the names in play with a short "what kind of thing"
+  tag each — explicitly no mechanisms, no conclusions, no numbers. A map
+  legend, not the map. The prompt block around it is framed as *setting*:
+  never quote it, recognising a name is not understanding it, never let it
+  supply an answer, and it never sets the agenda.
+  Measured before/after on the same topic: without the brief the learner spent
+  its whole first turn asking what a "manifest" even is ("a static file, a
+  runtime data structure, or something else?"); with it, the first question
+  was the real one — "what exact fields in a retailer manifest does the
+  promise service need to compute a delivery window?" — and it still had to
+  ask, never parroting the transcript.
+- **The brief is cached by growth, not mtime.** It is generated, not read, so
+  a live session would otherwise buy a new one every single turn. A grown
+  session earns a fresh brief only once it moves materially (+6k chars or
+  +25%) — a domain's vocabulary doesn't change every time somebody asks
+  another question. It runs on the cheap `glossary` role, its cost rides back
+  with the learner turn that triggered it so the header stays honest, and a
+  failed generation keeps the last good brief rather than breaking the run.
+- **`model_routes` grew a symmetric `learner_grounding` hook.** The hosted
+  backend passes neither hook, so `api/index.py` is byte-for-byte what it was
+  — asserted in the tests.
 - **The picker hides the app's own calls.** Every model call this app makes is
   itself a Copilot session, and on a machine that has run `learn --web` for a
   while they vastly outnumber the real ones — so sessions whose first message

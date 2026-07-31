@@ -442,6 +442,67 @@ def test_source_threading():
     print("ok  source threading (learner opening, tutor context, cap)")
 
 
+def test_learner_brief_threading():
+    """The learner drives every question, so an anchored Copilot session has to
+    reach it too — as scenery, never as the transcript the tutor gets."""
+    from learn_with_claude.webapi import handle_learner, learner_opening, model_routes
+
+    brief = "KESTREL — routing service\nFINCH — human review queue"
+    passage = "A hash table maps keys to buckets."
+
+    plain = learner_opening({"topic": "amber legs"})
+    withb = learner_opening({"topic": "amber legs"}, brief)
+    assert brief in withb and brief not in plain
+    assert "SETTING" in withb
+    # scenery on top, the task (and its output contract) still last
+    assert withb.index(brief) < withb.index("amber legs")
+    assert withb.endswith(plain[-40:])
+    # the guardrails the learner needs are actually in the block
+    low = withb.lower()
+    for rule in ["never quote it", "not understanding it", "never let it supply an answer",
+                 "never sets your agenda"]:
+        assert rule in low, rule
+
+    # with a passage too: the passage is what's being studied, the session is
+    # only the room it stands in, so scenery goes above it
+    both = learner_opening({"topic": "t", "source": passage}, brief)
+    assert both.index(brief) < both.index(passage)
+
+    # every conversation kind carries it
+    for kind in ("branch", "followup", "gaps", "deepen"):
+        assert brief in learner_opening({"topic": "t", "kind": kind}, brief)
+
+    seen = {}
+
+    def capture(system, messages, role, **kw):
+        seen["opening"] = messages[0]["content"]
+        return ('{"thinking":"t","new_term":null,"action":"a","confidence":10,'
+                '"done":false}'), 0.25
+
+    # the brief costs something to make, so it rides back with the turn that
+    # triggered it — the header must not under-report what was spent
+    routes = model_routes(capture, learner_grounding=lambda: (brief, 0.5))
+    out = routes["learner"]({"kind": "root", "topic": "t", "turns": []})
+    assert brief in seen["opening"]
+    assert out["cost"] == 0.75, out["cost"]
+
+    # a plain-string hook still works, and costs nothing
+    routes = model_routes(capture, learner_grounding=lambda: brief)
+    assert routes["learner"]({"kind": "root", "topic": "t", "turns": []})["cost"] == 0.25
+
+    # hosted (no hook at all) is byte-for-byte what it was before this existed
+    seen.clear()
+    model_routes(capture)["learner"]({"kind": "root", "topic": "t", "turns": []})
+    assert "SETTING" not in seen["opening"]
+    assert seen["opening"] == learner_opening({"kind": "root", "topic": "t"})
+
+    # and handle_learner's own default is no brief
+    seen.clear()
+    handle_learner({"kind": "root", "topic": "t", "turns": []}, capture)
+    assert "SETTING" not in seen["opening"]
+    print("ok  learner brief threading (scenery block, ordering, cost, hosted unchanged)")
+
+
 def test_deepen_threading():
     """🔬 look deeper: same topic, re-investigated, seeded with what the node
     already covered, and told explicitly to override the ambient brevity."""
@@ -526,6 +587,7 @@ if __name__ == "__main__":
     test_handle_teachback()
     test_handle_survey()
     test_source_threading()
+    test_learner_brief_threading()
     test_deepen_threading()
     test_question_anchoring()
     print("\nall green")

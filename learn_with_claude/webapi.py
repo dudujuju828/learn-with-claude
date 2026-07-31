@@ -47,6 +47,7 @@ from .personas import (
     learner_system,
     next_concept_message,
     quiz_message,
+    session_brief_learner_context,
     source_learner_context,
     source_tutor_context,
     survey_message,
@@ -75,7 +76,7 @@ def source_of(body: dict) -> str:
     return s.strip()[:SOURCE_MAX] if isinstance(s, str) else ""
 
 
-def learner_opening(body: dict) -> str:
+def learner_opening(body: dict, brief: str = "") -> str:
     kind = body.get("kind", "root")
     if kind == "branch":
         msg = branch_learner_message(
@@ -100,6 +101,10 @@ def learner_opening(body: dict) -> str:
     if src:
         # passage first; the task (and its output contract) stays last
         msg = f"{source_learner_context(src)}\n\n{msg}"
+    if brief:
+        # scenery goes above everything: the passage (when there is one) is
+        # what the learner is studying, this is only the room it stands in
+        msg = f"{session_brief_learner_context(brief)}\n\n{msg}"
     return msg
 
 
@@ -166,11 +171,16 @@ def turn_json(turn: dict) -> str:
     )
 
 
-def handle_learner(body: dict, call_model) -> dict:
+def handle_learner(body: dict, call_model, brief: str = "", brief_cost: float = 0.0) -> dict:
+    """`brief` is local-mode only: an orientation on the anchored Copilot
+    session, so the learner recognises the domain's vocabulary instead of
+    misreading a term and aiming the whole investigation at the wrong thing.
+    `brief_cost` is whatever producing it cost, folded into this turn so the
+    header stays honest about what was spent."""
     level = body.get("level")
     if level not in LEARNER_LEVELS:
         level = "student"
-    messages = [{"role": "user", "content": learner_opening(body)}]
+    messages = [{"role": "user", "content": learner_opening(body, brief)}]
     anchor = anchor_question(body)
     for t in body.get("turns", []):
         messages.append({"role": "assistant", "content": turn_json(t)})
@@ -183,7 +193,7 @@ def handle_learner(body: dict, call_model) -> dict:
         "action": (data.get("action") or "").strip(),
         "confidence": data.get("confidence"),
         "done": bool(data.get("done")),
-        "cost": cost,
+        "cost": cost + brief_cost,
     }
 
 
@@ -503,18 +513,31 @@ def handle_digest(body: dict) -> dict:
     return {"digest": conversation_digest(body.get("turns", []), body.get("upto"))}
 
 
-def model_routes(call_model, tutor_grounding=None) -> dict:
+def model_routes(call_model, tutor_grounding=None, learner_grounding=None) -> dict:
     """The POST route table every backend serves, bound to its transport.
 
-    `tutor_grounding` is local-mode-only: a string, a zero-arg callable
-    returning one (evaluated fresh per request, since local settings can
-    change while the server runs), or None. api/index.py (hosted) never
-    passes it, so handle_tutor there always gets grounding=None."""
+    Both grounding hooks are local-mode-only, and both are evaluated fresh per
+    request since local settings (and the anchored session itself) can change
+    while the server runs. api/index.py (hosted) passes neither, so its tutor
+    gets grounding=None and its learner gets no brief — behaviour there is
+    exactly as it was before either existed.
+
+    `tutor_grounding`: a string, a zero-arg callable returning one, or None.
+    `learner_grounding`: a zero-arg callable returning (brief, cost). It costs
+    something because the brief is generated, not read, so the cost rides back
+    with the learner turn that triggered it.
+    """
     def _grounding() -> "str | None":
         return tutor_grounding() if callable(tutor_grounding) else tutor_grounding
 
+    def _brief() -> tuple:
+        if not callable(learner_grounding):
+            return "", 0.0
+        got = learner_grounding()
+        return got if isinstance(got, tuple) else (got or "", 0.0)
+
     return {
-        "learner": lambda body: handle_learner(body, call_model),
+        "learner": lambda body: handle_learner(body, call_model, *_brief()),
         "tutor": lambda body: handle_tutor(body, call_model, grounding=_grounding()),
         "next_concept": lambda body: handle_next_concept(body, call_model),
         "interview": lambda body: handle_interview(body, call_model),

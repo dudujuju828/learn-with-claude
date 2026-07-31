@@ -604,6 +604,76 @@ def test_tutor_session_setting():
     print("ok  tutor session memory (resolve on save, grounding, graceful loss)")
 
 
+def test_learner_brief_caching():
+    """The brief is generated, not read, so a session that's still running
+    must not buy a new one every turn."""
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        os.environ["COPILOT_HOME"] = str(home)
+        try:
+            sid = "44444444-aaaa-bbbb-cccc-dddddddddddd"
+            root = home / "session-state"
+            _fake_session(root, sid, [("how does KESTREL route a parcel?",
+                                       "it reads the manifest off WREN " + "x" * 2000)],
+                          noise=False)
+            calls = {"n": 0}
+
+            def fake_call(system, messages, role, **kw):
+                calls["n"] += 1
+                assert role == "glossary", role          # the cheap model, not the tutor's
+                return f"brief-{calls['n']}", 0.25
+
+            real = copilot_backend.call_model
+            copilot_backend.call_model = fake_call
+            try:
+                copilot_backend.configure(
+                    local_settings.sanitize({"tutor_session": sid}, strict=True))
+                copilot_backend._brief_cache.update(session="", size=0, text="")
+
+                text, cost = copilot_backend.learner_brief()
+                assert (text, cost) == ("brief-1", 0.25)
+
+                # a second turn reuses it, and costs nothing
+                assert copilot_backend.learner_brief() == ("brief-1", 0.0)
+                assert calls["n"] == 1
+
+                # the session grows a little — still the same brief
+                events = root / sid / "events.jsonl"
+                events.write_text(events.read_text(encoding="utf-8") + json.dumps(
+                    {"type": "user.message", "data": {"content": "and then?"}}) + "\n",
+                    encoding="utf-8")
+                assert copilot_backend.learner_brief() == ("brief-1", 0.0)
+                assert calls["n"] == 1
+
+                # it grows materially — now it's worth a fresh one
+                events.write_text(events.read_text(encoding="utf-8") + json.dumps(
+                    {"type": "assistant.message",
+                     "data": {"content": "PLOVER resolves it " + "y" * 9000}}) + "\n",
+                    encoding="utf-8")
+                text, cost = copilot_backend.learner_brief()
+                assert (text, cost) == ("brief-2", 0.25), (text, cost)
+
+                # a failed generation keeps the last good brief instead of
+                # breaking the run
+                def boom(*a, **k):
+                    raise ApiError("copilot fell over", 502)
+
+                copilot_backend.call_model = boom
+                copilot_backend._brief_cache["size"] = 1     # force a regen attempt
+                assert copilot_backend.learner_brief() == ("brief-2", 0.0)
+
+                # nothing anchored -> nothing generated, ever
+                copilot_backend.configure(local_settings.default())
+                assert copilot_backend.learner_brief() == ("", 0.0)
+            finally:
+                copilot_backend.call_model = real
+        finally:
+            os.environ.pop("COPILOT_HOME", None)
+            copilot_backend.configure(local_settings.default())
+            copilot_backend._brief_cache.update(session="", size=0, text="")
+    print("ok  learner brief caching (reuse, material regrowth, failure, unanchored)")
+
+
 def test_session_memory_is_tutor_only():
     """The learner and glossary personas must stay uncontaminated roleplay."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -651,5 +721,6 @@ if __name__ == "__main__":
     test_session_names()
     test_session_memory_tracks_a_live_session()
     test_tutor_session_setting()
+    test_learner_brief_caching()
     test_session_memory_is_tutor_only()
     print("\nall green")

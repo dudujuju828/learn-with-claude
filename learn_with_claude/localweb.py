@@ -54,7 +54,9 @@ _TREE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _TUTOR_ID = re.compile(r"^[a-z0-9-]{1,32}$")
 _GQ_ID = re.compile(r"^[a-f0-9]{8,32}$")
 
-ROUTES = model_routes(copilot_backend.call_model, tutor_grounding=copilot_backend.grounding_text)
+ROUTES = model_routes(copilot_backend.call_model,
+                      tutor_grounding=copilot_backend.grounding_text,
+                      learner_grounding=copilot_backend.learner_brief)
 
 
 def handle_config() -> dict:
