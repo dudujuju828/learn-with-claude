@@ -763,6 +763,46 @@ def tree_to_html(tree) -> str:
             + "".join(blocks) + "</section>"
         )
 
+    exams = tree.exam_map() if hasattr(tree, "exam_map") else {}
+    exam_html = ""
+    if exams:
+        blocks = []
+        for nid in sorted(exams):
+            for exam in exams[nid]:
+                total, mx = exam.get("total"), exam.get("max")
+                score = f" — {total}/{mx}" if isinstance(total, int) and mx else ""
+                sat = str(exam.get("submitted") or "")[:10]
+                blocks.append(
+                    f'<div class="turn"><div class="block ask"><div class="label">'
+                    f'✍ [{nid}] {_esc(tree.nodes[nid].label)}{_esc(score)}'
+                    + (f" · {_esc(sat)}" if sat else "") + "</div>"
+                    + (f"<p>{_esc(str(exam.get('overall') or '').strip())}</p>"
+                       if str(exam.get("overall") or "").strip() else "")
+                    + "</div></div>"
+                )
+                for i, (q, answer, result) in enumerate(tree.exam_rows(exam), 1):
+                    marks = result.get("marks")
+                    got = (f" — {marks}/{q.get('marks', 10)}"
+                           if isinstance(marks, int) else "")
+                    feedback = "".join(
+                        f'<p class="muted">{_esc(str(result.get(key) or "").strip())}</p>'
+                        for key in ("earned", "improve")
+                        if str(result.get(key) or "").strip()
+                    )
+                    blocks.append(
+                        f'<div class="turn"><div class="block">'
+                        f'<div class="label">Q{i}{_esc(got)}</div>'
+                        f"<p>{_esc(q['q'])}</p></div>"
+                        f'<div class="block ans"><div class="label">My answer</div>'
+                        f"<p>{_esc(answer.strip() or '(left blank)')}</p>"
+                        f"{feedback}</div></div>"
+                    )
+        exam_html = (
+            '<section class="node" id="exams"><h2>✍ Exams</h2>'
+            '<div class="muted">Written answers under exam conditions, and how they were marked.</div>'
+            + "".join(blocks) + "</section>"
+        )
+
     meta = (f'<p class="muted">Created {_esc(tree.created)} · {len(tree.nodes)} '
             f'investigations · total cost ${tree.total_cost():.4f}</p>')
 
@@ -802,6 +842,7 @@ def tree_to_html(tree) -> str:
         + "".join(sections)
         + glossary_html
         + teach_html
+        + exam_html
         + "</div>"
         + '<div id="ruler"></div>'
         + ai_config_html()

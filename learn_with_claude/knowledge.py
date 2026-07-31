@@ -203,6 +203,43 @@ class KnowledgeTree:
             lst.sort(key=lambda a: str(a.get("when") or ""))
         return out
 
+    def exam_map(self) -> dict:
+        """node_id -> MARKED written exams (oldest first). Papers live in
+        extras['exams'] (written by the web app's ✍ exam). A paper that has
+        been set but not yet submitted has no marks on it and is work in
+        progress, not a record of anything, so it never reaches an export."""
+        out: dict = {}
+        for e in (self.extras.get("exams") or []):
+            if not isinstance(e, dict) or not e.get("submitted"):
+                continue
+            if not isinstance(e.get("questions"), list) or not isinstance(e.get("results"), list):
+                continue
+            try:
+                nid = int(e.get("node"))
+            except (TypeError, ValueError):
+                continue
+            if nid in self.nodes:
+                out.setdefault(nid, []).append(e)
+        for lst in out.values():
+            lst.sort(key=lambda e: str(e.get("submitted") or ""))
+        return out
+
+    @staticmethod
+    def exam_rows(exam: dict) -> list:
+        """An exam flattened for display: (question, answer, result) triples,
+        skipping anything the two lists don't line up on."""
+        questions = exam.get("questions") or []
+        answers = exam.get("answers") or []
+        results = exam.get("results") or []
+        rows = []
+        for i, q in enumerate(questions):
+            if not isinstance(q, dict) or not str(q.get("q") or "").strip():
+                continue
+            answer = answers[i] if i < len(answers) and isinstance(answers[i], str) else ""
+            result = results[i] if i < len(results) and isinstance(results[i], dict) else {}
+            rows.append((q, answer, result))
+        return rows
+
     # --- persistence -----------------------------------------------------
     def to_dict(self) -> dict:
         d = {
@@ -398,5 +435,38 @@ class KnowledgeTree:
                 missing = str(last.get("missing") or "").strip()
                 if verdict != "clean" and missing:
                     out.append(f"The gap that mattered: {missing}")
+                    out.append("")
+
+        exams = self.exam_map()
+        if exams:
+            out.append("## Exams")
+            out.append("")
+            for nid in sorted(exams):
+                for exam in exams[nid]:
+                    total, mx = exam.get("total"), exam.get("max")
+                    score = f" — {total}/{mx}" if isinstance(total, int) and mx else ""
+                    sat = str(exam.get("submitted") or "")[:10]
+                    out.append(f"### [{nid}] {self.nodes[nid].label}{score}"
+                               + (f"  ({sat})" if sat else ""))
+                    out.append("")
+                    overall = str(exam.get("overall") or "").strip()
+                    if overall:
+                        out.append(f"> {overall.replace(chr(10), ' ')}")
+                        out.append("")
+                    for i, (q, answer, result) in enumerate(self.exam_rows(exam), 1):
+                        marks = result.get("marks")
+                        got = f" — {marks}/{q.get('marks', 10)}" if isinstance(marks, int) else ""
+                        out.append(f"**Q{i}{got}.** {q['q']}")
+                        out.append("")
+                        out.append("> ✍ " + (answer.strip().replace("\n", "\n> ")
+                                             if answer.strip() else "(left blank)"))
+                        out.append("")
+                        for label, key in (("What you earned", "earned"),
+                                           ("What would have earned more", "improve")):
+                            text = str(result.get(key) or "").strip()
+                            if text:
+                                out.append(f"*{label}:* {text}")
+                                out.append("")
+                    out.append("---")
                     out.append("")
         return "\n".join(out)
