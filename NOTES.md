@@ -35,7 +35,24 @@ Ctrl+B/I/U/H — plus a **👁 preview**. And it now autosaves.
   existing machinery takes over: `persistTree` marks the tree dirty,
   `flushDirty` pushes it, and the `beforeunload` handler already beacons
   anything unsynced on the way out. A "✓ saved" line makes it visible.
-- **Rendering is duplicated deliberately.** `noteHtml()` (JS) and `note_md()`
+- **Then it became a live editor**, because a preview toggle isn't what
+  "renders as you type" means. The textarea is gone: notes are now a
+  contenteditable holding one `<div>` per source line, restyled on every
+  keystroke. Markers stay on screen **dimmed** rather than disappearing —
+  Bear/iA Writer's approach, not Notion's — which buys two things that matter
+  more than the last 5% of polish: the on-screen character count always
+  matches the source exactly (so caret arithmetic is trivial and honest), and
+  nothing reflows out from under the cursor when the caret leaves a line.
+- **The parts a hand-rolled contenteditable actually has to solve**, all
+  covered: caret restored by character offset after each re-render; a render
+  skipped entirely when the HTML wouldn't change; paste forced to plain text
+  (otherwise styled HTML walks in from anywhere); and our own undo stack,
+  since rewriting `innerHTML` destroys the native one. The undo has one
+  non-obvious rule — the debounced snapshot records the state *at rest*, so
+  the top of the stack is usually where you already are and the step has to
+  skip past it. A test caught that.
+- **Rendering is duplicated deliberately.** `note_md()` (Python, for the HTML
+  export) and the editor's own line renderer
   (Python, for the HTML export) implement the same subset with the same
   escape-first discipline — escape everything, then build only the tags the
   renderer itself creates, so no note can inject markup. `<img src=x

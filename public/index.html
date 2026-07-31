@@ -1073,32 +1073,37 @@
     min-width:2rem; padding:.28rem .5rem; font-size:var(--t-sm); line-height:1.1;
   }
   #notesbox .nttools button[disabled]{opacity:.4}
-  #notesbox #ntpreview{margin-left:auto}
-  /* the formatted view — same measure and rhythm as the editor it replaces */
-  #notesbox .ntview{
-    flex:1; min-height:9rem; overflow:auto; width:100%; padding:.7rem .8rem;
+  /* the live editor: one div per source line, markers dimmed in place */
+  #notesbox .ntedit{
+    flex:1; min-height:9rem; overflow:auto; width:100%; white-space:pre-wrap;
+    word-break:break-word; padding:.7rem .8rem; color:var(--fg);
     background:var(--bg); border:1px solid var(--line); border-radius:var(--r-md);
-    font-size:1rem; line-height:1.7;
+    font-family:inherit; font-size:1rem; line-height:1.7;
+    letter-spacing:inherit; word-spacing:inherit; outline:none;
   }
-  #notesbox .ntview[hidden]{display:none}
-  #notesbox .ntview > :first-child{margin-top:0}
-  #notesbox .ntview h2, #notesbox .ntview h3,
-  #notesbox .ntview h4, #notesbox .ntview h5{margin:.9rem 0 .35rem; line-height:1.3}
-  #notesbox .ntview h2{font-size:1.15rem}
-  #notesbox .ntview h3{font-size:1.05rem}
-  #notesbox .ntview h4, #notesbox .ntview h5{font-size:1rem}
-  #notesbox .ntview p{margin:.5rem 0}
-  #notesbox .ntview ul, #notesbox .ntview ol{margin:.5rem 0; padding-left:1.4rem}
-  #notesbox .ntview li{margin:.2rem 0}
-  #notesbox .ntview blockquote{
-    margin:.5rem 0; padding:.1rem 0 .1rem .7rem;
-    border-left:3px solid var(--term); color:var(--muted);
+  #notesbox .ntedit:focus{border-color:var(--term)}
+  #notesbox .ntedit.empty::before{
+    content:attr(data-placeholder); color:var(--muted); pointer-events:none;
   }
-  #notesbox .ntview hr{border:0; border-top:1px solid var(--line); margin:.9rem 0}
-  #notesbox .ntview code{
-    background:var(--termbg); border-radius:var(--r-sm); padding:.05rem .3rem;
-    font-size:.92em;
+  #notesbox .ntedit .nl{min-height:1.7em}
+  /* the markers themselves stay visible but recede */
+  #notesbox .ntedit .mk{opacity:.38; font-weight:400; font-style:normal}
+  #notesbox .ntedit .h{font-weight:700; line-height:1.35}
+  #notesbox .ntedit .h1{font-size:1.35em}
+  #notesbox .ntedit .h2{font-size:1.2em}
+  #notesbox .ntedit .h3{font-size:1.08em}
+  #notesbox .ntedit .h4{font-size:1em}
+  #notesbox .ntedit .b{font-weight:700}
+  #notesbox .ntedit .i{font-style:italic}
+  #notesbox .ntedit .u{text-decoration:underline}
+  #notesbox .ntedit .c{
+    font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.92em;
+    background:var(--termbg); border-radius:var(--r-sm); padding:.02rem .25rem;
   }
+  #notesbox .ntedit .bullet .mk{color:var(--term); opacity:.7}
+  #notesbox .ntedit .quote{color:var(--muted); font-style:italic}
+  #notesbox .ntedit .quote .mk{color:var(--term); opacity:.7; font-style:normal}
+  #notesbox .ntedit .rule{color:var(--muted); opacity:.5; letter-spacing:.2em}
   /* the grow tab's paste-your-own-material and already-know folds */
   #srcdetails, #knowndetails{margin:.5rem 0 .2rem}
   #srcdetails summary, #knowndetails summary{cursor:pointer; color:var(--muted); font-size:var(--t-sm)}
@@ -1611,6 +1616,14 @@
   <p><b>ask the tutor yourself</b> — the box under any conversation sends your
   own question with the same context. It's recorded as your turn (🧑), and the
   simulated learner never sees it.</p>
+  <p><b>📝 my notes</b> (<b>Shift+N</b>) — your own synthesis of a tree, and
+  it <b>formats as you type</b>: type <code>## </code> and the line becomes a
+  heading, close a <code>**</code> and the word goes bold. The markers stay
+  put, just dimmed, so nothing shifts under your cursor. The toolbar does
+  headings, bullets, numbered lists, quotes, bold, italic, underline and code
+  (Ctrl+B/I/U/H, Ctrl+Z to undo). It saves as you write — and again whenever
+  the tab is hidden or closed — then travels with the tree and heads every
+  export.</p>
   <p><b>❓ question banks</b> — jot down a question without losing your place:
   no dialog, no scrolling away, just a small bar to type it into. There are
   two, answered completely differently. Press <b>q</b> anywhere (no tree
@@ -2098,12 +2111,11 @@
       <button data-md="ol" title="numbered list" aria-label="numbered list">1.</button>
       <button data-md="quote" title="quote" aria-label="quote">❝</button>
       <button data-md="code" title="code" aria-label="code">&lt;/&gt;</button>
-      <button id="ntpreview" class="ghost" title="see it formatted"
-              aria-pressed="false">👁 preview</button>
     </div>
-    <textarea id="ntarea" aria-label="my notes for this tree"
-      placeholder="Your own words on what you learned — the summary, the key insight, what to revisit. Writing it yourself is what makes it stick.&#10;&#10;## a heading&#10;- a bullet&#10;**bold**, *italic*"></textarea>
-    <div id="ntview" class="ntview" hidden aria-live="polite"></div>
+    <div id="ntarea" class="ntedit" contenteditable="true" role="textbox"
+         aria-multiline="true" spellcheck="true"
+         aria-label="my notes for this tree — formatting appears as you type"
+         data-placeholder="Your own words on what you learned — the summary, the key insight, what to revisit. Writing it yourself is what makes it stick."></div>
     <div class="ntfoot">
       <span id="ntmeta" class="hint"></span>
       <span id="ntsaved" class="hint ntsaved"></span>
@@ -3133,86 +3145,217 @@ let notesPrevFocus = null;
 /* one thing markdown lacks, so <u> passes through — valid markdown,   */
 /* and it renders in every viewer that matters.                        */
 /* ------------------------------------------------------------------ */
-function mdInline(s){
-  // escaped first, so only the tags built here can ever reach the DOM
-  return esc(s)
-    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<em>$2</em>")
-    .replace(/(^|[^_\w])_([^_\n]+)_/g, "$1<em>$2</em>")
-    .replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/g, "<u>$1</u>");
+/* the live editor. Formatting appears as you type: a heading grows the */
+/* moment you type "## ", **bold** goes bold as you close it. The       */
+/* markers stay on screen, dimmed — the way Bear and iA Writer do it —  */
+/* rather than vanishing, so the text never reflows out from under your */
+/* cursor and what you see is still exactly what gets saved.            */
+/*                                                                      */
+/* It is a contenteditable holding ONE div per line, and the source of  */
+/* truth is those lines' text. Every render is: read source, rebuild    */
+/* HTML, put the caret back where it was by character offset.           */
+/* ------------------------------------------------------------------ */
+function noteSource(){
+  const root = $("ntarea");
+  return [...root.children].map(d => d.textContent.replace(/​/g, "")).join("\n");
 }
-function noteHtml(md){
-  const lines = String(md || "").replace(/\r/g, "").split("\n");
-  let html = "", list = null, para = [];
-  const flushPara = () => {
-    if (para.length) html += "<p>" + para.map(mdInline).join("<br>") + "</p>";
-    para = [];
-  };
-  const flushList = () => { if (list){ html += `</${list}>`; list = null; } };
-  const open = (tag) => { if (list !== tag){ flushList(); html += `<${tag}>`; list = tag; } };
-  for (const raw of lines){
-    const line = raw.replace(/\s+$/, "");
-    let m;
-    if (!line.trim()){ flushPara(); flushList(); continue; }
-    if ((m = line.match(/^\s{0,3}(#{1,4})\s+(.*)$/))){
-      flushPara(); flushList();
-      const n = Math.min(6, m[1].length + 1);          // # is a section, not the page title
-      html += `<h${n}>${mdInline(m[2])}</h${n}>`;
-    } else if (/^\s{0,3}(---|\*\*\*|___)\s*$/.test(line)){
-      flushPara(); flushList(); html += "<hr>";
-    } else if ((m = line.match(/^\s{0,3}[-*+]\s+(.*)$/))){
-      flushPara(); open("ul"); html += `<li>${mdInline(m[1])}</li>`;
-    } else if ((m = line.match(/^\s{0,3}\d+[.)]\s+(.*)$/))){
-      flushPara(); open("ol"); html += `<li>${mdInline(m[1])}</li>`;
-    } else if ((m = line.match(/^\s{0,3}>\s?(.*)$/))){
-      flushPara(); flushList(); html += `<blockquote>${mdInline(m[1])}</blockquote>`;
-    } else {
-      flushList(); para.push(line);
+/* caret position as a character offset into noteSource() */
+function noteCaret(){
+  const sel = document.getSelection();
+  const root = $("ntarea");
+  if (!sel || !sel.rangeCount || !root.contains(sel.anchorNode)) return null;
+  const r = sel.getRangeAt(0);
+  let n = 0;
+  for (const line of root.children){
+    if (line.contains(r.endContainer) || line === r.endContainer){
+      const pre = document.createRange();
+      pre.selectNodeContents(line);
+      pre.setEnd(r.endContainer, r.endOffset);
+      return n + pre.toString().replace(/​/g, "").length;
     }
+    n += line.textContent.replace(/​/g, "").length + 1;   // +1 for the newline
   }
-  flushPara(); flushList();
-  return html;
+  return null;
+}
+function setNoteCaret(offset){
+  const root = $("ntarea");
+  if (offset == null) return;
+  let left = offset;
+  for (const line of root.children){
+    const len = line.textContent.replace(/​/g, "").length;
+    if (left <= len){
+      // walk this line's text nodes to find the one holding `left`
+      const walk = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      let node = null, seen = 0;
+      while (walk.nextNode()){
+        node = walk.currentNode;
+        const t = node.textContent.replace(/​/g, "").length;
+        if (seen + t >= left) break;
+        seen += t;
+      }
+      const sel = document.getSelection();
+      const r = document.createRange();
+      if (node) r.setStart(node, Math.min(node.textContent.length, left - seen));
+      else { r.selectNodeContents(line); r.collapse(true); }
+      r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+      return;
+    }
+    left -= len + 1;
+  }
+  // past the end: park at the very end
+  const sel = document.getSelection(), r = document.createRange();
+  r.selectNodeContents(root); r.collapse(false);
+  sel.removeAllRanges(); sel.addRange(r);
+}
+/* one source line -> styled HTML. Markers survive as dimmed spans, so
+   the character count on screen matches the source exactly. */
+const mk = (s) => `<span class="mk">${esc(s)}</span>`;
+function noteLineHtml(line){
+  if (!line) return "<br>";
+  let m;
+  if ((m = line.match(/^(\s{0,3}#{1,4}\s+)([\s\S]*)$/)))
+    return `<span class="h h${Math.min(4, m[1].trim().length)}">${mk(m[1])}` +
+           `${noteInlineHtml(m[2])}</span>`;
+  if (/^\s{0,3}(---|\*\*\*|___)\s*$/.test(line))
+    return `<span class="rule">${esc(line)}</span>`;
+  if ((m = line.match(/^(\s{0,3}[-*+]\s+)([\s\S]*)$/)))
+    return `<span class="bullet">${mk(m[1])}${noteInlineHtml(m[2])}</span>`;
+  if ((m = line.match(/^(\s{0,3}\d+[.)]\s+)([\s\S]*)$/)))
+    return `<span class="bullet">${mk(m[1])}${noteInlineHtml(m[2])}</span>`;
+  if ((m = line.match(/^(\s{0,3}>\s?)([\s\S]*)$/)))
+    return `<span class="quote">${mk(m[1])}${noteInlineHtml(m[2])}</span>`;
+  return noteInlineHtml(line);
+}
+/* Inline markers. These run over text that is ALREADY escaped, so the
+   underline pattern matches &lt;u&gt; rather than <u> — writing them in
+   escaped form here beats rewriting the patterns at runtime, which is how
+   the lookbehinds got mangled the first time round. */
+const NOTE_INLINE = [
+  [/\*\*([^*\n]+)\*\*/g, "b", "**", "**"],
+  [/(?<![*\w])\*([^*\n]+)\*(?!\w)/g, "i", "*", "*"],
+  [/(?<![_\w])_([^_\n]+)_(?!\w)/g, "i", "_", "_"],
+  [/`([^`\n]+)`/g, "c", "`", "`"],
+  [/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/g, "u", "<u>", "</u>"],
+];
+function noteInlineHtml(text){
+  let html = esc(text);
+  for (const [re, cls, open, close] of NOTE_INLINE)
+    html = html.replace(re,
+      (_, inner) => `${mk(open)}<span class="${cls}">${inner}</span>${mk(close)}`);
+  return html || "";
+}
+function noteRender(force){
+  const root = $("ntarea");
+  const src = noteSource();
+  const html = src.split("\n")
+    .map(l => `<div class="nl">${noteLineHtml(l)}</div>`).join("");
+  if (!force && html === root.dataset.rendered) return;   // nothing would change
+  const caret = noteCaret();
+  root.innerHTML = html;
+  root.dataset.rendered = html;
+  root.classList.toggle("empty", src === "");
+  setNoteCaret(caret);
+}
+function setNoteText(text){
+  const root = $("ntarea");
+  root.innerHTML = String(text || "").split("\n")
+    .map(l => `<div class="nl">${noteLineHtml(l)}</div>`).join("") || `<div class="nl"><br></div>`;
+  root.dataset.rendered = root.innerHTML;
+  root.classList.toggle("empty", !String(text || ""));
+}
+
+/* contenteditable has no usable undo once we rewrite it, so we keep our
+   own: a snapshot per pause in typing, Ctrl+Z / Ctrl+Shift+Z. */
+let noteUndo = [], noteRedo = [], noteSnapTimer = null;
+function noteSnapshot(){
+  const src = noteSource();
+  if (noteUndo.length && noteUndo[noteUndo.length - 1].text === src) return;
+  noteUndo.push({text: src, caret: noteCaret()});
+  if (noteUndo.length > 120) noteUndo.shift();
+  noteRedo = [];
+}
+function noteUndoStep(stack, other){
+  const now = {text: noteSource(), caret: noteCaret()};
+  // the debounced snapshot records the state at rest, so the top of the
+  // stack is often exactly where we already are — step past it
+  let prev = stack.pop();
+  while (prev && prev.text === now.text) prev = stack.pop();
+  if (!prev) return;
+  other.push(now);
+  setNoteText(prev.text);
+  setNoteCaret(prev.caret);
+  notesChanged();
 }
 
 /* the toolbar: wrap the selection, or open the markup at the cursor */
 const MD_WRAP = {b: ["**", "**"], i: ["*", "*"], u: ["<u>", "</u>"], code: ["`", "`"]};
 const MD_LINE = {h: "## ", ul: "- ", ol: "1. ", quote: "> "};
+/* the selection as offsets into noteSource() */
+function noteRange(){
+  const sel = document.getSelection(), root = $("ntarea");
+  if (!sel || !sel.rangeCount || !root.contains(sel.anchorNode)){
+    const n = noteSource().length;
+    return {start: n, end: n};
+  }
+  const r = sel.getRangeAt(0);
+  const at = (container, offset) => {
+    let n = 0;
+    for (const line of root.children){
+      if (line.contains(container) || line === container){
+        const pre = document.createRange();
+        pre.selectNodeContents(line);
+        pre.setEnd(container, offset);
+        return n + pre.toString().replace(/​/g, "").length;
+      }
+      n += line.textContent.replace(/​/g, "").length + 1;
+    }
+    return n;
+  };
+  return {start: at(r.startContainer, r.startOffset), end: at(r.endContainer, r.endOffset)};
+}
+function setNoteRange(start, end){
+  if (start === end) return setNoteCaret(start);
+  setNoteCaret(start);
+  const sel = document.getSelection();
+  const anchor = sel.rangeCount ? sel.getRangeAt(0) : null;
+  setNoteCaret(end);
+  if (anchor && sel.rangeCount){
+    const focus = sel.getRangeAt(0);
+    const r = document.createRange();
+    r.setStart(anchor.startContainer, anchor.startOffset);
+    r.setEnd(focus.startContainer, focus.startOffset);
+    sel.removeAllRanges(); sel.addRange(r);
+  }
+}
 function applyMd(kind){
-  const ta = $("ntarea");
-  const {selectionStart: a, selectionEnd: b, value: v} = ta;
+  noteSnapshot();
+  const v = noteSource();
+  const {start: a, end: b} = noteRange();
+  let text, from, to;
   if (MD_WRAP[kind]){
     const [l, r] = MD_WRAP[kind];
     const chosen = v.slice(a, b);
-    ta.value = v.slice(0, a) + l + chosen + r + v.slice(b);
+    text = v.slice(0, a) + l + chosen + r + v.slice(b);
     // no selection: land the caret between the markers, ready to type
-    ta.selectionStart = a + l.length;
-    ta.selectionEnd = a + l.length + chosen.length;
+    from = a + l.length; to = from + chosen.length;
   } else {
     const prefix = MD_LINE[kind];
-    const from = v.lastIndexOf("\n", a - 1) + 1;
-    const to = v.indexOf("\n", b) < 0 ? v.length : v.indexOf("\n", b);
-    const block = v.slice(from, to).split("\n").map((line, i) => {
+    const lineFrom = v.lastIndexOf("\n", a - 1) + 1;
+    const lineTo = v.indexOf("\n", b) < 0 ? v.length : v.indexOf("\n", b);
+    const block = v.slice(lineFrom, lineTo).split("\n").map((line, i) => {
       const bare = line.replace(/^\s{0,3}(#{1,4}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, "");
       // pressing the same button again takes the markup back off
       if (bare !== line && line.startsWith(prefix)) return bare;
       return (kind === "ol" ? `${i + 1}. ` : prefix) + bare;
     }).join("\n");
-    ta.value = v.slice(0, from) + block + v.slice(to);
-    ta.selectionStart = from; ta.selectionEnd = from + block.length;
+    text = v.slice(0, lineFrom) + block + v.slice(lineTo);
+    from = lineFrom; to = lineFrom + block.length;
   }
-  ta.focus();
+  setNoteText(text);
+  $("ntarea").focus();
+  setNoteRange(from, to);
   notesChanged();
-}
-function setNotePreview(on){
-  $("ntview").hidden = !on;
-  $("ntarea").style.display = on ? "none" : "";
-  $("ntpreview").setAttribute("aria-pressed", on ? "true" : "false");
-  $("ntpreview").innerHTML = on ? "✎ write" : "👁 preview";
-  document.querySelectorAll(".nttools [data-md]").forEach(b => { b.disabled = on; });
-  if (on) $("ntview").innerHTML =
-    noteHtml($("ntarea").value) || `<p class="hint">nothing written yet.</p>`;
-  else $("ntarea").focus();
 }
 
 /* autosave. Notes used to persist only on close, so a phone evicting the
@@ -3225,6 +3368,8 @@ function notesChanged(){
   setNoteSaved("saving");
   clearTimeout(notesTimer);
   notesTimer = setTimeout(persistNotes, 600);
+  clearTimeout(noteSnapTimer);
+  noteSnapTimer = setTimeout(noteSnapshot, 500);   // one undo step per pause
 }
 function setNoteSaved(state){
   const el = $("ntsaved");
@@ -3234,7 +3379,7 @@ function setNoteSaved(state){
 }
 
 function updateNotesMeta(){
-  const v = $("ntarea").value.trim();
+  const v = noteSource().trim();
   const words = v ? v.split(/\s+/).length : 0;
   $("ntmeta").textContent = words
     ? `${words} word${words === 1 ? "" : "s"} · saved with the tree`
@@ -3244,20 +3389,19 @@ function openNotes(){
   const tree = cur(); if (!tree) return;
   notesPrevFocus = document.activeElement;
   $("ntscope").textContent = "· " + oneLine(tree.root_topic, 60);
-  const ta = $("ntarea");
-  ta.value = tree.note || "";
   $("notesbox").classList.add("open");
-  setNotePreview(false);      // always opens ready to write
+  setNoteText(tree.note || "");
+  noteUndo = []; noteRedo = [];
   setNoteSaved("");
   updateNotesMeta();
-  ta.focus();
-  ta.setSelectionRange(ta.value.length, ta.value.length);
+  $("ntarea").focus();
+  setNoteCaret(noteSource().length);
 }
 window.openNotes = openNotes;
 function persistNotes(){
   clearTimeout(notesTimer);
   const tree = cur(); if (!tree) return;
-  const v = $("ntarea").value.replace(/[ \t]+$/gm, "").replace(/\s+$/, "").slice(0, NOTE_MAX);
+  const v = noteSource().replace(/[ \t]+$/gm, "").replace(/\s+$/, "").slice(0, NOTE_MAX);
   if ((tree.note || "") === v){ setNoteSaved("saved"); return; }   // unchanged — don't churn the sync queue
   tree.note = v;
   persistTree(tree);            // localStorage now, server on the next flush
@@ -3274,8 +3418,22 @@ function closeNotes(){
 window.closeNotes = closeNotes;
 $("ntdone").onclick = closeNotes;
 $("ntclose").onclick = closeNotes;
-$("ntarea").addEventListener("input", notesChanged);
+$("ntarea").addEventListener("input", () => {
+  noteRender();      // formatting appears as you type
+  notesChanged();
+});
 $("ntarea").addEventListener("blur", persistNotes);
+/* contenteditable would otherwise paste styled HTML in from anywhere */
+$("ntarea").addEventListener("paste", (e) => {
+  e.preventDefault();
+  noteSnapshot();
+  const text = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+  const v = noteSource(), {start, end} = noteRange();
+  const clean = text.replace(/\r\n?/g, "\n");
+  setNoteText(v.slice(0, start) + clean + v.slice(end));
+  setNoteCaret(start + clean.length);
+  notesChanged();
+});
 $("notesbox").addEventListener("click", (e) => { if (e.target === $("notesbox")) closeNotes(); });
 /* any of these could be the last moment before the tab goes away */
 document.addEventListener("visibilitychange", () => {
@@ -3286,12 +3444,20 @@ window.addEventListener("pagehide", () => {
   if ($("notesbox").classList.contains("open")) persistNotes();
 });
 document.querySelectorAll(".nttools [data-md]").forEach(b => {
-  b.onclick = () => applyMd(b.dataset.md);
+  // mousedown, not click: don't let the button take the selection first
+  b.onmousedown = (e) => { e.preventDefault(); applyMd(b.dataset.md); };
 });
-$("ntpreview").onclick = () => setNotePreview($("ntview").hidden);
 $("ntarea").addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-  const k = {b: "b", i: "i", u: "u", h: "h"}[e.key.toLowerCase()];
+  const key = e.key.toLowerCase();
+  if (key === "z"){
+    e.preventDefault();
+    if (e.shiftKey) noteUndoStep(noteRedo, noteUndo);
+    else noteUndoStep(noteUndo, noteRedo);
+    return;
+  }
+  if (key === "y"){ e.preventDefault(); noteUndoStep(noteRedo, noteUndo); return; }
+  const k = {b: "b", i: "i", u: "u", h: "h"}[key];
   if (!k) return;
   e.preventDefault();
   applyMd(k);

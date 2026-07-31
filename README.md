@@ -267,9 +267,13 @@ directly (a local `claude` login can't run on a server), so it needs an
   both exports under *Explained back*, and **📊 progress** counts attempts,
   clean explanations, and what's due another pass. Each tree also
   gets **📝 my notes** — a space for your own synthesis of what you learned,
-  written in a small **markdown** subset with a toolbar for it (headings,
-  bullet and numbered lists, quotes, rules, **bold**, *italic*, underline,
-  `code`, with Ctrl+B/I/U/H) and a **👁 preview** to see it formatted. It
+  written in a small **markdown** subset that **formats itself as you type** —
+  type `## ` and the line becomes a heading there and then, close a `**` and
+  the word goes bold. The markers stay on screen, dimmed, the way Bear and iA
+  Writer do it, so nothing reflows out from under your cursor and what you see
+  is exactly what gets saved. A toolbar covers headings, bullet and numbered
+  lists, quotes, **bold**, *italic*, underline and `code` (Ctrl+B/I/U/H), with
+  its own undo (Ctrl+Z). It
   autosaves as you type — and again the moment the tab is hidden, unloaded, or
   the box closed, so nothing is lost to a phone evicting the tab — then syncs
   with the tree and heads every export, where the markup renders properly
