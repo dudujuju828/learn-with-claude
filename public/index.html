@@ -1886,9 +1886,11 @@
     <p class="hint" id="lssessionmeta"></p>
     <p class="hint">whatever you worked through in that session — a codebase you
     explored, a design you argued out — the tutor already knows, so you can ask
-    about it here without setting it up again. Its transcript is read, never
-    written to: your session is left exactly as you left it. Tutor only; the
-    simulated learner never sees it.</p>
+    about it here without setting it up again. <b>The whole session goes over,
+    not a summary of it</b> (set <code>LEARN_SESSION_MEMORY_MAX</code> if you
+    want a character cap). Its transcript is read, never written to: your
+    session is left exactly as you left it. Tutor only; the simulated learner
+    never sees it.</p>
 
     <label>MCP tools the tutor can call before answering</label>
     <div id="mcplist"></div>
@@ -2699,6 +2701,9 @@ function sessionAgo(secs){
   const days = Math.floor((Date.now() / 1000 - secs) / 86400);
   return days <= 0 ? "today" : days === 1 ? "yesterday" : `${days}d ago`;
 }
+function sessionSize(chars){
+  return chars >= 1000 ? `${Math.round(chars / 1000)}k chars` : `${chars} chars`;
+}
 function renderSessionPick(){
   const list = localSettingsDoc.available_sessions || [];
   const chosen = ($("lssession").value || "").trim().toLowerCase();
@@ -2706,26 +2711,31 @@ function renderSessionPick(){
     const on = chosen && s.id.startsWith(chosen);
     return `<div class="sessrow${on ? " on" : ""}" role="button" tabindex="0"` +
       ` data-id="${esc(s.id)}" title="${esc(s.id)}">` +
-      `<span class="sesswhen">${esc(sessionAgo(s.when))} · ${s.messages} msg</span>` +
+      `<span class="sesswhen">${esc(sessionAgo(s.when))} · ${s.messages} msg` +
+      `${s.chars ? " · " + esc(sessionSize(s.chars)) : ""}</span>` +
       `<span class="sesstitle">${esc(oneLine(s.title || s.id, 70))}</span></div>`;
   }).join("");
   updateSessionMeta();
+}
+/* says exactly how much of the session the tutor gets — the whole thing
+   unless LEARN_SESSION_MEMORY_MAX is set, and if that cap bites, it says so
+   here rather than trimming behind your back */
+function sessionExtent(s){
+  const size = s.chars ? `, ${sessionSize(s.chars)}` : "";
+  if (!s.trimmed) return `${s.messages} messages${size} — all of it goes to the tutor`;
+  return `${s.messages} messages${size} — ⚠ trimmed to ${sessionSize(s.limit)} by ` +
+         `LEARN_SESSION_MEMORY_MAX; the middle is left out`;
 }
 function updateSessionMeta(){
   const typed = ($("lssession").value || "").trim();
   const info = localSettingsDoc.session_info;
   const el = $("lssessionmeta");
   if (!typed){ el.textContent = "no session — the tutor starts fresh, as usual."; return; }
-  if (info && typed.toLowerCase() === (info.id || "").toLowerCase()){
-    el.textContent = `✓ ${info.messages} messages, last touched ${sessionAgo(info.when)}` +
-                     (info.title ? ` — “${oneLine(info.title, 60)}”` : "");
-    return;
-  }
-  const hit = (localSettingsDoc.available_sessions || [])
-    .find(s => s.id.toLowerCase().startsWith(typed.toLowerCase()));
-  el.textContent = hit
-    ? `✓ ${hit.messages} messages, ${sessionAgo(hit.when)}` +
-      (hit.title ? ` — “${oneLine(hit.title, 60)}”` : "")
+  const s = (info && typed.toLowerCase() === (info.id || "").toLowerCase()) ? info
+    : (localSettingsDoc.available_sessions || [])
+        .find(x => x.id.toLowerCase().startsWith(typed.toLowerCase()));
+  el.textContent = s
+    ? `✓ ${sessionExtent(s)}` + (s.title ? ` — “${oneLine(s.title, 50)}”` : "")
     : "checked when you save — a unique prefix of the id is enough.";
 }
 function pickSession(id){

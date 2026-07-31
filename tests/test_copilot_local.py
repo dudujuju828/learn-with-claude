@@ -431,15 +431,31 @@ def test_session_reading():
             t = copilot_sessions.transcript("abc12345-1111-2222-3333-444455556666")
             assert "[user]" in t and "nested quotes" in t and "Unterminated" in t
 
-            # over budget: the opening survives, the middle is elided, the end stays
+            # a long session is handed over WHOLE by default — anchoring a
+            # session to study it, only to get an abridgement, is the one
+            # thing this must not do
             _fake_session(root, "ffffffff-0000-0000-0000-000000000000",
                           [(f"question {i} " + "x" * 400, f"answer {i} " + "y" * 400)
                            for i in range(40)], noise=False)
-            big = copilot_sessions.transcript("ffffffff-0000-0000-0000-000000000000",
-                                              budget=6000)
-            assert len(big) <= 6000, len(big)
-            assert "question 0" in big and "messages omitted" in big and "answer 39" in big
-            assert "question 20" not in big
+            whole = copilot_sessions.transcript("ffffffff-0000-0000-0000-000000000000")
+            assert len(whole) > 32000, len(whole)
+            assert "messages omitted" not in whole
+            for i in range(40):     # every single exchange survives, in order
+                assert f"question {i} " in whole and f"answer {i} " in whole
+            # a message is never chopped mid-way either
+            assert ("x" * 400) in whole and ("y" * 400) in whole
+
+            # an explicit cap (LEARN_SESSION_MEMORY_MAX) still works, and when
+            # it bites it keeps the opening and the tail and says so
+            capped = copilot_sessions.transcript("ffffffff-0000-0000-0000-000000000000",
+                                                 budget=6000)
+            assert len(capped) <= 6000, len(capped)
+            assert "question 0" in capped and "messages omitted" in capped
+            assert "answer 39" in capped and "question 20" not in capped
+
+            # describe() reports the real extent, so nothing is hidden
+            info = copilot_sessions.describe("ffffffff-0000-0000-0000-000000000000")
+            assert info["chars"] > 32000 and info["trimmed"] is False, info
         finally:
             os.environ.pop("COPILOT_HOME", None)
     print("ok  copilot session reading (parse, resolve, filter, budget)")

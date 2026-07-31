@@ -36,12 +36,20 @@ from pathlib import Path
 # CLI itself accepts for --resume
 SESSION_REF = re.compile(r"^[0-9a-fA-F][0-9a-fA-F-]{3,63}$")
 
-# how much of a session can become tutor memory. Long coding sessions run to
-# hundreds of KB; past this the middle is elided, keeping how it started and
-# where it ended up — the two parts that actually carry the context.
-TRANSCRIPT_BUDGET = 16000
+# How much of a session becomes tutor memory. **The default is all of it.**
+# Anchoring a session you want to study, only to have the middle silently
+# elided, defeats the whole point — and a ceiling here buys less safety than
+# it looks like it does: the CLI compacts an over-long prompt itself (and
+# compaction is a better summariser than head+tail slicing), the tutor's
+# oversized prompts already travel via a temp file it reads with `view`, and
+# a session's *conversation* is a small fraction of its events.jsonl once
+# tool calls, reasoning blobs, and file dumps are stripped out.
+#
+# LEARN_SESSION_MEMORY_MAX caps it in characters for anyone who does want a
+# limit (0 = no limit). When a cap bites, the settings panel says so rather
+# than trimming behind your back.
+TRANSCRIPT_BUDGET = max(0, int(os.environ.get("LEARN_SESSION_MEMORY_MAX", "0") or 0))
 HEAD_MESSAGES = 2
-MAX_MESSAGE = 4000
 
 
 def session_root() -> Path:
@@ -80,11 +88,13 @@ def _messages(path: Path) -> list:
                     continue
                 # "content" is what was actually said; "transformedContent"
                 # carries the CLI's own injected preamble, which isn't ours
+                # kept whole — a long answer chopped mid-sentence is worse
+                # than a long prompt
                 text = str(data.get("content") or "").strip()
                 if not text:
                     continue
                 out.append({"role": "user" if kind == "user.message" else "assistant",
-                            "text": text[:MAX_MESSAGE]})
+                            "text": text})
     except OSError:
         return []
     return out
@@ -109,8 +119,9 @@ def resolve(ref: str) -> "str | None":
 
 
 def describe(session_id: str) -> "dict | None":
-    """{id, when, messages, title} for one session — what the settings panel
-    shows so you can tell you picked the right one."""
+    """{id, when, messages, chars, trimmed, title} for one session — what the
+    settings panel shows so you can tell you picked the right one, and exactly
+    how much of it the tutor will be given."""
     path = _events_path(session_id)
     if not path.is_file():
         return None
@@ -120,10 +131,16 @@ def describe(session_id: str) -> "dict | None":
         when = path.stat().st_mtime
     except OSError:
         when = 0
+    chars = sum(len(m["text"]) + len(m["role"]) + 4 for m in msgs)
     return {
         "id": session_id,
         "when": when,
         "messages": len(msgs),
+        "chars": chars,
+        # a cap is opt-in, and when one bites we say so instead of quietly
+        # handing the tutor half a conversation
+        "trimmed": bool(TRANSCRIPT_BUDGET and chars > TRANSCRIPT_BUDGET),
+        "limit": TRANSCRIPT_BUDGET,
         "title": " ".join(first.split())[:120],
     }
 
@@ -169,20 +186,24 @@ def recent(limit: int = 12) -> list:
     return out
 
 
-def transcript(session_id: str, budget: int = TRANSCRIPT_BUDGET) -> str:
-    """The session as a plain transcript, trimmed to `budget` characters.
+def transcript(session_id: str, budget: "int | None" = None) -> str:
+    """The whole session as a plain transcript.
 
-    Over budget, the opening exchange is kept and the middle elided: how the
-    session was framed matters as much as where it ended up, and the tail is
-    where the conclusions live. Empty string if there's nothing readable —
-    callers treat that as "no memory", never as an error.
+    `budget` (characters) is only honoured if you ask for one — None uses
+    LEARN_SESSION_MEMORY_MAX, and 0 (the default) means no trimming at all.
+    Where a cap does bite, the opening exchange is kept and the middle elided:
+    how the session was framed matters as much as where it ended up, and the
+    tail is where the conclusions live. Empty string if there's nothing
+    readable — callers treat that as "no memory", never as an error.
     """
     msgs = _messages(_events_path(session_id))
     if not msgs:
         return ""
     blocks = [f"[{m['role']}]\n{m['text']}" for m in msgs]
+    if budget is None:
+        budget = TRANSCRIPT_BUDGET
     total = sum(len(b) + 2 for b in blocks)
-    if total <= budget:
+    if not budget or total <= budget:
         return "\n\n".join(blocks)
 
     head = blocks[:HEAD_MESSAGES]

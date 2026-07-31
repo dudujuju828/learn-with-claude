@@ -339,10 +339,13 @@ How it differs from the Vercel deployment:
   the list of recent sessions right there) and everything you worked through
   in it — a codebase you explored, a design you argued out — is already known
   to the tutor, so you can ask about it here without setting it up again. The
-  session's transcript is **read, never written to**: your session is left
-  exactly as you left it, and nothing about it is chained or appended, so the
-  tutor starts from the same point every turn. Tutor only — the simulated
-  learner and the glossary never see it.
+  **whole session** goes over, not a summary of it — the panel tells you its
+  size and says plainly that all of it is going (set
+  `LEARN_SESSION_MEMORY_MAX` if you'd rather cap it, and it says so when that
+  cap bites). The session's transcript is **read, never written to**: your
+  session is left exactly as you left it, and nothing is chained or appended,
+  so the tutor starts from the same point every turn. Tutor only — the
+  simulated learner and the glossary never see it.
 - **⚙ local settings** (header, local mode only) lets you swap the model per
   role (a dropdown of common ones, or type any exact id) and pick a reasoning
   effort, name one project directory of your own code or notes for the tutor
@@ -362,7 +365,9 @@ Options: `--port` (default 8577), `--dir` for the knowledge folder,
 `--no-open` to skip the browser. Env knobs: `LEARN_COPILOT_MODEL` (or
 per-role `LEARN_COPILOT_LEARNER_MODEL` / `_TUTOR_MODEL` / `_GLOSSARY_MODEL`)
 to pin a model instead of `auto`, `LEARN_EFFORT` for reasoning effort on
-models that support it, `LEARN_TIMEOUT` per call, `LEARN_COPILOT_EXE` if the
+models that support it, `LEARN_SESSION_MEMORY_MAX` to cap how much of an
+anchored Copilot session becomes tutor memory (default: no cap — all of it),
+`LEARN_TIMEOUT` per call, `LEARN_COPILOT_EXE` if the
 CLI lives somewhere unusual — all of these are the *defaults* the ⚙ local
 settings panel overrides once you save anything there. `python -m
 learn_with_claude.localweb` works without installing the `learn` command.

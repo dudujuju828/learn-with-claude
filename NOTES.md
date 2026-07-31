@@ -45,9 +45,26 @@ re-explaining it. Tutor only — the learner and glossary personas never see it.
   local-tools one. No route changes, no new endpoint. It's cached on the
   session file's (size, mtime) because a long session is hundreds of KB and
   this runs on every tutor turn.
-- **Bounded at 16k characters**, keeping the opening exchange and the tail
-  with the middle elided — how a session was framed matters as much as where
-  it ended up, and a coding session can run far past any context window.
+- **The whole session goes over, not an abridgement of it.** The first cut of
+  this shipped a 16k-character ceiling (head + tail, middle elided) and a 4k
+  per-message truncation. Both were wrong, and the user caught it: anchoring a
+  long conversation *because you want to study it*, only for the tutor to be
+  handed the first and last slices of it, defeats the entire feature — and the
+  per-message cut was worse, chopping individual answers mid-sentence. The
+  ceiling also bought less safety than it appeared to: the CLI compacts an
+  over-long prompt itself (better than head/tail slicing), the tutor's
+  oversized prompts already travel via a temp file it reads with `view`, and a
+  session's *conversation* is a small fraction of its `events.jsonl` once tool
+  calls, reasoning blobs, and file dumps are stripped. Now: no limit by
+  default, `LEARN_SESSION_MEMORY_MAX` for anyone who wants one, and the
+  settings panel states the extent outright — "60 messages, 28k chars — all of
+  it goes to the tutor", or a ⚠ naming the cap when one bites. Nothing is
+  trimmed silently.
+- **Re-read vs. re-sent.** The transcript is parsed once and cached on the
+  session file's (size, mtime), but it *is* re-sent on every tutor turn — the
+  transport is one stateless subprocess per call, so the prompt is the only
+  memory there is. That costs no extra billing in local mode (premium
+  requests are per call, not per token); it spends context-window headroom.
 - **Framed as memory, not as a document.** The prompt tells the tutor this is
   its own record of working with this learner: treat it as established, let it
   set the level, never mention the session or recap it, and never let it
@@ -56,13 +73,15 @@ re-explaining it. Tutor only — the learner and glossary personas never see it.
   itself a Copilot session, and on a machine that has run `learn --web` for a
   while they vastly outnumber the real ones — so sessions whose first message
   opens with `compose_prompt()`'s banner are filtered out of the list.
-- Verified three ways: 6 unit tests (parsing, prefix resolution, filtering,
-  budget elision, tutor-only reach), 25 end-to-end checks driving the real
-  server and the real panel over CDP (pick → save → persist → reject a bad id
-  → clear), and one **real Copilot call** with a session anchored — the tutor
-  answered a question only that session could support (naming the
-  `events_seen` table and the bloom filter), never mentioned a transcript, and
-  left the session byte-identical. 0 premium requests.
+- Verified three ways: unit tests (parsing, prefix resolution, filtering,
+  whole-session fidelity, opt-in capping, tutor-only reach), 25 end-to-end
+  checks driving the real server and the real panel over CDP (pick → save →
+  persist → reject a bad id → clear), and **real Copilot calls** with a
+  session anchored. The decisive one: a 60-message, 27.8k-char session with a
+  distinctive fact planted at exchange 15 of 30 — dead in the middle, exactly
+  what the old ceiling discarded, and past the argv limit so it travelled via
+  the temp file. The tutor recalled it precisely, never mentioned a
+  transcript, and left the session byte-identical. 0 premium requests.
 
 ### Candidates rejected (this cycle)
 - **Chaining `--resume` per call** — see above; measured, not assumed.
