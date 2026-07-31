@@ -1592,6 +1592,7 @@
     <tr><td><kbd>j</kbd> <kbd>k</kbd></td><td>hop to the next / previous turn</td></tr>
     <tr><td><kbd>q</kbd></td><td>jot a question for the global bank — investigated fresh, later</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>Q</kbd></td><td>jot a question for this tree's local bank</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>open <b>my notes</b> for the tree you're reading</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>step the reading ruler / focus line (when on)</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>stop speech · close panels · turn the ruler off</td></tr>
   </table>
@@ -4318,7 +4319,7 @@ function renderConversation(keepScroll){
   if (!running){
     const hasNote = !!(tree.note && tree.note.trim());
     acts.push(`<button class="notes${hasNote ? " has" : ""}" onclick="openNotes()"` +
-              ` title="your own synthesis of this tree — it travels with the tree, syncs, and heads every export">` +
+              ` title="your own synthesis of this tree (Shift+N) — it travels with the tree, syncs, and heads every export">` +
               `${ico("📝")}notes${hasNote ? ' <span class="ndot" aria-hidden="true">●</span>' : ""}</button>`);
     if (tree.source)
       acts.push(`<button class="notes has" onclick="openSrcbox()"` +
@@ -7336,7 +7337,7 @@ function paletteActions(){
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
     if (tree.survey && tree.survey.items && tree.survey.items.length)
       acts.push({icon: "🗺", label: "survey", sub: "the topic's foundations map", run(){ openSurvey(); }});
-    acts.push({icon: "📝", label: "my notes", sub: tree.note && tree.note.trim() ? "your synthesis of this tree" : "jot your own synthesis", run(){ openNotes(); }});
+    acts.push({icon: "📝", label: "my notes", sub: (tree.note && tree.note.trim() ? "your synthesis of this tree" : "jot your own synthesis") + " · Shift+N", run(){ openNotes(); }});
     if (tree.source) acts.push({icon: "📚", label: "source", sub: "the passage this tree is grounded in", run(){ openSrcbox(); }});
     if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor))
       acts.push({icon: "❓", label: "jot a question (this tree)", sub: "press Shift+Q while reading",
@@ -8519,6 +8520,14 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       openQCap("local");
     }
+  }
+  /* Shift+N: your own notes on this tree. Shifted like Shift+Q because it
+     belongs to the tree you're reading, and it needs one — plain "n" stays
+     free for anything that works with nothing open. */
+  if (e.key === "N" && !typing && cur() &&
+      !e.ctrlKey && !e.metaKey && !e.altKey){
+    e.preventDefault();
+    openNotes();
   }
 });
 
