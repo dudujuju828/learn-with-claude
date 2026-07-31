@@ -5,6 +5,51 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 49 — profiles actually contain everything
+
+*(user-requested: "ensure that profiles fully encapsulate all aspects of the
+application (glossary, qbank, etc.)".)*
+
+### What it is
+The active profile now scopes every surface, not just the tree list and the
+review deck. An audit of every walk over `store` turned up four leaks, plus
+one whole feature with no notion of profiles at all.
+
+### The leaks
+- **Search** — all four passes (turn text, glossary, highlights, notes) walked
+  the entire store, so searching inside *computer-science* surfaced hits from
+  *biology*.
+- **The glossary's "all trees" scope** — meant *literally* all trees. It now
+  means all trees in this profile, which is what that toggle sitting next to a
+  profile chip plainly implies.
+- **The ⌘K palette** — listed and jumped to trees the tree list wouldn't show.
+- **"Open the latest tree"** on boot and after a sync — could drop you into a
+  tree from a profile you weren't in, which then wasn't in the list beside it.
+- **The global question bank had no profile at all.** Questions now carry one,
+  taken from the active profile when banked.
+
+### Design notes
+- **The document keeps every question; only the views filter.** That matters
+  for ⇅ order, which rewrites `globalQDoc.questions` wholesale — filtering
+  there would have *deleted* every other profile's questions. It rebuilds from
+  `otherProfileQuestions()` plus the visible ones, and there's a test that
+  would have caught exactly that mistake.
+- **Legacy data behaves like legacy trees.** A question banked before this
+  (no `profile`) is hidden while a profile is active and visible when none is
+  — the same rule `inProfile()` has always applied to unfiled trees, so the
+  two are consistent rather than each surprising in a different way.
+- **Renaming a profile carries its questions**, not just its trees.
+- **What stays global on purpose:** the full `save all` backup (a backup that
+  quietly omitted other profiles would be a trap), `allProfiles()`, and custom
+  tutors — a tutor style is a preference about how you like to be taught, not
+  knowledge filed under an interest.
+- 26 browser assertions across two profiles with distinctly-named data in
+  every surface: isolation, that switching flips all of it, that no profile
+  still shows everything, and that a rename moves trees and questions
+  together. All five earlier suites re-run green — 164 assertions in total.
+
+---
+
 ## Feature 48 — notes get markup, and actually save
 
 *(user-requested: "improve the notes — give it basic markup (headers, bullet

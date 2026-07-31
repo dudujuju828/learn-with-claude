@@ -229,10 +229,15 @@ directly (a local `claude` login can't run on a server), so it needs an
   recall strength (card maturity), a 14-day review forecast, your current
   streak, and quiz history — scoped to the active profile. Trees file
   under **profiles** — named interest areas like *computer-science* — and the
-  active profile scopes the tree list and the review deck, so each interest
-  keeps its own flashcards; the profile name lives on the tree document and
-  syncs, merges, and exports with it (and the ✎ chip renames a profile
-  across every tree filed under it). **🎓
+  active profile scopes **everything**, not just the tree list: the glossary
+  (both its this-tree and all-trees views), the review deck, search, the ⌘K
+  palette, 📅 today, the highlights hub, the study sheet, 📊 progress, and the
+  global question bank. Switch profile and the whole app is about that
+  interest; each keeps its own flashcards, its own banked questions, its own
+  everything. With no profile selected you see the lot. The name lives on the
+  tree document (and on each banked question), so it syncs, merges, and
+  exports with them — and the ✎ chip renames a profile across every tree
+  *and* question filed under it. **🎓
   quiz me** writes a handful of multiple-choice questions from what the tree
   actually covered (one model call, kept with the tree — retakes just
   reshuffle), explains every answer, and records your scores; the 🔊 beside
