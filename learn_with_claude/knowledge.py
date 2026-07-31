@@ -105,8 +105,9 @@ class KnowledgeTree:
         self.root_id: int | None = None
         self._next = 1
         self.path: Path | None = Path(path) if path else None
-        # term (lowercased key) -> {"term", "def", "node", "turn"}: every word
-        # the learner hit, with the definition the web app generated for it
+        # term (lowercased key) -> {"term", "def", "node", "turn"}: the words
+        # the reader deliberately added in the web app (nothing lands here on
+        # its own), each with the definition they asked for, if any
         self.glossary: dict = {}
         # the learner's own free-text synthesis of the tree (optional)
         self.note: str = ""

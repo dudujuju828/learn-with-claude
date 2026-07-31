@@ -541,7 +541,10 @@
     letter-spacing:0; word-spacing:0}
   .tutor-b pre, .tutor-b pre code{background:var(--prebg); font-size:.9em}
   .term{display:inline-block; background:var(--termbg); color:var(--term);
-    border-radius:var(--r-sm); padding:.02rem .55rem; font-size:var(--t-sm)}
+    border-radius:var(--r-sm); padding:.02rem .55rem; font-size:var(--t-sm);
+    cursor:pointer}
+  /* already in the glossary — settled, not an invitation to add it again */
+  .term.ing{background:transparent; box-shadow:inset 0 0 0 1px var(--termbg)}
 
   /* structured answer parts — one labelled card per aspect */
   .tutor-b details.part{
@@ -1181,18 +1184,18 @@
   #loose .threstore:hover{color:var(--term)}
 
   /* selection chip — select words in an answer to define or dig into them */
+  /* five actions don't fit a phone on one line, so the chip wraps and the
+     separators become a grid gap the card colour shows through */
   #selchip{
-    position:fixed; z-index:86; display:flex; align-items:stretch;
-    border:1px solid var(--term); background:var(--card); border-radius:var(--r-pill);
-    box-shadow:var(--shadow-md); overflow:hidden;
+    position:fixed; z-index:86; display:flex; align-items:stretch; flex-wrap:wrap;
+    max-width:min(94vw, 34rem); gap:1px;
+    border:1px solid var(--term); background:color-mix(in srgb, var(--term) 40%, var(--line));
+    border-radius:var(--r-pill); box-shadow:var(--shadow-md); overflow:hidden;
   }
   #selchip[hidden]{display:none}
   #selchip button{
-    border:0; border-radius:0; background:none; color:var(--term);
+    flex:1 0 auto; border:0; border-radius:0; background:var(--card); color:var(--term);
     padding:.3rem .75rem; font-size:var(--t-sm); line-height:1.2; cursor:pointer;
-  }
-  #selchip button + button{
-    border-left:1px solid color-mix(in srgb, var(--term) 40%, var(--line));
   }
   #selchip button:hover{background:var(--termbg)}
 
@@ -1432,16 +1435,22 @@
   <p><b>answer parts</b> — when an answer has distinct aspects (the why, an
   example, a caveat), each shows as its own labelled card under the direct
   answer. Tap a card to fold or unfold it — one idea at a time.</p>
-  <p><b>glossary</b> — every term the learner hits gets a short definition
-  (written the moment it appears) and lives in the tree, so it syncs and
-  exports with it. Dotted-underlined words in answers are glossary terms —
-  tap one to see its definition right there. And it's yours too: select a
-  word or two in any answer and a chip offers <b>✎ define</b> — the term
-  joins the glossary (and review) — or <b>⛏ dig</b>, for when a definition
-  isn't enough: the tutor is asked what that thing actually is in this
-  context, and the answer lands in the conversation as your turn.
-  <b>✕ forget</b> in the sidebar takes a term back out. <b>anki cards</b>
-  downloads the defined terms as a file Anki imports directly.</p>
+  <p><b>glossary</b> — every word in it is one you put there. Nothing is
+  added automatically: select a word or two in any answer and the chip's
+  <b>➕ add</b> files it (free — no model call), or tap the 🔍 word the
+  learner flagged to add that one. It lives in the tree, so it syncs and
+  exports with it. A definition is a separate step, whenever you want it:
+  <b>✎ define it</b> on the entry, or <b>define N missing</b> for the whole
+  list at once. The chip's <b>✎ define</b> is a plain <i>lookup</i> — it
+  tells you what a word means and adds nothing; if the answer was worth
+  keeping, the popover's <b>➕ add to glossary</b> keeps it, definition and
+  all. Dotted-underlined words in answers are defined glossary terms — tap
+  one to read it right there. <b>⛏ dig</b> is for when a definition isn't
+  enough: the tutor is asked what that thing actually is in this context,
+  and the answer lands in the conversation as your turn.
+  <b>✕ forget</b> in the sidebar takes a term back out for good.
+  <b>anki cards</b> downloads the defined terms as a file Anki imports
+  directly.</p>
   <p><b>🗣 explain it back</b> — the Feynman loop. Explain a conversation in
   your own words, from memory, as if teaching a friend; the tutor reads it
   against what was actually covered and answers with what's solid, the one
@@ -1738,8 +1747,9 @@
         <div id="terms"></div>
         <div class="btnrow" id="glossactions" style="margin-top:.45rem"></div>
       </div>
-      <p class="hint" id="glossempty">no terms yet — the glossary fills itself as the
-      learner hits words it doesn't know.</p>
+      <p class="hint" id="glossempty">no words yet — nothing lands here on its own.
+      Select a word in an answer and press ➕ add, or tap a 🔍 word the learner
+      flagged. Definitions come later, when you ask.</p>
     </section>
 
     <section data-side="search">
@@ -2070,13 +2080,14 @@
   </div>
 </div>
 
-<div id="gpop" role="dialog" aria-label="glossary entry" hidden>
+<div id="gpop" role="dialog" aria-label="definition" hidden>
   <div class="gname"></div>
   <div class="gbody"></div>
   <div class="gfoot"></div>
 </div>
 
 <div id="selchip" role="group" aria-label="selection actions" hidden>
+  <button id="seladd"></button>
   <button id="seldef"></button>
   <button id="seldig"></button>
   <button id="selhi"></button>
@@ -3719,6 +3730,18 @@ function mergeTrees(local, server){
     if (le.rev && (!se.rev || (le.rev.last || "") > (se.rev.last || "")))
       se.rev = structuredClone(le.rev);
   }
+  // forgotten terms: tombstones union both ways, so a term removed on one
+  // device doesn't come back from another's copy (the union above would
+  // otherwise resurrect it). Re-adding beats the tombstone on recency.
+  const goneMap = new Map();
+  for (const x of [...(server.gone || []), ...(local.gone || [])])
+    if (x && x.k && (!goneMap.has(x.k) || (x.when || "") > goneMap.get(x.k).when))
+      goneMap.set(x.k, {k: x.k, when: x.when || ""});
+  for (const [k, t] of goneMap){
+    if (sg[k] && (sg[k].added || "") > t.when) goneMap.delete(k);   // added back since
+    else delete sg[k];
+  }
+  if (goneMap.size) out.gone = [...goneMap.values()]; else delete out.gone;
   // highlights: a reading aid, append-mostly — union by node|turn|text so a
   // mark made on one device survives a merge with another's edits
   const localHl = Array.isArray(local.highlights) ? local.highlights : [];
@@ -4029,6 +4052,27 @@ function confHtml(t, prev){
    screen-reader transcript, which already has the words */
 const ico = (e) => `<span aria-hidden="true">${e}</span> `;
 
+/* the word the learner snagged on. It is a marker, not an entry — the tap
+   is what puts it in the glossary, and once it's there the same chip shows
+   you what you have on it. */
+function termChipHtml(term, turn){
+  const tree = cur();
+  const inG = !!(tree && glossaryOf(tree)[term.toLowerCase()]);
+  const label = inG ? `show “${term}” in the glossary`
+                    : `add “${term}” to the glossary`;
+  return `<span class="term${inG ? " ing" : ""}" role="button" tabindex="0"` +
+    ` onclick="event.stopPropagation();termChipClick(this)"` +
+    ` data-term="${esc(term)}" data-turn="${turn}"` +
+    ` title="${esc(label)}" aria-label="${esc(label)}">` +
+    `${ico(inG ? "📖" : "➕")}${esc(term)}</span>`;
+}
+window.termChipClick = (el) => {
+  const tree = cur(), term = el.dataset.term || "";
+  if (!tree || !term) return;
+  if (glossaryOf(tree)[term.toLowerCase()]) showGloss(term, el);
+  else addTerm(tree, term, currentNode, +el.dataset.turn || 1);
+};
+
 function turnHtml(node, t, prevConf, allowBranch){
   let h = `<article class="turn" data-turn="${t.turn}">`;
   h += `<div class="turnhead"><span>turn ${t.turn}</span>${confHtml(t, prevConf)}</div>`;
@@ -4039,9 +4083,7 @@ function turnHtml(node, t, prevConf, allowBranch){
   if (t.action){
     h += `<div class="block action${t.user ? " user-q" : ""}">` +
          `<div class="who">${t.user ? ico("🧑") + "you ask " + provName() : ico("🙋") + "I ask " + provName()}` +
-         (t.new_term ? `<span class="term" role="button" tabindex="0" ` +
-           `onclick="event.stopPropagation();showGloss(this.dataset.term, this)" ` +
-           `data-term="${esc(t.new_term)}" title="show in glossary">${ico("🔍")}${esc(t.new_term)}</span>` : "") +
+         (t.new_term ? termChipHtml(t.new_term, t.turn) : "") +
          `${copyBtn}</div>${esc(t.action)}</div>`;
   }
   if (t.tutor){
@@ -4084,8 +4126,8 @@ function emptyHtml(){
         then watch the investigation unfold, turn by turn</div></div>
       <div class="step"><span aria-hidden="true">⤵</span><div><b>branch</b>any answer that
         deserves a closer look becomes its own deeper conversation</div></div>
-      <div class="step"><span aria-hidden="true">📖</span><div><b>keep it</b>every term lands
-        in a glossary with a real definition — <b>quiz me</b> and spaced
+      <div class="step"><span aria-hidden="true">📖</span><div><b>keep it</b>select any word
+        worth keeping and <b>➕ add</b> it to your glossary — <b>quiz me</b> and spaced
         <b>review</b> check what stuck</div></div>
     </div>
     <div class="examples">${EXAMPLES.map(t =>
@@ -4617,36 +4659,56 @@ $("searchbox").addEventListener("keydown", (e) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* glossary — every term the learner hit is listed (via glossaryItems, */
-/* straight off the turns) whether or not it has an entry here yet; an */
-/* entry — and the card that comes with it — only exists once the      */
-/* reader deliberately asks for one: the words tab's "define it" /     */
-/* "define missing", or the reading-view flashcard picker (which can   */
-/* also tag the card with a reason other than a plain definition).     */
-/* Lives inside the tree (so it syncs and travels in .know.json).      */
+/* glossary — strictly what you put in it. Nothing lands here on its    */
+/* own: not the words the learner flagged, not the ones the tutor       */
+/* leaned on. A term joins only by a deliberate gesture — ➕ add on a    */
+/* selection or on the 🔍 chip, ➕ add from a lookup you decided to      */
+/* keep, or the flashcard picker (which can tag the card with a reason  */
+/* other than a plain definition). Adding is free; a definition is a    */
+/* separate step ("define it" / "define N missing"), so the list is a   */
+/* record of what YOU found worth keeping rather than a pile the app    */
+/* accumulated. Lives inside the tree (syncs, travels in .know.json).   */
 /* ------------------------------------------------------------------ */
 function glossaryOf(tree){
   if (!tree.glossary || typeof tree.glossary !== "object") tree.glossary = {};
   return tree.glossary;
 }
 function glossaryItems(tree){
-  // every distinct term in turn order, joined with its glossary entry
-  const seen = new Set(); const items = [];
-  for (const id of Object.keys(tree.nodes).map(Number).sort((a, b) => a - b)){
-    for (const t of getNode(tree, id).turns){
-      const term = (t.new_term || "").trim();
-      const key = term.toLowerCase();
-      if (!term || seen.has(key)) continue;
-      seen.add(key);
-      items.push({term, key, nodeId: id, turn: t.turn});
-    }
-  }
-  const g = glossaryOf(tree);
-  for (const key of Object.keys(g)){         // entries whose turn was pruned
-    if (!seen.has(key) && g[key] && g[key].term)
-      items.push({term: g[key].term, key, nodeId: g[key].node, turn: g[key].turn});
+  // the stored entries, in the order you added them — and nothing else
+  const g = glossaryOf(tree); const items = [];
+  for (const key of Object.keys(g)){
+    const e = g[key];
+    if (e && e.term) items.push({term: e.term, key, nodeId: e.node, turn: e.turn});
   }
   return items;
+}
+/* forgetting is a real deletion, but the sync unions glossary keys, so a
+   bare delete comes straight back from another device's copy. A tombstone
+   per key stops that; a later re-add (stamped "added") outlives it. */
+function goneOf(tree){ return Array.isArray(tree.gone) ? tree.gone : []; }
+function unforget(tree, key){
+  const rest = goneOf(tree).filter(x => x && x.k !== key);
+  if (rest.length) tree.gone = rest; else delete tree.gone;
+}
+/* the one and only way a word enters the glossary: you put it there. A
+   bare add costs nothing — no model call — so adding while you read is
+   free, and you buy definitions later, in one pass if you like. */
+function addTerm(tree, term, nodeId, turn, def = ""){
+  const clean = String(term || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!tree || !clean) return false;
+  const g = glossaryOf(tree), key = clean.toLowerCase();
+  if (g[key]) return false;                    // already yours
+  g[key] = {term: clean, def, turn: turn || 1, src: "you", added: nowIso(),
+            ...(Number.isInteger(nodeId) ? {node: nodeId} : {})};
+  unforget(tree, key);
+  persistTree(tree);
+  if (!running){                               // don't clobber a live run's status
+    setStatus(def ? `“${oneLine(clean, 30)}” added, with its definition`
+                  : `“${oneLine(clean, 30)}” added — define it when you want`);
+    setTimeout(() => { if (!running) clearStatus(); }, 2200);
+  }
+  renderAll(true);
+  return true;
 }
 function termContext(tree, nodeId, turn){
   // the exchange around the term: the tutor reply it appeared in, the
@@ -4676,8 +4738,8 @@ async function defineMissing(){
       try {
         const r = await api("define", {term: i.term, topic: tree.root_topic,
                                        context: termContext(tree, i.nodeId, i.turn)});
-        g[i.key] = {term: i.term, def: r.definition || "",
-                    node: i.nodeId, turn: i.turn};
+        // fill the entry in; never rebuild it — src/added/rev/reason are its own
+        if (g[i.key]) g[i.key].def = r.definition || "";
         const node = getNode(tree, i.nodeId);
         if (node) node.cost += r.cost || 0;
         saveStore();
@@ -4759,10 +4821,9 @@ function renderTerms(){
                  ` onclick="startEditDef(this.dataset.tree,this.dataset.key)">✎ edit</span>`);
     else if (!glossAll)
       links.push(`<span class="cl" tabindex="0" role="button" data-key="${esc(i.key)}" onclick="defineOne(this.dataset.key)">✎ define it</span>`);
-    if (e && e.src === "you")
-      links.push(`<span class="cl" tabindex="0" role="button" data-tree="${esc(i.tree.id)}" data-key="${esc(i.key)}"` +
-                 ` title="you added this one — remove it and its review schedule"` +
-                 ` onclick="forgetTerm(this.dataset.tree,this.dataset.key)">✕ forget</span>`);
+    links.push(`<span class="cl" tabindex="0" role="button" data-tree="${esc(i.tree.id)}" data-key="${esc(i.key)}"` +
+               ` title="take it back out of the glossary, along with its review schedule"` +
+               ` onclick="forgetTerm(this.dataset.tree,this.dataset.key)">✕ forget</span>`);
     const reasonMeta = fcReasonMeta(e && e.reason);
     const tag = reasonMeta ? ` <span class="gtag">${ico(reasonMeta.icon)}${reasonMeta.label}</span>` : "";
     return `<details class="gentry${def ? "" : " undef"}" data-gfold="${esc(foldKey)}"` +
@@ -4772,8 +4833,8 @@ function renderTerms(){
       `<div class="gdeflinks">${links.join(" · ")}</div></div></details>`;
   }).join("") +
   (extra > 0 ? `<p class="hint">… and ${extra} more — filter or search finds them</p>` : "") +
-  (empty ? `<p class="hint">${glossAll ? "no terms in any tree yet"
-    : "no terms in this tree yet — try “all trees”"}</p>` : "");
+  (empty ? `<p class="hint">${glossAll ? "no words added in any tree yet"
+    : "nothing added from this tree yet — try “all trees”"}</p>` : "");
   const missing = items.length - defined;
   const acts = [];
   if (!glossAll && missing > 0)
@@ -4825,7 +4886,7 @@ async function defineOne(key){
     setStatus(`defining “${oneLine(i.term, 30)}”…`);
     const r = await api("define", {term: i.term, topic: tree.root_topic,
                                    context: termContext(tree, i.nodeId, i.turn)});
-    g[key] = {term: i.term, def: r.definition || "", node: i.nodeId, turn: i.turn};
+    if (g[key]) g[key].def = r.definition || "";   // fill in, don't rebuild
     const node = getNode(tree, i.nodeId);
     if (node) node.cost += r.cost || 0;
     saveStore();
@@ -4834,11 +4895,16 @@ async function defineOne(key){
   renderTerms(); renderHeader();
 }
 window.defineOne = defineOne;
-/* hand-added terms can be taken back out (the learner's own can't —
-   they mark where its understanding actually snagged) */
+/* every term is hand-added now, so every term can be taken back out. The
+   tombstone is what makes it stay out: the sync unions glossary keys, so
+   without one the next merge from another device would hand it straight
+   back. Adding it again later beats the tombstone by its "added" stamp. */
 function forgetTerm(treeId, key){
   const t = store[treeId]; if (!t) return;
   delete glossaryOf(t)[key];
+  const gone = goneOf(t).filter(x => x && x.k !== key);
+  gone.push({k: key, when: nowIso()});
+  t.gone = gone.slice(-200);
   persistTree(t);
   renderTerms(); renderConversation(true);   // drop its underlines too
 }
@@ -6279,16 +6345,30 @@ function annotateTerms(){
     }
   });
 }
-function showGloss(term, anchor){
-  const tree = cur(); if (!tree) return;
-  const e = glossaryOf(tree)[term.toLowerCase()];
-  if (!e) return;
+/* the last ✎ define lookup, held only so its ➕ add can keep it without
+   paying for the same definition twice. Nothing reads it otherwise. */
+let lookup = null;
+function addLookup(){
+  const tree = cur();
+  if (tree && lookup) addTerm(tree, lookup.term, lookup.node, lookup.turn, lookup.def);
+  lookup = null;
+  hideGloss();
+}
+window.addLookup = addLookup;
+
+/* one popover, two sources: a glossary entry you own, or a throwaway
+   lookup (which offers to become one) */
+function gpopShow(o, anchor){
   const pop = $("gpop");
-  pop.querySelector(".gname").textContent = e.term;
-  pop.querySelector(".gbody").textContent = e.def || "no definition yet";
-  pop.querySelector(".gfoot").innerHTML = Number.isInteger(e.node)
-    ? `<span class="cl" tabindex="0" role="button" onclick="hideGloss();jumpToTerm(${e.node},${e.turn})">↪ where I met it</span>`
-    : "";
+  pop.querySelector(".gname").textContent = o.term;
+  pop.querySelector(".gbody").textContent = o.def || "no definition yet";
+  const foot = [];
+  if (o.addable)
+    foot.push(`<span class="cl" tabindex="0" role="button" onclick="addLookup()">` +
+              `${ico("➕")}add to glossary</span>`);
+  if (Number.isInteger(o.node))
+    foot.push(`<span class="cl" tabindex="0" role="button" onclick="hideGloss();jumpToTerm(${o.node},${o.turn})">↪ where I met it</span>`);
+  pop.querySelector(".gfoot").innerHTML = foot.join(" · ");
   pop.hidden = false;
   const r = anchor.getBoundingClientRect();
   const pw = Math.min(340, window.innerWidth - 24);
@@ -6301,7 +6381,13 @@ function showGloss(term, anchor){
   if (top + ph > window.innerHeight - 12) top = Math.max(12, r.top - ph - 8);
   pop.style.top = top + "px";
 }
-function hideGloss(){ $("gpop").hidden = true; }
+function showGloss(term, anchor){
+  const tree = cur(); if (!tree) return;
+  const e = glossaryOf(tree)[term.toLowerCase()];
+  if (!e) return;
+  gpopShow({term: e.term, def: e.def, node: e.node, turn: e.turn}, anchor);
+}
+function hideGloss(){ $("gpop").hidden = true; lookup = null; }
 window.showGloss = showGloss; window.hideGloss = hideGloss;
 document.addEventListener("click", (e) => {
   if (!$("gpop").hidden && !$("gpop").contains(e.target) &&
@@ -6741,15 +6827,22 @@ document.addEventListener("selectionchange", () => {
   selTimer = setTimeout(() => {
     const info = cur() ? selInfo() : null;
     if (!info){ hideSelchip(); return; }
-    // define/dig are for term-like selections; a longer passage only highlights
+    // add/define/dig are for term-like selections; a longer passage only highlights
     const short = !info.long;
     $("seldef").style.display = short ? "" : "none";
     $("seldig").style.display = short ? "" : "none";
+    $("seladd").style.display = "none";
     if (short){
       const known = glossaryOf(cur())[info.text.toLowerCase()];
+      // add is the only door into the glossary — hidden once it's through
+      $("seladd").style.display = known ? "none" : "";
+      $("seladd").innerHTML = `${ico("➕")}add`;
+      $("seladd").title = "add it to the glossary — free, define it whenever";
+      $("seladd").setAttribute("aria-label", `add “${info.text}” to the glossary`);
       $("seldef").innerHTML = known && known.def ? `${ico("📖")}definition` : `${ico("✎")}define`;
+      $("seldef").title = known && known.def ? "" : "just look it up — this doesn’t add it";
       $("seldef").setAttribute("aria-label",
-        (known && known.def ? "show the definition of " : "define ") + `“${info.text}”`);
+        (known && known.def ? "show the definition of " : "look up ") + `“${info.text}”`);
       $("seldig").innerHTML = `${ico("⛏")}dig`;
       $("seldig").setAttribute("aria-label",
         `dig into “${info.text}” — ask the tutor what it is in this context`);
@@ -6773,6 +6866,23 @@ document.addEventListener("selectionchange", () => {
   }, 180);
 });
 window.addEventListener("scroll", hideSelchip, {passive: true});
+/* + add — the whole of it: the word joins the glossary, no model call, no
+   cost, no definition until you ask for one. */
+$("seladd").onclick = (ev) => {
+  ev.stopPropagation();
+  const tree = cur();
+  const term = selchip.dataset.term || "";
+  const turn = selchip.dataset.turn ? +selchip.dataset.turn : null;
+  hideSelchip();
+  document.getSelection()?.removeAllRanges();
+  if (tree && term) addTerm(tree, term, currentNode, turn ?? 1);
+};
+
+/* ✎ define — a *lookup*, not an add. It answers "what does that word mean"
+   and leaves the glossary exactly as it was; if you decide the answer was
+   worth keeping, the popover's ➕ add puts it in (with the definition you
+   already paid for). The one exception is a word that's already yours but
+   still bare — filling that in isn't adding anything. */
 $("seldef").onclick = async (ev) => {
   ev.stopPropagation();   // the document click handler would hide the popover
   const tree = cur();
@@ -6782,25 +6892,30 @@ $("seldef").onclick = async (ev) => {
   const anchor = {getBoundingClientRect: () => rect};
   hideSelchip();
   if (!tree || !term || !rect) return;
-  const key = term.toLowerCase();
-  const g = glossaryOf(tree);
-  if (g[key] && g[key].def){ showGloss(g[key].term, anchor); return; }
+  const g = glossaryOf(tree), stored = g[term.toLowerCase()];
+  if (stored && stored.def){ showGloss(stored.term, anchor); return; }   // free
   const nodeId = currentNode;
-  const had = g[key];   // an undefined auto-entry keeps its identity, just gains the def
-  g[key] = had || {term, def: "", node: nodeId, turn: turn ?? 1, src: "you"};
   try {
-    setStatus(`defining “${oneLine(term, 30)}”…`);
+    setStatus(`looking up “${oneLine(term, 30)}”…`);
     const r = await api("define", {term, topic: tree.root_topic,
                                    context: termContext(tree, nodeId, turn ?? 1)});
-    g[key].def = r.definition || "";
+    const def = r.definition || "";
     const node = getNode(tree, nodeId);
-    if (node) node.cost += r.cost || 0;
-    saveStore();
+    if (node) node.cost += r.cost || 0;   // the call was real even if nothing is kept
     clearStatus();
-    renderAll(true);   // underline it everywhere; it's a flashcard now
-    if (g[key].def) showGloss(term, anchor);
+    if (stored){                          // already in the glossary — just fill it in
+      stored.def = def;
+      saveStore();
+      renderAll(true);
+      gpopShow({term: stored.term, def, node: stored.node, turn: stored.turn}, anchor);
+    } else {
+      saveStore();                        // the cost, and only the cost
+      renderHeader();
+      lookup = {term, def, node: nodeId, turn: turn ?? 1};
+      gpopShow({term, def, node: nodeId, turn: turn ?? 1, addable: !!def}, anchor);
+    }
   } catch (e){
-    if (!had) delete g[key];   // don't leave a junk shell behind
+    clearStatus();
     if (e.message !== "logged out") setError(e.message);
   }
 };
@@ -6936,7 +7051,9 @@ fcpop.querySelector(".fcadd").onclick = () => {
   const had = g[key];
   g[key] = {term: fcState.term, reason: fcState.reason, def: draft,
             node: currentNode, turn: fcState.turn ?? 1, src: "you",
+            added: (had && had.added) || nowIso(),
             ...(had && had.rev ? {rev: had.rev} : {})};
+  unforget(tree, key);   // a deliberate re-add outranks an old tombstone
   saveStore();
   hideFcpop();
   renderAll(true);

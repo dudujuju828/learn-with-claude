@@ -5,6 +5,81 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 41 — the glossary is strictly what you put in it
+
+*(user-requested: "no words should ever be added automatically to the
+glossary — the user should explicitly highlight a word and click 'add to
+glossary'", then "add should add to the glossary — define shouldn't — and
+remove any automatic route to the glossary".)*
+
+### What it is
+Nothing enters the glossary on its own any more. The words tab lists
+exactly the terms you added, and the two gestures are cleanly split:
+
+- **➕ add** (new, on the selection chip and on the 🔍 term chip) — files
+  the word. No model call, no cost, no definition. The only door in.
+- **✎ define** — a *lookup*. It fetches the meaning, shows it, and writes
+  nothing. If it was worth keeping, the popover's **➕ add to glossary**
+  keeps it *with* the definition already paid for.
+
+Definitions for added terms come from the entry's existing *✎ define it*,
+or **define N missing** in a batch — which stops being dead weight and
+becomes the natural workflow: add a run of words while reading, backfill
+them in one pass.
+
+### Design notes
+- **There was exactly one automatic route, and it was derived, not
+  stored.** `glossaryItems()` merged every turn's `new_term` with the
+  stored `tree.glossary` entries; the storage was always explicit. So the
+  fix is a five-line function that returns the stored entries and nothing
+  else — the sync, exports, Anki, study sheet, and review deck already
+  read `tree.glossary` (and already filtered to entries with a `def`), so
+  they needed no change at all.
+- **`new_term` stays in the learner protocol.** It still drives loose
+  threads, branch labels, and the 🔍 marker in the transcript — it just
+  no longer implies an entry. Loose threads become the honest home for
+  "words the learner flagged and never chased".
+- **The 🔍 chip became the cheap add.** It already sat next to every
+  flagged word; making it a one-tap add (and flipping to 📖 *show* once
+  the word is in) means the common case doesn't require selecting text.
+  Its ➕/📖 icon and outlined-vs-filled pill carry the state.
+- **`✕ forget` needed a tombstone.** With every term hand-curated,
+  forgetting is a normal correction rather than a rarity — and the sync
+  merge unions glossary keys, so a bare delete came straight back from
+  another device's copy. That is itself an automatic route into the
+  glossary, so it's in scope. `tree.gone` holds `{k, when}` per removed
+  key, unioned both ways in `mergeTrees` (a forget on any device sticks);
+  a later re-add wins on its `added` stamp. It rides through the CLI
+  untouched via `KnowledgeTree.extras`, so no Python change was needed.
+- **The selection chip went from four actions to five and stopped
+  fitting a phone** (466px measured, vs. 388px before — which already
+  overflowed a 390px screen). It now wraps, with the separators redone as
+  a 1px grid gap so a wrapped row doesn't start with a stray border.
+- **`defineOne`/`defineMissing` fill entries in rather than rebuilding
+  them** — a rebuilt entry would have dropped the `src`/`added`/`rev`/
+  `reason` fields that now matter, silently resetting a card's review
+  schedule.
+- Verified against the real page: 38 assertions driven through headless
+  Edge over the actual UI — that a tree with three flagged `new_term`s
+  shows an empty glossary, that adding costs zero `/api/define` calls,
+  that define makes exactly one call and adds nothing while still
+  recording the cost, that promoting the lookup costs no second call,
+  that a bare term isn't a review card and a defined one is, and that a
+  forgotten term survives a `mergeTrees` round trip against a server copy
+  that still has it.
+
+### Candidates rejected (this cycle)
+- **Keeping `✎ define` as an add, just renaming it** — would have left
+  two doors into the glossary with only wording to tell them apart.
+- **Dropping the 🔍 chip entirely** — the strictest read of the rule, but
+  it throws away the cheapest legitimate add and leaves the learner's
+  flagged word as inert text.
+- **An undo toast on ✕ forget** — the tombstone makes deletion real
+  across devices, which raises the stakes; still, re-adding is two taps,
+  and an undo would have to un-tombstone across the sync.
+
+---
+
 ## Feature 40 — ✓ skip what you already know
 
 *(user-requested, not picked from the autonomous candidate list — logged
