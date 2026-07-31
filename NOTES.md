@@ -5,6 +5,48 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Removal — Excalidraw diagrams
+
+*(user-requested: "remove the excalidraw feature entirely from the
+application (all traces of it)".)*
+
+### What went
+The CLI tutor's optional drawing hand: give it an Obsidian vault and the
+`excalidraw-skills` MCP server and it could sketch a small flowchart into
+the vault alongside its answer.
+
+- `learn_with_claude/diagrams.py` — deleted.
+- `personas.TUTOR_DIAGRAM_SYSTEM` — deleted, and `tutor_system()` lost its
+  required `diagrams` keyword. The tool clause is now simply `grounding or
+  TUTOR_NO_TOOLS`.
+- `cli.py` — `--vault` and `--no-diagrams` gone, along with the vault/server
+  resolution and its two warnings.
+- `repl.py` — the `vault` field and the four call sites that threaded it.
+- `simulator.py` — no vault parameter, no MCP config, no allowed-tools list.
+- `backend.py` — `ClaudeSession`'s `mcp_config` and `allowed_tools`
+  parameters, the temp-file MCP config writer, and the now-unused `tempfile`
+  import. **`--strict-mcp-config` stays**: it is what stops the operator's own
+  globally registered MCP servers leaking into a persona, and that guarantee
+  never depended on diagrams.
+- README: the intro paragraph, the whole *Diagrams (optional)* section, both
+  option rows, the project-layout line, and the "not in the web app" mention.
+  The no-tools guarantee the Diagrams section happened to carry moved into
+  *Notes & limitations*, where it stands on its own.
+
+### Notes
+- Nothing in the web app referenced it — the hosted and local backends always
+  called `tutor_system(diagrams=False, …)`, so the whole removal is CLI-side
+  plus one keyword argument.
+- Verified with a real learner↔tutor exchange through the Copilot CLI after
+  the cut, plus 32 green tests and a repo-wide grep for
+  excalidraw/diagram/vault/obsidian.
+- The three surviving mentions are in the entries below, which are a dated
+  record of what was decided when — including a *rejected* candidate
+  ("Mermaid diagrams in web tutor answers"). Rewriting them would falsify the
+  log, so they stay as history.
+
+---
+
 ## Feature 43 — the tutor can start from a past Copilot session (local mode)
 
 *(user-requested: "when you leave a local copilot session it gives you the

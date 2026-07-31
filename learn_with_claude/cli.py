@@ -13,7 +13,6 @@ import sys
 from pathlib import Path
 
 from .backend import ClaudeError
-from .diagrams import INSTALL_HINT, resolve_vault, server_entry
 from .render import prepare_console
 from .repl import Shell
 
@@ -45,11 +44,6 @@ def build_parser() -> argparse.ArgumentParser:
                    choices=["novice", "student", "practitioner", "expert"],
                    help="How much the simulated learner already knows — shapes the "
                         "questions it can ask (default: student).")
-    p.add_argument("--vault", default=None,
-                   help="Obsidian vault path for tutor diagrams (default: "
-                        "$EXCALIDRAW_VAULT_PATH or $OBSIDIAN_VAULT_PATH).")
-    p.add_argument("--no-diagrams", action="store_true",
-                   help="Disable the tutor's Excalidraw diagram tool.")
     p.add_argument("-d", "--dir", default=None,
                    help=f"Knowledge directory (default: $LEARN_DIR or {DEFAULT_DIR}).")
     p.add_argument("--width", type=int, default=66,
@@ -79,15 +73,6 @@ def main(argv: list[str] | None = None) -> int:
         return serve(port=args.port, knowledge_dir=args.dir,
                      open_browser=not args.no_open)
 
-    vault = None if args.no_diagrams else resolve_vault(args.vault)
-    if args.vault and not args.no_diagrams and vault is None:
-        print(f"warning: vault path not found, diagrams disabled: {args.vault}",
-              file=sys.stderr)
-    if vault and server_entry() is None:
-        print(f"warning: excalidraw-skills not installed ({INSTALL_HINT}), "
-              "diagrams disabled", file=sys.stderr)
-        vault = None
-
     shell = Shell(
         knowledge_dir=args.dir or DEFAULT_DIR,
         color=not args.no_color,
@@ -96,7 +81,6 @@ def main(argv: list[str] | None = None) -> int:
         tutor_model=args.tutor_model or args.model,
         effort=args.effort,
         level=args.level,
-        vault=vault,
         timeout=args.timeout,
         width=args.width,
         line_spacing=args.line_spacing,

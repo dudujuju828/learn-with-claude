@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import tempfile
 from dataclasses import dataclass, field
 
 # Resolve the claude executable once. On this machine it is a native .EXE, so it
@@ -45,14 +44,6 @@ class ClaudeSession:
     exclude_dynamic:
         Strip the dynamic system-prompt sections (env, dir listing, CLAUDE.md …)
         so the persona stays clean and reproducible.
-    mcp_config:
-        Optional MCP server config (the ``{"mcpServers": ...}`` dict) made
-        available to this persona. Regardless of this value the session runs
-        with ``--strict-mcp-config``, so the user's globally registered MCP
-        servers never leak into a persona.
-    allowed_tools:
-        Tool names to pre-approve (``--allowedTools``), e.g. MCP tools from
-        `mcp_config` — required in ``-p`` mode, where nobody can click "allow".
     builtin_tools:
         Value for ``--tools``. Personas are conversational, so the default is
         ``""`` — no filesystem/bash access.
@@ -66,8 +57,6 @@ class ClaudeSession:
         effort: str | None = None,
         exclude_dynamic: bool = True,
         timeout: int = 300,
-        mcp_config: dict | None = None,
-        allowed_tools: list[str] | None = None,
         builtin_tools: str = "",
     ) -> None:
         self.system_prompt = system_prompt
@@ -75,19 +64,7 @@ class ClaudeSession:
         self.effort = effort
         self.exclude_dynamic = exclude_dynamic
         self.timeout = timeout
-        self.allowed_tools = allowed_tools or []
         self.builtin_tools = builtin_tools
-
-        # The claude CLI mis-parses inline-JSON --mcp-config on Windows (flags
-        # after it get dropped), so always hand it a real file.
-        self._mcp_config_path: str | None = None
-        if mcp_config:
-            f = tempfile.NamedTemporaryFile(
-                "w", suffix=".mcp.json", prefix="learn-", delete=False, encoding="utf-8"
-            )
-            json.dump(mcp_config, f)
-            f.close()
-            self._mcp_config_path = f.name
 
         self.session_id: str | None = None
         self.total_cost: float = 0.0
@@ -112,10 +89,6 @@ class ClaudeSession:
         ]
         if self.effort:
             cmd += ["--effort", self.effort]
-        if self._mcp_config_path:
-            cmd += ["--mcp-config", self._mcp_config_path]
-        if self.allowed_tools:
-            cmd += ["--allowedTools", ",".join(self.allowed_tools)]
 
         if self.session_id is None:
             # First turn: install the persona / system prompt.

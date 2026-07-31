@@ -299,22 +299,6 @@ MARKUP — the learner's reading app shows your reply in small pieces:
 - Tags sit alone at the start of a line, never mid-sentence, never in code."""
 
 
-TUTOR_DIAGRAM_SYSTEM = """\
-DIAGRAMS — you have exactly one tool: create_diagram (Excalidraw). It draws a
-small flowchart/graph as a note in the learner's Obsidian vault from nodes and
-directed edges.
-- Draw ONLY when a picture genuinely beats words: a process/workflow, a
-  structure of several connected parts, or a relationship the learner keeps
-  fumbling. Most answers need NO diagram — when in doubt, don't.
-- Keep diagrams tiny: 3-8 nodes, labels of a few words, one idea per diagram.
-  Name the diagram after the specific question, not the whole topic.
-- A diagram supplements your short verbal answer, NEVER replaces it. Even when
-  you draw, you MUST still answer in your usual <=2 sentences first, then
-  mention the sketch in passing at the end, e.g.:
-  (I sketched this for you: <vault path returned by the tool>)
-- Never draw the same thing twice; never announce that you are "about to" draw."""
-
-
 # Local-mode only (the Copilot CLI transport, `learn --web`): the tutor's
 # Copilot session actually gets read-only tools (view/grep/glob, skills, and
 # whatever MCP servers the operator turned on) and this is the only place
@@ -389,16 +373,16 @@ def session_memory_system(transcript: str) -> str:
     ])
 
 
-def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str | None" = None,
+def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
                  segments: bool = False, grounding: "str | None" = None) -> str:
     """The tutor's full system prompt: base rules, a style addendum (a built-in
     TUTOR_MODES entry, or the caller's own custom style text, which wins), and
     the tool clause. The base rules — answer what was asked, no menu endings,
     dyslexia-friendly layout — always apply. `segments` adds the web reading
     UI's part-markup contract (the CLI renders plain text, so it stays off).
-    `grounding` (local Copilot mode only) replaces the diagrams/no-tools
-    clause with local_grounding_system()'s text; omitted, behaviour is
-    unchanged from before local grounding existed."""
+    `grounding` (local Copilot mode only) replaces the no-tools clause with
+    local_grounding_system()'s text; omitted, the tutor is pure text with no
+    tools at all."""
     if custom_style and custom_style.strip():
         style = "STYLE — CUSTOM (defined by the learner's operator):\n" + custom_style.strip()
     else:
@@ -408,10 +392,7 @@ def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str |
         parts.append(style)
     if segments:
         parts.append(TUTOR_SEGMENTS)
-    if grounding:
-        parts.append(grounding)
-    else:
-        parts.append(TUTOR_DIAGRAM_SYSTEM if diagrams else TUTOR_NO_TOOLS)
+    parts.append(grounding or TUTOR_NO_TOOLS)
     return "\n\n".join(parts)
 
 

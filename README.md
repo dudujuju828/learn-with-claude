@@ -20,12 +20,6 @@ which is how real understanding actually accretes.
 
 Each tree is a single portable file. Share what you've learned by copying the file.
 
-When a picture genuinely beats words (a workflow, a multi-part structure), the
-tutor can additionally **draw an Excalidraw diagram into your Obsidian vault**
-via the [excalidraw-skills](https://github.com/dudujuju828/excalidraw_skills)
-MCP server, and mentions the note's path in its answer. See
-[Diagrams](#diagrams-optional) below.
-
 ## Requirements
 
 - **Python 3.8+** (standard library only — no pip installs).
@@ -298,7 +292,7 @@ directly (a local `claude` login can't run on a server), so it needs an
 Deploy your own: `vercel deploy --prod`, then `vercel env add APP_PASSWORD
 production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob
 store add <name>` (linked to the project) for history. Not in the web app:
-tutor diagrams (they need a local Obsidian vault), `many`, `seeplusplus`.
+`many`, `seeplusplus`.
 
 ## Local web app (no keys — GitHub Copilot)
 
@@ -424,26 +418,6 @@ learn (what a hash table is) › branch 1 2 collisions
 
 `<node>` and `<turn>` are the bracketed ids shown by `tree` (e.g. `branch 1 2`).
 
-## Diagrams (optional)
-
-Give the tutor a drawing hand:
-
-```bash
-npm install -g excalidraw-skills          # the MCP server that renders diagrams
-learn "how DNS resolution works" --vault "C:/path/to/your/vault"
-```
-
-Instead of `--vault` you can set `EXCALIDRAW_VAULT_PATH` (or `OBSIDIAN_VAULT_PATH`)
-once. Diagrams land in `Excalidraw/Lessons/` inside the vault (override with
-`EXCALIDRAW_FOLDER`); open them in Obsidian with the Excalidraw plugin. The tutor
-is prompted to draw sparingly — only when a structure or process is easier to see
-than to read — and still answers in its usual terse style.
-
-If no vault or server is found, or with `--no-diagrams`, the tutor is pure text,
-as before. The tutor never gets any other tool; both personas run with the
-built-in tools disabled and `--strict-mcp-config`, so your globally registered
-MCP servers are never exposed to them.
-
 ## How branching works
 
 When you `branch <node> <turn>`, the tool seeds a *fresh* learner↔tutor conversation
@@ -536,7 +510,6 @@ pyproject.toml                # packaging + `learn` console-script entry point
 learn_with_claude/
   __main__.py                 # enables `python -m learn_with_claude`
   backend.py                  # ClaudeSession — wraps `claude -p`, resumes by session id
-  diagrams.py                 # optional excalidraw-skills MCP wiring for the tutor
   personas.py                 # learner/tutor prompts + root & branch message templates
   simulator.py                # run_conversation() — the reusable learner<->tutor loop
   knowledge.py                # Node + KnowledgeTree: persistence, navigation, render, md export
@@ -561,8 +534,6 @@ knowledge/                    # your saved trees (*.know.json) + exported markdo
 | `-m, --model` | `claude-sonnet-5` | model for both personas (`opus`, `claude-opus-4-8`, …) |
 | `--learner-model` / `--tutor-model` | = `--model` | per-persona override |
 | `--effort` | `xhigh` | reasoning effort for both personas (`low`…`max`) |
-| `--vault` | env vars | Obsidian vault for tutor diagrams (see [Diagrams](#diagrams-optional)) |
-| `--no-diagrams` | off | force the pure-text tutor |
 | `-d, --dir` | `knowledge` | knowledge directory |
 | `--width` | `66` | terminal wrap width (dyslexia-friendly short measure) |
 | `--line-spacing` | `1` | `2` adds a blank line between lines for extra airiness |
@@ -575,7 +546,10 @@ knowledge/                    # your saved trees (*.know.json) + exported markdo
 - **It costs money.** Every turn is two real model calls — roughly $0.05–0.07/turn on
   `sonnet`. A root investigation usually self-stops in a handful of turns; each branch is
   another small conversation. Keep `--max-turns` modest and use `sonnet` to stay cheap.
-- The tutor is a *conceptual* tutor (no filesystem, no tools beyond the optional
-  diagram pen), deliberately terse to force granular learning.
+- The tutor is a *conceptual* tutor, deliberately terse to force granular
+  learning. In the CLI it gets no tools at all: both personas run with the
+  built-in tools disabled and `--strict-mcp-config`, so your globally
+  registered MCP servers are never exposed to them. (`learn --web` is the one
+  exception — see [Local web app](#local-web-app-no-keys--github-copilot).)
 - The learner is a simulation of a plausible human, not a specific person; runs are
   non-deterministic.

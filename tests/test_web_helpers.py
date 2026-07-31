@@ -37,9 +37,9 @@ def test_learner_levels():
 
 
 def test_tutor_system_segments():
-    base = tutor_system(diagrams=False)
+    base = tutor_system()
     assert "MARKUP" not in base  # the CLI stays plain
-    seg = tutor_system(diagrams=False, segments=True)
+    seg = tutor_system(segments=True)
     assert "MARKUP" in seg and "[watch out]" in seg
     print("ok  tutor segments flag")
 
@@ -47,8 +47,8 @@ def test_tutor_system_segments():
 def test_tutor_grounding():
     # hosted (no grounding passed): byte-identical to before local grounding
     # existed — the whole safety property the feature depends on.
-    base = tutor_system(diagrams=False)
-    assert tutor_system(diagrams=False, grounding=None) == base
+    base = tutor_system()
+    assert tutor_system(grounding=None) == base
     assert "LOCAL TOOLS" not in base
     assert "do not use any tools or the filesystem" in base
 
@@ -57,11 +57,9 @@ def test_tutor_grounding():
     assert local_grounding_system(None) == local_grounding_system(None, [])
     assert '"' not in local_grounding_system(None)   # no dangling code_dir clause
 
-    local = tutor_system(diagrams=False, grounding=g)
+    local = tutor_system(grounding=g)
     assert "LOCAL TOOLS" in local and "/some/proj" in local
     assert "do not use any tools" not in local   # grounding replaces, not appends
-    # the diagrams flag is irrelevant once grounding is supplied
-    assert tutor_system(diagrams=True, grounding=g) == local
     print("ok  tutor grounding (hosted default byte-identical, local block swaps in)")
 
 

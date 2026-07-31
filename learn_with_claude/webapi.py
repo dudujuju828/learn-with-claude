@@ -242,7 +242,7 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
         custom = None
     elif len(custom) > 4000:
         custom = custom[:4000]
-    system = tutor_system(diagrams=False, mode=mode, custom_style=custom, segments=True,
+    system = tutor_system(mode=mode, custom_style=custom, segments=True,
                           grounding=grounding)
     extra = tutor_extra_context(body)
     if extra:

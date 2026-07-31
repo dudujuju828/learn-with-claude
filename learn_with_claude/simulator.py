@@ -13,7 +13,6 @@ import re
 from dataclasses import dataclass, field
 
 from .backend import ClaudeSession
-from .diagrams import DIAGRAM_TOOL, excalidraw_mcp_config
 from .personas import (
     LEARNER_SYSTEM,  # noqa: F401 - kept for older callers
     NEXT_CONCEPT_SYSTEM,
@@ -122,7 +121,6 @@ def run_conversation(
     tutor_model: str = "claude-sonnet-5",
     effort: str = "xhigh",
     level: str = "student",
-    vault: str | None = None,
     timeout: int = 300,
     renderer: Renderer | None = None,
 ) -> ConversationResult:
@@ -144,8 +142,7 @@ def run_conversation(
         exclude_dynamic=True,
         timeout=timeout,
     )
-    mcp_config = excalidraw_mcp_config(vault) if vault else None
-    tutor_prompt = tutor_system(diagrams=mcp_config is not None)
+    tutor_prompt = tutor_system()
     if tutor_extra_system:
         tutor_prompt += f"\n\n{tutor_extra_system}"
     tutor = ClaudeSession(
@@ -154,8 +151,6 @@ def run_conversation(
         effort=effort,
         exclude_dynamic=True,
         timeout=timeout,
-        mcp_config=mcp_config,
-        allowed_tools=[DIAGRAM_TOOL] if mcp_config else None,
     )
 
     result = ConversationResult()
