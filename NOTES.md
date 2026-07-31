@@ -5,6 +5,53 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 52 — ↗ promote a question from the local bank to the global one
+
+*(user-requested: "implement the ability to promote a question from the
+local-bank to the global-bank".)*
+
+### What it is
+A third action on every pending row of a tree's ❓ question bank. It moves the
+question to the global bank, and the local bank folds it away under
+**↗ moved to the global bank** with a jump across to where it went.
+
+### Design notes
+- **It's a change of answer, not of filing.** The two banks answer a question
+  completely differently — the local one sends it straight to this tutor with
+  this conversation's context and files the reply as your turn in this tree;
+  the global one starts a brand-new investigation with the question as its
+  topic. So promoting is the move for a question that turns out not to be
+  about the passage you jotted it against, but a topic in its own right. The
+  button's tooltip says exactly that, since "promote" alone doesn't.
+- **A move, and the move is a one-way flag rather than a splice.** This is the
+  whole subtlety. `mergeTrees()` unions `questions` by id starting from the
+  *server's* copy, so a spliced-out question comes back on the next 409 merge —
+  and it would come back alongside the global copy, leaving the question in
+  both banks at once, which is the one outcome a move must never produce.
+  `promoted` flips one way exactly like `answered` already does, and rides the
+  same merge rule. Rejected: splicing (matches the existing `discard`, and is
+  wrong here for that reason); a `gone`-style tombstone array (the glossary's
+  pattern, but overkill when the record itself can just carry a flag, and the
+  flag doubles as the on-screen trace).
+- **It carries the TREE's profile, not the active one.** `addGlobalQuestion()`
+  filed under `activeProfile()`, which is "" whenever no profile is selected —
+  a question promoted then would have shown up in every profile. It now takes
+  an optional explicit profile, and the duplicate check (`bankedUnder`) is
+  profile-aware to match, since `isBanked()` asks about the profile you're *in*
+  rather than the one being filed under.
+- **Already in the global bank under that profile?** Then it still leaves the
+  local bank, it just doesn't duplicate. The move is the point; the copy is
+  incidental.
+- **A queued investigate can't fire on a promoted question.** Press *run all*,
+  then promote one before the queue reaches it: `bankInvestigateThunk` now
+  checks `promoted` alongside `answered`, so the old tree doesn't answer a
+  question that has left it.
+- Verified with 33 browser assertions, including both merge directions, the
+  run-all race, the profile-aware duplicate check, and that promoting twice or
+  promoting an answered question is a no-op.
+
+---
+
 ## Feature 51 — 📄 exam: a written paper on the open conversation
 
 *(user-requested: "an open-ended university style-question page that asks essay

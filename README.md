@@ -331,6 +331,12 @@ directly (a local `claude` login can't run on a server), so it needs an
   question in one pass, exactly like `full` queues its follow-ups; either
   way it's the same single question straight to the tutor as asking
   yourself, just saved for later instead of interrupting the moment.
+  A local question can change its mind: **↗ promote** moves it to the global
+  bank, for when something you jotted mid-read turns out not to be about that
+  passage at all but a topic in its own right — it stops being one question to
+  this tutor and becomes its own investigation, carrying the profile of the
+  tree it came from. The local bank folds it away under *↗ moved to the global
+  bank*, so you can still see where it went.
   In the global bank, **✨ suggest questions** reads what you've banked and
   proposes a few it implies but you never wrote down — the prerequisite
   underneath them, the obvious next step past them, the case they all quietly

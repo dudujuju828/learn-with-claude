@@ -1756,7 +1756,13 @@
   <b>⇅ order by dependency</b>: it sorts what's waiting into the order it's
   best learned in — where two questions touch the same idea, whichever the
   other one needs answered first goes first. Either bank folds answered
-  questions under a disclosure with a jump back to what they became.</p>
+  questions under a disclosure with a jump back to what they became.
+  A local question can change its mind: <b>↗ promote</b> moves it to the
+  global bank, for when something you jotted mid-read turns out not to be
+  about that passage at all but a topic in its own right. It stops being one
+  question to this tutor and becomes its own investigation, keeping the
+  profile of the tree it came from; the local bank folds it away under
+  <b>↗ moved to the global bank</b> so you can still see where it went.</p>
   <p>Trees live <b>in this browser</b>. Use <b>save .know.json</b> to move one to
   another device or the CLI — the file format is identical. On a phone or
   tablet, saving opens the <b>share sheet</b> (AirDrop, Save to Files, Drive…)
@@ -4423,6 +4429,11 @@ function mergeTrees(local, server){
     const sq = qById.get(lq.id);
     if (!sq){ const clone = structuredClone(lq); outQ.push(clone); qById.set(lq.id, clone); continue; }
     if (lq.answered && !sq.answered){ sq.answered = true; sq.answerTurn = lq.answerTurn; }
+    // ↗ promote is the same kind of one-way flip. Once a question has left
+    // this bank for the global one on any device it stays gone here — the
+    // union above would otherwise hand it back as pending, and it would be
+    // sitting in both banks at once
+    if (lq.promoted && !sq.promoted){ sq.promoted = lq.promoted; sq.globalId = lq.globalId; }
     // ⇅ order lives on `seq`, stamped so the more recent ordering wins —
     // without this the union above would hand back the server's order
     if (Number.isInteger(lq.seq) && (lq.ordered || "") > (sq.ordered || "")){
@@ -7673,14 +7684,19 @@ function questionsOf(tree){
    never ordered keeps the order it was jotted in. */
 function pendingQuestions(tree){
   return questionsOf(tree)
-    .filter(q => !q.answered && getNode(tree, q.node))
+    .filter(q => !q.answered && !q.promoted && getNode(tree, q.node))
     .map((q, i) => ({q, i}))
     .sort((a, b) => (Number.isInteger(a.q.seq) ? a.q.seq : a.i + 1e6) -
                     (Number.isInteger(b.q.seq) ? b.q.seq : b.i + 1e6))
     .map(x => x.q);
 }
 function answeredQuestions(tree){
-  return questionsOf(tree).filter(q => q.answered && getNode(tree, q.node));
+  return questionsOf(tree).filter(q => q.answered && !q.promoted && getNode(tree, q.node));
+}
+/* ones that left this bank for the global one. They stay listed, folded
+   away, so "where did my question go?" has an answer on screen. */
+function promotedQuestions(tree){
+  return questionsOf(tree).filter(q => q.promoted && getNode(tree, q.node));
 }
 function addQuestion(nodeId, turn, text){
   const tree = cur();
@@ -7705,6 +7721,38 @@ function removeQuestion(qid){
   persistTree(tree);
 }
 window.removeQuestion = removeQuestion;
+
+/* ↗ promote — move a question from this tree's bank to the global one.
+   Not a filing tweak: the two banks ANSWER a question differently. The local
+   one sends it straight to this tutor with this conversation's context and
+   files the reply as your turn here; the global one starts a brand-new
+   investigation with the question as its topic, in its own tree. So promoting
+   is the move you make when a question you jotted mid-read turns out not to be
+   about that passage at all — it's a whole topic.
+
+   It's a MOVE, and the move is a one-way flag rather than a splice, because
+   mergeTrees() unions this list by id starting from the SERVER's copy: a
+   spliced-out question comes back on the next 409 merge, and it would come
+   back alongside the global copy, leaving the question in both banks at once —
+   the one outcome a move must never produce. `promoted` flips one way exactly
+   like `answered` already does. */
+function promoteQuestion(qid){
+  const tree = cur(); if (!tree) return false;
+  const q = questionsOf(tree).find(x => x.id === qid);
+  if (!q || q.promoted || q.answered) return false;
+  // the question keeps the filing of the tree it came from, not whichever
+  // profile happens to be active (with no profile selected they differ)
+  const profile = treeProfile(tree);
+  if (!bankedUnder(q.text, profile)){
+    const made = addGlobalQuestion(q.text, profile);
+    if (!made) return false;      // bank full, or the text didn't survive
+    q.globalId = made.id;
+  }
+  q.promoted = nowIso();
+  persistTree(tree);
+  updateGlobalQRow();
+  return true;
+}
 
 /* the global bank — its own small synced doc (not part of any tree),
    loaded/persisted/merged exactly like tutorsDoc. */
@@ -7747,17 +7795,29 @@ async function persistGlobalQDoc(){
   try { await api("global_questions", {doc: globalQDoc}); setSync("ok"); }
   catch (e){ if (e.message !== "logged out") setSync("err"); }
 }
-function addGlobalQuestion(text){
+/* `profile` is for a question arriving from somewhere with a filing of its
+   own — a promoted one carries its TREE's profile, which isn't always the
+   one you happen to be working in. Everything else files under the active
+   profile, as before. */
+function addGlobalQuestion(text, profile){
   const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 500);
   if (t.length < 3) return null;
   const qs = globalQuestionsOf().slice();
   if (qs.length >= 300) return null;   // a sane ceiling for the whole bank
   const q = {id: randHex(8), text: t, added: nowIso()};
-  if (activeProfile()) q.profile = activeProfile();
+  const p = cleanProfileName(profile === undefined ? activeProfile() : profile);
+  if (p) q.profile = p;
   qs.push(q);
   globalQDoc.questions = qs;
   persistGlobalQDoc();
   return q;
+}
+/* isBanked() asks whether the profile you're IN already has this question;
+   a promotion has to ask about the profile it's filing under instead. */
+function bankedUnder(text, profile){
+  const k = normTerm(text), p = cleanProfileName(profile);
+  return !!k && globalQuestionsOf().some(
+    q => normTerm(q.text) === k && cleanProfileName(q.profile) === p);
 }
 function removeGlobalQuestion(qid){
   const qs = globalQuestionsOf().slice();
@@ -7904,20 +7964,31 @@ function saveQCap(){
    investigate one, discard it, or run every pending question in one
    queued pass (exactly like "full" queues four follow-ups). Answered
    ones fold under a disclosure with a jump back to the Q&A they became. */
-function qrowHtml(q, done){
+/* `state`: "" pending · "done" answered here · "promoted" moved to the global bank */
+function qrowHtml(q, state){
   const tree = cur();
   const node = getNode(tree, q.node);
+  const done = state === "done", moved = state === "promoted";
   const jumpTurn = done ? (q.answerTurn ?? q.turn ?? 1) : (q.turn ?? 1);
-  return `<div class="qrow${done ? " done" : ""}">` +
+  return `<div class="qrow${done || moved ? " done" : ""}">` +
     `<div class="qtext cl" tabindex="0" role="button" data-act="jump"` +
     ` data-node="${q.node}" data-turn="${jumpTurn}"` +
     ` title="jump to this in the conversation">${esc(oneLine(q.text, 160))}</div>` +
     `<div class="qwhere">${node ? esc(oneLine(node.label, 40)) : "…"}` +
-    `${q.turn ? " · turn " + q.turn : ""}${done ? " · answered" : ""}</div>` +
+    `${q.turn ? " · turn " + q.turn : ""}` +
+    `${done ? " · answered" : moved ? " · moved to the global bank" : ""}</div>` +
     `<div class="qacts">` +
-    (done
+    (moved
+      ? `<button data-act="global" class="ghost" title="open the global bank, where it is now">` +
+        `${ico("❓")}global bank</button>` +
+        `<button data-act="clear" data-q="${esc(q.id)}" class="ghost">${ico("✕")}clear</button>`
+      : done
       ? `<button data-act="clear" data-q="${esc(q.id)}" class="ghost">${ico("✕")}clear</button>`
       : `<button data-act="go" data-q="${esc(q.id)}" class="primary" ${running ? "disabled" : ""}>${ico("▶")}investigate</button>` +
+        `<button data-act="promote" data-q="${esc(q.id)}" class="ghost"` +
+        ` title="this isn't a question about that passage after all — move it to the` +
+        ` global bank, where it becomes its own investigation instead of one question` +
+        ` to this tutor">${ico("↗")}promote</button>` +
         `<button data-act="discard" data-q="${esc(q.id)}" class="ghost">${ico("✕")}discard</button>`) +
     `</div></div>`;
 }
@@ -7926,7 +7997,20 @@ function wireQBankBody(){
     el.onclick = () => {
       const act = el.dataset.act;
       if (act === "jump"){ closeQBank(); jumpToTerm(+el.dataset.node, +el.dataset.turn); return; }
-      if (act === "discard" || act === "clear"){ removeQuestion(el.dataset.q); renderQBank(); return; }
+      if (act === "discard" || act === "clear"){
+        removeQuestion(el.dataset.q); renderQBank();
+        renderConversation(true);   // the ❓ questions count in the header moved
+        return;
+      }
+      if (act === "global"){ closeQBank(); openGlobalQBank(); return; }
+      if (act === "promote"){
+        if (!promoteQuestion(el.dataset.q)) return;
+        renderQBank();
+        renderConversation(true);
+        setStatus("moved to the global bank — press q to see it");
+        setTimeout(() => { if (!running) clearStatus(); }, 2200);
+        return;
+      }
       if (act === "go"){
         if (running) return;
         const tree = cur(); if (!tree) return;
@@ -7958,8 +8042,9 @@ function renderQBank(){
   const tree = cur();
   const pend = tree ? pendingQuestions(tree) : [];
   const done = tree ? answeredQuestions(tree) : [];
+  const moved = tree ? promotedQuestions(tree) : [];
   $("qbscope").textContent = tree ? "· " + oneLine(tree.root_topic, 34) : "";
-  if (!pend.length && !done.length){
+  if (!pend.length && !done.length && !moved.length){
     $("qbbody").innerHTML =
       `<div class="dkempty"><div class="big">❓</div>` +
       `<p>nothing banked yet — press <b>Shift+Q</b> while reading to jot down a ` +
@@ -7971,10 +8056,14 @@ function renderQBank(){
   if (pend.length > 1)
     h += `<button class="primary" id="qbrunall" style="width:100%;margin-bottom:.7rem" ${running ? "disabled" : ""}>` +
          `${ico("▶")}run all ${pend.length} now</button>` + orderBtnHtml("qborder", pend.length);
-  h += pend.map(q => qrowHtml(q, false)).join("");
+  h += pend.map(q => qrowHtml(q, "")).join("");
   if (done.length){
     h += `<details class="qbdone"${pend.length ? "" : " open"}><summary>${ico("✓")}answered · ${done.length}</summary>` +
-         done.map(q => qrowHtml(q, true)).join("") + `</details>`;
+         done.map(q => qrowHtml(q, "done")).join("") + `</details>`;
+  }
+  if (moved.length){
+    h += `<details class="qbdone"><summary>${ico("↗")}moved to the global bank · ${moved.length}</summary>` +
+         moved.map(q => qrowHtml(q, "promoted")).join("") + `</details>`;
   }
   $("qbbody").innerHTML = h;
   wireQBankBody();
@@ -9282,7 +9371,9 @@ function bankInvestigateThunk(treeId, qid){
     runLabel = "";
     const tree = store[treeId];
     const q = tree && questionsOf(tree).find(x => x.id === qid);
-    if (!tree || !q || q.answered) return;
+    // promoted since being queued (run-all, then a promote) — it belongs to
+    // the global bank now, so this tree must not answer it after all
+    if (!tree || !q || q.answered || q.promoted) return;
     const node = getNode(tree, q.node);
     if (!node) return;
     activeRun = {treeId, nodeId: node.id};
