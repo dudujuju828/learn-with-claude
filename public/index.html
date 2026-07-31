@@ -1064,6 +1064,41 @@
   }
   #notesbox .ntfoot, #srcbox .ntfoot{display:flex; align-items:center; gap:.7rem; margin-top:.7rem}
   #notesbox #ntmeta, #srcbox #srcmeta{flex:1}
+  #notesbox #ntsaved{flex:0 0 auto; opacity:0; transition:opacity .15s}
+  #notesbox #ntsaved:not(:empty){opacity:1}
+  #notesbox #ntsaved.on{color:var(--good, var(--term))}
+  /* markup toolbar */
+  #notesbox .nttools{display:flex; flex-wrap:wrap; gap:.25rem; margin-bottom:.45rem}
+  #notesbox .nttools button{
+    min-width:2rem; padding:.28rem .5rem; font-size:var(--t-sm); line-height:1.1;
+  }
+  #notesbox .nttools button[disabled]{opacity:.4}
+  #notesbox #ntpreview{margin-left:auto}
+  /* the formatted view — same measure and rhythm as the editor it replaces */
+  #notesbox .ntview{
+    flex:1; min-height:9rem; overflow:auto; width:100%; padding:.7rem .8rem;
+    background:var(--bg); border:1px solid var(--line); border-radius:var(--r-md);
+    font-size:1rem; line-height:1.7;
+  }
+  #notesbox .ntview[hidden]{display:none}
+  #notesbox .ntview > :first-child{margin-top:0}
+  #notesbox .ntview h2, #notesbox .ntview h3,
+  #notesbox .ntview h4, #notesbox .ntview h5{margin:.9rem 0 .35rem; line-height:1.3}
+  #notesbox .ntview h2{font-size:1.15rem}
+  #notesbox .ntview h3{font-size:1.05rem}
+  #notesbox .ntview h4, #notesbox .ntview h5{font-size:1rem}
+  #notesbox .ntview p{margin:.5rem 0}
+  #notesbox .ntview ul, #notesbox .ntview ol{margin:.5rem 0; padding-left:1.4rem}
+  #notesbox .ntview li{margin:.2rem 0}
+  #notesbox .ntview blockquote{
+    margin:.5rem 0; padding:.1rem 0 .1rem .7rem;
+    border-left:3px solid var(--term); color:var(--muted);
+  }
+  #notesbox .ntview hr{border:0; border-top:1px solid var(--line); margin:.9rem 0}
+  #notesbox .ntview code{
+    background:var(--termbg); border-radius:var(--r-sm); padding:.05rem .3rem;
+    font-size:.92em;
+  }
   /* the grow tab's paste-your-own-material and already-know folds */
   #srcdetails, #knowndetails{margin:.5rem 0 .2rem}
   #srcdetails summary, #knowndetails summary{cursor:pointer; color:var(--muted); font-size:var(--t-sm)}
@@ -2054,10 +2089,24 @@
       <span id="ntscope"></span>
       <button id="ntclose" class="ghost" aria-label="close notes">✕</button>
     </div>
+    <div class="nttools" role="toolbar" aria-label="formatting">
+      <button data-md="h" title="heading (Ctrl+H)" aria-label="heading">H</button>
+      <button data-md="b" title="bold (Ctrl+B)" aria-label="bold"><b>B</b></button>
+      <button data-md="i" title="italic (Ctrl+I)" aria-label="italic"><i>I</i></button>
+      <button data-md="u" title="underline (Ctrl+U)" aria-label="underline"><u>U</u></button>
+      <button data-md="ul" title="bullet list" aria-label="bullet list">•</button>
+      <button data-md="ol" title="numbered list" aria-label="numbered list">1.</button>
+      <button data-md="quote" title="quote" aria-label="quote">❝</button>
+      <button data-md="code" title="code" aria-label="code">&lt;/&gt;</button>
+      <button id="ntpreview" class="ghost" title="see it formatted"
+              aria-pressed="false">👁 preview</button>
+    </div>
     <textarea id="ntarea" aria-label="my notes for this tree"
-      placeholder="Your own words on what you learned — the summary, the key insight, what to revisit. Writing it yourself is what makes it stick."></textarea>
+      placeholder="Your own words on what you learned — the summary, the key insight, what to revisit. Writing it yourself is what makes it stick.&#10;&#10;## a heading&#10;- a bullet&#10;**bold**, *italic*"></textarea>
+    <div id="ntview" class="ntview" hidden aria-live="polite"></div>
     <div class="ntfoot">
       <span id="ntmeta" class="hint"></span>
+      <span id="ntsaved" class="hint ntsaved"></span>
       <button id="ntdone" class="primary">done</button>
     </div>
   </div>
@@ -3074,6 +3123,116 @@ window.copyLink = copyLink;
 /* ------------------------------------------------------------------ */
 const NOTE_MAX = 20000;
 let notesPrevFocus = null;
+/* ------------------------------------------------------------------ */
+/* notes markup — a small, deliberate subset of markdown.              */
+/*                                                                     */
+/* Markdown rather than rich text because the note is ALREADY markdown */
+/* everywhere it goes: knowledge.py drops it under "## My notes" in    */
+/* the markdown export and the study sheet compiles it the same way.   */
+/* Storing HTML would break both and the CLI besides. Underline is the */
+/* one thing markdown lacks, so <u> passes through — valid markdown,   */
+/* and it renders in every viewer that matters.                        */
+/* ------------------------------------------------------------------ */
+function mdInline(s){
+  // escaped first, so only the tags built here can ever reach the DOM
+  return esc(s)
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*\w])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/(^|[^_\w])_([^_\n]+)_/g, "$1<em>$2</em>")
+    .replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/g, "<u>$1</u>");
+}
+function noteHtml(md){
+  const lines = String(md || "").replace(/\r/g, "").split("\n");
+  let html = "", list = null, para = [];
+  const flushPara = () => {
+    if (para.length) html += "<p>" + para.map(mdInline).join("<br>") + "</p>";
+    para = [];
+  };
+  const flushList = () => { if (list){ html += `</${list}>`; list = null; } };
+  const open = (tag) => { if (list !== tag){ flushList(); html += `<${tag}>`; list = tag; } };
+  for (const raw of lines){
+    const line = raw.replace(/\s+$/, "");
+    let m;
+    if (!line.trim()){ flushPara(); flushList(); continue; }
+    if ((m = line.match(/^\s{0,3}(#{1,4})\s+(.*)$/))){
+      flushPara(); flushList();
+      const n = Math.min(6, m[1].length + 1);          // # is a section, not the page title
+      html += `<h${n}>${mdInline(m[2])}</h${n}>`;
+    } else if (/^\s{0,3}(---|\*\*\*|___)\s*$/.test(line)){
+      flushPara(); flushList(); html += "<hr>";
+    } else if ((m = line.match(/^\s{0,3}[-*+]\s+(.*)$/))){
+      flushPara(); open("ul"); html += `<li>${mdInline(m[1])}</li>`;
+    } else if ((m = line.match(/^\s{0,3}\d+[.)]\s+(.*)$/))){
+      flushPara(); open("ol"); html += `<li>${mdInline(m[1])}</li>`;
+    } else if ((m = line.match(/^\s{0,3}>\s?(.*)$/))){
+      flushPara(); flushList(); html += `<blockquote>${mdInline(m[1])}</blockquote>`;
+    } else {
+      flushList(); para.push(line);
+    }
+  }
+  flushPara(); flushList();
+  return html;
+}
+
+/* the toolbar: wrap the selection, or open the markup at the cursor */
+const MD_WRAP = {b: ["**", "**"], i: ["*", "*"], u: ["<u>", "</u>"], code: ["`", "`"]};
+const MD_LINE = {h: "## ", ul: "- ", ol: "1. ", quote: "> "};
+function applyMd(kind){
+  const ta = $("ntarea");
+  const {selectionStart: a, selectionEnd: b, value: v} = ta;
+  if (MD_WRAP[kind]){
+    const [l, r] = MD_WRAP[kind];
+    const chosen = v.slice(a, b);
+    ta.value = v.slice(0, a) + l + chosen + r + v.slice(b);
+    // no selection: land the caret between the markers, ready to type
+    ta.selectionStart = a + l.length;
+    ta.selectionEnd = a + l.length + chosen.length;
+  } else {
+    const prefix = MD_LINE[kind];
+    const from = v.lastIndexOf("\n", a - 1) + 1;
+    const to = v.indexOf("\n", b) < 0 ? v.length : v.indexOf("\n", b);
+    const block = v.slice(from, to).split("\n").map((line, i) => {
+      const bare = line.replace(/^\s{0,3}(#{1,4}\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/, "");
+      // pressing the same button again takes the markup back off
+      if (bare !== line && line.startsWith(prefix)) return bare;
+      return (kind === "ol" ? `${i + 1}. ` : prefix) + bare;
+    }).join("\n");
+    ta.value = v.slice(0, from) + block + v.slice(to);
+    ta.selectionStart = from; ta.selectionEnd = from + block.length;
+  }
+  ta.focus();
+  notesChanged();
+}
+function setNotePreview(on){
+  $("ntview").hidden = !on;
+  $("ntarea").style.display = on ? "none" : "";
+  $("ntpreview").setAttribute("aria-pressed", on ? "true" : "false");
+  $("ntpreview").innerHTML = on ? "✎ write" : "👁 preview";
+  document.querySelectorAll(".nttools [data-md]").forEach(b => { b.disabled = on; });
+  if (on) $("ntview").innerHTML =
+    noteHtml($("ntarea").value) || `<p class="hint">nothing written yet.</p>`;
+  else $("ntarea").focus();
+}
+
+/* autosave. Notes used to persist only on close, so a phone evicting the
+   tab — or just closing it — with the editor open lost whatever was typed.
+   Now every keystroke schedules a save, and anything that could be the last
+   moment (blur, hiding the tab, unload, closing the box) saves immediately. */
+let notesTimer = null;
+function notesChanged(){
+  updateNotesMeta();
+  setNoteSaved("saving");
+  clearTimeout(notesTimer);
+  notesTimer = setTimeout(persistNotes, 600);
+}
+function setNoteSaved(state){
+  const el = $("ntsaved");
+  if (!el) return;
+  el.textContent = state === "saving" ? "saving…" : state === "saved" ? "✓ saved" : "";
+  el.classList.toggle("on", state === "saved");
+}
+
 function updateNotesMeta(){
   const v = $("ntarea").value.trim();
   const words = v ? v.split(/\s+/).length : 0;
@@ -3088,17 +3247,21 @@ function openNotes(){
   const ta = $("ntarea");
   ta.value = tree.note || "";
   $("notesbox").classList.add("open");
+  setNotePreview(false);      // always opens ready to write
+  setNoteSaved("");
   updateNotesMeta();
   ta.focus();
   ta.setSelectionRange(ta.value.length, ta.value.length);
 }
 window.openNotes = openNotes;
 function persistNotes(){
+  clearTimeout(notesTimer);
   const tree = cur(); if (!tree) return;
   const v = $("ntarea").value.replace(/[ \t]+$/gm, "").replace(/\s+$/, "").slice(0, NOTE_MAX);
-  if ((tree.note || "") === v) return;   // unchanged — don't churn the sync queue
+  if ((tree.note || "") === v){ setNoteSaved("saved"); return; }   // unchanged — don't churn the sync queue
   tree.note = v;
-  persistTree(tree);
+  persistTree(tree);            // localStorage now, server on the next flush
+  setNoteSaved("saved");
   renderConversation(true);   // refresh the notes-button indicator
 }
 function closeNotes(){
@@ -3111,8 +3274,28 @@ function closeNotes(){
 window.closeNotes = closeNotes;
 $("ntdone").onclick = closeNotes;
 $("ntclose").onclick = closeNotes;
-$("ntarea").addEventListener("input", updateNotesMeta);
+$("ntarea").addEventListener("input", notesChanged);
+$("ntarea").addEventListener("blur", persistNotes);
 $("notesbox").addEventListener("click", (e) => { if (e.target === $("notesbox")) closeNotes(); });
+/* any of these could be the last moment before the tab goes away */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && $("notesbox").classList.contains("open"))
+    persistNotes();
+});
+window.addEventListener("pagehide", () => {
+  if ($("notesbox").classList.contains("open")) persistNotes();
+});
+document.querySelectorAll(".nttools [data-md]").forEach(b => {
+  b.onclick = () => applyMd(b.dataset.md);
+});
+$("ntpreview").onclick = () => setNotePreview($("ntview").hidden);
+$("ntarea").addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = {b: "b", i: "i", u: "u", h: "h"}[e.key.toLowerCase()];
+  if (!k) return;
+  e.preventDefault();
+  applyMd(k);
+});
 
 /* ------------------------------------------------------------------ */
 /* 📚 source — the passage a tree was grounded in (set once at "new" / */

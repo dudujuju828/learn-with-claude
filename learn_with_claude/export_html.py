@@ -482,6 +482,86 @@ def _md_lite(text: str) -> str:
     return "".join(out) or "<p></p>"
 
 
+def note_md(text: str) -> str:
+    """The reader's own notes, which are written in a small markdown subset
+    (the notes editor has a toolbar for it): headings, bullet and numbered
+    lists, quotes, rules, bold/italic/underline/code. Same escape-first
+    discipline as everything else here — only the tags built below can reach
+    the page. Mirrors noteHtml() in public/index.html.
+    """
+    def inline(s: str) -> str:
+        s = _esc(s)
+        s = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", s)
+        s = re.sub(r"\*\*([^*\n]+)\*\*", r"<strong>\1</strong>", s)
+        s = re.sub(r"(^|[^*\w])\*([^*\n]+)\*", r"\1<em>\2</em>", s)
+        s = re.sub(r"(^|[^_\w])_([^_\n]+)_", r"\1<em>\2</em>", s)
+        return re.sub(r"&lt;u&gt;(.*?)&lt;/u&gt;", r"<u>\1</u>", s, flags=re.S)
+
+    html: list = []
+    para: list = []
+    list_tag = None
+
+    def flush_para():
+        if para:
+            html.append("<p>" + "<br>".join(inline(x) for x in para) + "</p>")
+            para.clear()
+
+    def flush_list():
+        nonlocal list_tag
+        if list_tag:
+            html.append(f"</{list_tag}>")
+            list_tag = None
+
+    def open_list(tag):
+        nonlocal list_tag
+        if list_tag != tag:
+            flush_list()
+            html.append(f"<{tag}>")
+            list_tag = tag
+
+    for raw in (text or "").replace("\r", "").split("\n"):
+        line = raw.rstrip()
+        if not line.strip():
+            flush_para()
+            flush_list()
+            continue
+        m = re.match(r"^\s{0,3}(#{1,4})\s+(.*)$", line)
+        if m:
+            flush_para()
+            flush_list()
+            html.append(f"<h{min(6, len(m.group(1)) + 1)}>{inline(m.group(2))}"
+                        f"</h{min(6, len(m.group(1)) + 1)}>")
+            continue
+        if re.match(r"^\s{0,3}(---|\*\*\*|___)\s*$", line):
+            flush_para()
+            flush_list()
+            html.append("<hr>")
+            continue
+        m = re.match(r"^\s{0,3}[-*+]\s+(.*)$", line)
+        if m:
+            flush_para()
+            open_list("ul")
+            html.append(f"<li>{inline(m.group(1))}</li>")
+            continue
+        m = re.match(r"^\s{0,3}\d+[.)]\s+(.*)$", line)
+        if m:
+            flush_para()
+            open_list("ol")
+            html.append(f"<li>{inline(m.group(1))}</li>")
+            continue
+        m = re.match(r"^\s{0,3}>\s?(.*)$", line)
+        if m:
+            flush_para()
+            flush_list()
+            html.append(f"<blockquote>{inline(m.group(1))}</blockquote>")
+            continue
+        flush_list()
+        para.append(line)
+    flush_para()
+    flush_list()
+    return "".join(html)
+
+
 def toolbar_html() -> str:
     """The reading-aids toolbar, shared by the tree export and the source-code
     export (seeplusplus)."""
@@ -698,10 +778,7 @@ def tree_to_html(tree) -> str:
     note = (getattr(tree, "note", "") or "").strip()
     note_html = ""
     if note:
-        paras = "".join(
-            "<p>" + "<br>".join(_esc(line) for line in para.split("\n")) + "</p>"
-            for para in re.split(r"\n{2,}", note) if para.strip()
-        )
+        paras = note_md(note)
         note_html = (
             '<section class="node" id="mynotes"><h2>📝 My notes</h2>'
             f'<div class="turn"><div class="block">{paras}</div></div></section>'

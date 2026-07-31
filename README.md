@@ -266,8 +266,14 @@ directly (a local `claude` login can't run on a server), so it needs an
   feedback aloud, your latest explanation of each conversation lands in
   both exports under *Explained back*, and **📊 progress** counts attempts,
   clean explanations, and what's due another pass. Each tree also
-  gets **📝 my notes** — a free-text space for your own synthesis of what you
-  learned, which autosaves, syncs with the tree, and heads every export. You
+  gets **📝 my notes** — a space for your own synthesis of what you learned,
+  written in a small **markdown** subset with a toolbar for it (headings,
+  bullet and numbered lists, quotes, rules, **bold**, *italic*, underline,
+  `code`, with Ctrl+B/I/U/H) and a **👁 preview** to see it formatted. It
+  autosaves as you type — and again the moment the tab is hidden, unloaded, or
+  the box closed, so nothing is lost to a phone evicting the tab — then syncs
+  with the tree and heads every export, where the markup renders properly
+  rather than showing its syntax. **Shift+N** opens it. You
   can also **ask the tutor yourself** under any conversation — your question
   is answered with the node's context and stored as your own turn
   (`user: true`), which the simulated learner never sees. Two **❓ question

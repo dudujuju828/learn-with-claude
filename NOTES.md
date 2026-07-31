@@ -5,6 +5,49 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 48 — notes get markup, and actually save
+
+*(user-requested: "improve the notes — give it basic markup (headers, bullet
+points, fonts, bold, underline, etc.) and ensure they are saved to the
+server".)*
+
+### What it is
+The notes editor gains a toolbar over a small markdown subset — headings,
+bullet and numbered lists, quotes, rules, bold/italic/underline/code, with
+Ctrl+B/I/U/H — plus a **👁 preview**. And it now autosaves.
+
+### Design notes
+- **Markdown, not rich text, because the note is already markdown
+  everywhere it goes.** `knowledge.to_markdown()` drops it under
+  `## My notes` and the study sheet compiles it the same way; storing HTML
+  would have broken both exports and the CLI. Writing markdown makes those
+  outputs *more* correct, not less. Underline is the one thing markdown
+  lacks, so `<u>` passes through — valid markdown, renders everywhere.
+- **Per-note font pickers were the one part of the request I left out.** The
+  app already has a global, dyslexia-driven font switcher; a per-note
+  override would fight it, and it can't survive a markdown round trip. Bold /
+  italic / underline / code cover what the toolbar is actually for.
+- **The autosave was a real bug, and the README was already claiming it.**
+  Notes persisted *only* in `closeNotes()`. Close the tab — or let a phone
+  evict it — with the editor open and everything typed was gone. Now every
+  keystroke schedules a save 600ms out, and blur, `visibilitychange`,
+  `pagehide`, and closing the box all flush immediately. From there the
+  existing machinery takes over: `persistTree` marks the tree dirty,
+  `flushDirty` pushes it, and the `beforeunload` handler already beacons
+  anything unsynced on the way out. A "✓ saved" line makes it visible.
+- **Rendering is duplicated deliberately.** `noteHtml()` (JS) and `note_md()`
+  (Python, for the HTML export) implement the same subset with the same
+  escape-first discipline — escape everything, then build only the tags the
+  renderer itself creates, so no note can inject markup. `<img src=x
+  onerror=…>` comes out as text; there's a test for it on both sides.
+- The toolbar toggles: pressing • on lines that are already bullets takes the
+  bullets off, and numbered lists renumber from 1.
+- 25 browser assertions (renderer, every toolbar button, preview, and each
+  autosave trigger including a simulated tab-hide and pagehide), 8 layout
+  measurements, and Python coverage of the export renderer.
+
+---
+
 ## Feature 47 — ❓ bank it, from an explain-it-back probe
 
 *(user-requested: "when doing an explain-it-back it may end up asking a
