@@ -14,6 +14,12 @@ const MAX_TUTORS = 20;
 const MAX_NAME = 40;
 const MAX_STYLE = 4000;
 
+// a tutor may be filed under a profile, which offers it only in that interest
+// (see api/profiles.js); no filing means "offered everywhere"
+const scopeOk = (p) =>
+  p === undefined || p === "" ||
+  (typeof p === "string" && p.length <= 40 && !/['"\\<>&]/.test(p));
+
 function validDoc(doc) {
   if (!doc || typeof doc !== "object" || !Array.isArray(doc.tutors)) return false;
   if (doc.tutors.length > MAX_TUTORS) return false;
@@ -21,7 +27,8 @@ function validDoc(doc) {
     t && typeof t === "object" &&
     /^[a-z0-9-]{1,32}$/.test(String(t.id || "")) &&
     typeof t.name === "string" && t.name.trim() && t.name.length <= MAX_NAME &&
-    typeof t.style === "string" && t.style.trim() && t.style.length <= MAX_STYLE);
+    typeof t.style === "string" && t.style.trim() && t.style.length <= MAX_STYLE &&
+    scopeOk(t.profile));
 }
 
 module.exports = async (req, res) => {

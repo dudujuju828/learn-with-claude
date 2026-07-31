@@ -5,6 +5,91 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 53 — profiles become real records, owned by the server
+
+*(user-requested: "consistently getting an issue with the lifecycle of
+profiles (creating one means it's not there — it seems to want to also
+automatically include the last conversation to a profile) — audit the full
+pipeline for bugs — where you can, make the server the authority".)*
+
+**The root cause was that a profile had no existence of its own.**
+`allProfiles()` derived the list from the `tree.profile` strings it found in
+the store, so a profile existed only while some tree wore its name. Every
+reported symptom falls out of that one fact:
+
+- the only way to create a profile was `fileTreeUnder("__new")`, which
+  prompts for a name and immediately assigns it to the **open** tree — so
+  "new profile" literally meant "refile the conversation I'm looking at";
+- `fileTreeUnder` only moved the active selection when a profile was
+  *already* active (`if (wasActive && …)`), so creating one from **all
+  trees** left you on "all" with a chip you hadn't selected — "creating one
+  means it's not there";
+- `activeProfile()` re-validated against `allProfiles()` on every call, so
+  refiling or deleting the last tree in a profile silently returned "" and
+  threw you back to "all trees" — the name gone for good, and any global
+  question still filed under it now invisible in every view;
+- because `newTree()` reads `activeProfile()`, that evaporation also meant
+  new conversations were born profile-less, so the profile could not come
+  back by using it;
+- `prefs.profile` was a device preference in `localStorage`, and the set of
+  profiles was computed from whatever the local cache happened to hold — on
+  a fresh device the chip row was empty until the first sync finished.
+
+**Chosen: keep the filing on the tree, add a registry beside it.** A profile
+is now two halves. The *filing* stays a name on the tree doc, because that is
+what makes it sync, merge, and travel in `.know.json` to the CLI and back.
+The *registry* is a new synced document, `settings:profiles` (`api/profiles.js`
+hosted, `ProfileStore` → `profiles.json` locally), holding one record per
+profile. `allProfiles()` is the **union** of the two, which is the important
+detail: a registered profile survives with zero trees, and a tree arriving
+from the CLI wearing an unknown name still shows up rather than pointing at
+nothing. `adoptTreeProfiles()` turns such a name into a real record on sync,
+import, and drop.
+
+`active` lives in that same document, so the server is the authority on which
+profile you are in and every device agrees instead of drifting — the local
+copy is only a cache that makes the first paint instant. The registry also
+carries the per-profile tutor style, learner level, and thinking-blocks
+toggle (`PROFILE_SETTINGS`), so *history* keeps its plain-words tutor while
+*computer-science* keeps its technical one; `prefs` still holds the live
+values, so every existing reader of `prefs.tmode` is untouched.
+
+Creating a profile is now its own action (the dashed **＋** chip, always
+present so the first one is reachable): it registers the name, selects it,
+and **clears the open conversation** so the new interest starts genuinely
+empty. ✕ deletes a profile and moves its trees, questions, and tutors back
+to *no profile* — the conversations are the expensive artifact and must
+never disappear with a chip.
+
+Encapsulation was extended to the two things still leaking: custom tutors
+gained an optional `profile` (filed = offered only there, unfiled = offered
+everywhere, with a checkbox in the editor), and `save all` now backs up the
+profile you're in — carrying the registry entries, or an empty profile would
+not survive the round trip — and still backs up everything on "all".
+
+**Rejected:**
+
+- *keying trees by a profile **id** rather than a name.* Rename-safe, but it
+  breaks portability: `.know.json` would carry an opaque id the CLI can't
+  resolve, and an imported tree would need a mapping table. Renaming already
+  restamps every tree, which is cheap and keeps the file human-readable.
+- *tombstoning deleted profiles.* The union means a straggling offline tree
+  can resurrect a name. That is the better failure — a resurrected chip is
+  visible and deletable, an orphaned tree filed under a profile nothing
+  lists is not.
+- *leaving `active` in device prefs.* It is the one thing that makes the
+  lifecycle deterministic across devices, and it was explicitly asked for.
+- *deleting a profile's conversations with it.* Never.
+
+Verified with the usual stub-harness-plus-headless-Edge pattern: 44 checks
+over the full lifecycle (create → inherit → switch → per-profile settings →
+survive the last tree → rename → delete → adopt → tutor scoping → server
+wins → cache), plus a migration probe run against **both** `HEAD` and the
+working tree, which reproduces the swallowed-conversation and evaporation
+bugs on the old build and passes on the new one.
+
+---
+
 ## Feature 52 — ↗ promote a question from the local bank to the global one
 
 *(user-requested: "implement the ability to promote a question from the

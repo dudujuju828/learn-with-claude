@@ -75,8 +75,21 @@ Breaking one of these is a regression even if nothing errors.
 
 - **Profiles scope everything.** Any new view that walks `Object.values(store)`
   must use `profileTrees()` instead. Same for the global question bank
-  (`profileGlobalQuestions()`). Deliberately global: the `save all` backup,
-  `allProfiles()`, and custom tutors.
+  (`profileGlobalQuestions()`) and the custom tutors (`tutorInProfile()`).
+  Deliberately global: `allProfiles()` and `adoptTreeProfiles()`, which have
+  to see the whole store to work at all.
+
+  A profile has **two halves**, and new code usually needs both:
+  *the filing* is a name on the tree doc (`tree.profile`), so it travels in
+  `.know.json`; *the registry* is the synced `settings:profiles` doc
+  (`api/profiles.js`, `ProfileStore` in `localweb.py`), which is what lets a
+  profile exist with zero trees. `allProfiles()` is the **union** of the two —
+  never derive existence from the trees alone, that was the old lifecycle
+  bug. The registry also owns `active`: which profile you are in is
+  server-authoritative, not a device pref, and it carries the per-profile
+  tutor style / learner level (`PROFILE_SETTINGS`). Anything that can bring
+  trees in (sync, import, drop) must call `adoptTreeProfiles()` so a name
+  arriving from the CLI or another device becomes a real record.
 - **Nothing enters the glossary automatically.** Terms join only by an
   explicit `➕ add` / flashcard. `✎ define` is a *lookup* that stores nothing.
 - **The simulated learner stays ignorant.** It never sees the human's own

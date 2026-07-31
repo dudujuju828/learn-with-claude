@@ -11,10 +11,11 @@ with three differences:
   * trees persist as .know.json files in the CLI's knowledge directory
     ($LEARN_DIR or ~/.learn-with-claude/knowledge), so the shell and the web
     app grow the same collection;
-  * custom tutors live next to them in tutors.json, the model/effort/
-    project-directory/MCP-server settings (local_settings.py) in
-    local_settings.json, and the global question bank (questions banked
-    from anywhere, investigated as a fresh root topic) in
+  * custom tutors live next to them in tutors.json, the profile registry
+    (the named interest areas trees file under, and which one is active) in
+    profiles.json, the model/effort/project-directory/MCP-server settings
+    (local_settings.py) in local_settings.json, and the global question bank
+    (questions banked from anywhere, investigated as a fresh root topic) in
     global_questions.json.
 
 Binds 127.0.0.1 only.
@@ -53,6 +54,7 @@ STATIC_TYPES = {
 _TREE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _TUTOR_ID = re.compile(r"^[a-z0-9-]{1,32}$")
 _GQ_ID = re.compile(r"^[a-f0-9]{8,32}$")
+_PROFILE_BAD = re.compile(r"""['"\\<>&]""")
 
 ROUTES = model_routes(copilot_backend.call_model,
                       tutor_grounding=copilot_backend.grounding_text,
@@ -331,8 +333,17 @@ class TutorStore:
             and len(t["name"]) <= cls.MAX_NAME
             and isinstance(t.get("style"), str) and t["style"].strip()
             and len(t["style"]) <= cls.MAX_STYLE
+            and cls._scope_ok(t.get("profile"))
             for t in tutors
         )
+
+    @staticmethod
+    def _scope_ok(p) -> bool:
+        # a tutor may be filed under a profile, offering it only in that
+        # interest (see ProfileStore); no filing means "offered everywhere"
+        if p is None or p == "":
+            return True
+        return isinstance(p, str) and len(p) <= 40 and not _PROFILE_BAD.search(p)
 
 
 # --------------------------------------------------------------------------- #
@@ -381,10 +392,65 @@ class GlobalQuestionStore:
 
 
 # --------------------------------------------------------------------------- #
+# profiles — the named interest areas trees file under. The filing itself
+# lives on each tree (and so travels in .know.json to the CLI and back); this
+# is the REGISTRY, which is what lets a profile exist before its first
+# conversation and survive its last tree moving away. `active` rides along so
+# the profile you are in is the same in the browser on every visit rather
+# than a per-browser guess. Same "one small JSON doc" shape as TutorStore.
+# --------------------------------------------------------------------------- #
+class ProfileStore:
+    MAX_PROFILES, MAX_NAME = 60, 40
+
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.lock = threading.Lock()
+
+    def get(self) -> "dict | None":
+        with self.lock:
+            try:
+                return json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+
+    def put(self, doc) -> None:
+        if not self._valid(doc):
+            raise ApiError("invalid profiles document")
+        with self.lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(
+                json.dumps(doc, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+
+    @classmethod
+    def _name_ok(cls, name) -> bool:
+        # mirrors cleanProfileName() in public/index.html: names reach the
+        # client inside inline handlers, so quote-ish characters stay out
+        return (isinstance(name, str) and name.strip()
+                and len(name) <= cls.MAX_NAME
+                and not _PROFILE_BAD.search(name))
+
+    @classmethod
+    def _valid(cls, doc) -> bool:
+        if not isinstance(doc, dict) or not isinstance(doc.get("profiles"), list):
+            return False
+        if len(doc["profiles"]) > cls.MAX_PROFILES:
+            return False
+        active = doc.get("active")
+        if active not in (None, "") and not cls._name_ok(active):
+            return False
+        return all(
+            isinstance(p, dict) and cls._name_ok(p.get("name"))
+            and (p.get("settings") is None or isinstance(p.get("settings"), dict))
+            for p in doc["profiles"]
+        )
+
+
+# --------------------------------------------------------------------------- #
 # http
 # --------------------------------------------------------------------------- #
 def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEndpoint,
-                 global_questions: GlobalQuestionStore):
+                 global_questions: GlobalQuestionStore, profiles: ProfileStore):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -456,6 +522,8 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                     self._send_json(200, {"doc": tutors.get()})
                 elif path == "/api/global_questions":
                     self._send_json(200, {"doc": global_questions.get()})
+                elif path == "/api/profiles":
+                    self._send_json(200, {"doc": profiles.get()})
                 elif path == "/api/local_settings":
                     self._send_json(200, settings.get())
                 elif path.startswith("/api/"):
@@ -485,6 +553,9 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                     self._send_json(200, {"ok": True})
                 elif path == "/api/global_questions":
                     global_questions.put(body.get("doc"))
+                    self._send_json(200, {"ok": True})
+                elif path == "/api/profiles":
+                    profiles.put(body.get("doc"))
                     self._send_json(200, {"ok": True})
                 elif path == "/api/local_settings":
                     self._send_json(200, settings.put(body))
@@ -540,11 +611,13 @@ def serve(port: int = 8577, knowledge_dir: "str | None" = None,
     trees = TreeStore(root)
     tutors = TutorStore(root.parent / "tutors.json")
     global_questions = GlobalQuestionStore(root.parent / "global_questions.json")
+    profiles = ProfileStore(root.parent / "profiles.json")
     settings_store = local_settings.LocalSettingsStore(root.parent / "local_settings.json")
     copilot_backend.configure(settings_store.load())
     settings = LocalSettingsEndpoint(settings_store)
     httpd = ThreadingHTTPServer(("127.0.0.1", port),
-                                make_handler(trees, tutors, settings, global_questions))
+                                make_handler(trees, tutors, settings, global_questions,
+                                             profiles))
     url = f"http://localhost:{port}/"
     print(f"learn-with-claude local web · {version}")
     print(f"  trees: {root}")

@@ -243,13 +243,21 @@ directly (a local `claude` login can't run on a server), so it needs an
   under **profiles** — named interest areas like *computer-science* — and the
   active profile scopes **everything**, not just the tree list: the glossary
   (both its this-tree and all-trees views), the review deck, search, the ⌘K
-  palette, 📅 today, the highlights hub, the study sheet, 📊 progress, and the
-  global question bank. Switch profile and the whole app is about that
-  interest; each keeps its own flashcards, its own banked questions, its own
-  everything. With no profile selected you see the lot. The name lives on the
-  tree document (and on each banked question), so it syncs, merges, and
-  exports with them — and the ✎ chip renames a profile across every tree
-  *and* question filed under it. **🎓
+  palette, 📅 today, the highlights hub, the study sheet, 📊 progress, the
+  global question bank, the save-all backup, which custom tutors are on
+  offer, and the tutor style and learner level you read that interest with.
+  Switch profile and the whole app is about that interest; each keeps its own
+  flashcards, its own banked questions, its own everything. With no profile
+  selected you see the lot. **＋** above the tree list makes one — it starts
+  empty and selected, so the next thing you ask is the first thing in it,
+  and no conversation is dragged in behind you. ✎ renames a profile across
+  every tree, question, and tutor filed under it; ✕ deletes the profile and
+  moves its conversations back to *no profile*, never deleting them with it.
+  The filing lives on the tree document (and on each banked question), so it
+  syncs, merges, and exports with them; the profiles themselves — including
+  which one you are in — live in a small synced document of their own, so a
+  profile can exist before its first conversation, survives its last tree
+  moving away, and is the same on every device. **🎓
   quiz me** writes a handful of multiple-choice questions from what the tree
   actually covered (one model call, kept with the tree — retakes just
   reshuffle), explains every answer, and records your scores; the 🔊 beside

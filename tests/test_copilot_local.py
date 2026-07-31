@@ -14,7 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from learn_with_claude import copilot_backend, copilot_sessions, local_settings  # noqa: E402
 from learn_with_claude.copilot_backend import _parse_stream, compose_prompt  # noqa: E402
-from learn_with_claude.localweb import GlobalQuestionStore, TreeStore, TutorStore  # noqa: E402
+from learn_with_claude.localweb import (  # noqa: E402
+    GlobalQuestionStore, ProfileStore, TreeStore, TutorStore,
+)
 from learn_with_claude.webapi import ApiError, model_routes  # noqa: E402
 
 # A stand-in copilot: prints one assistant.message whose content is the argv
@@ -333,15 +335,54 @@ def test_tutor_store():
             {"id": "socratic", "name": "Socratic", "style": "Only questions."}]}
         store.put(doc)
         assert store.get() == doc
+        # a tutor may be filed under a profile, offering it only in that
+        # interest; the name is gated like every other profile name
+        scoped = {"saved_at": "2026-08-01", "tutors": [
+            {"id": "socratic", "name": "Socratic", "style": "Only questions.",
+             "profile": "computer-science"}]}
+        store.put(scoped)
+        assert store.get() == scoped
         for bad in [None, {"tutors": "nope"},
                     {"tutors": [{"id": "BAD ID", "name": "x", "style": "y"}]},
-                    {"tutors": [{"id": "a", "name": "", "style": "y"}]}]:
+                    {"tutors": [{"id": "a", "name": "", "style": "y"}]},
+                    {"tutors": [{"id": "a", "name": "x", "style": "y",
+                                 "profile": 'quote"d'}]}]:
             try:
                 store.put(bad)
                 assert False, f"must reject {bad!r}"
             except ApiError:
                 pass
-    print("ok  tutor store (round-trip, validation)")
+    print("ok  tutor store (round-trip, profile scoping, validation)")
+
+
+def test_profile_store():
+    with tempfile.TemporaryDirectory() as d:
+        store = ProfileStore(Path(d) / "profiles.json")
+        assert store.get() is None
+        # the registry is what lets a profile exist with no trees at all —
+        # "history" here has nothing filed under it and still round-trips
+        doc = {"saved_at": "2026-08-01", "active": "computer-science", "profiles": [
+            {"name": "computer-science", "created": "2026-08-01T09:00:00",
+             "settings": {"tmode": "technical", "think": True, "llevel": "expert"}},
+            {"name": "history", "created": "2026-08-01T09:01:00"}]}
+        store.put(doc)
+        assert store.get() == doc
+        # "no profile selected" is a legitimate state, not a missing value
+        store.put({"saved_at": "2026-08-01", "active": "", "profiles": []})
+        assert store.get()["active"] == ""
+        for bad in [None, {"profiles": "nope"},
+                    {"profiles": [{"name": ""}]},
+                    {"profiles": [{"name": 'quote"d'}]},        # inline-handler gate
+                    {"profiles": [{"name": "x" * 41}]},
+                    {"profiles": [{"name": "x", "settings": []}]},
+                    {"profiles": [], "active": "<script>"},
+                    {"profiles": [{"name": str(i)} for i in range(61)]}]:
+            try:
+                store.put(bad)
+                assert False, f"must reject {bad!r}"
+            except ApiError:
+                pass
+    print("ok  profile store (empty profiles, settings, name gate, validation)")
 
 
 def test_global_question_store():
@@ -717,6 +758,7 @@ if __name__ == "__main__":
     test_tree_store_revs()
     test_tutor_store()
     test_global_question_store()
+    test_profile_store()
     test_session_reading()
     test_session_names()
     test_session_memory_tracks_a_live_session()

@@ -386,6 +386,10 @@
   #profilerow .pchip.on{
     color:var(--accent); border-color:var(--accent); background:var(--card);
   }
+  /* dashed: "＋ profile" makes something that isn't there yet, unlike the
+     solid chips beside it which switch between things that are */
+  #profilerow .pchip.pnew{border-style:dashed}
+  #profilerow .pchip.pnew:hover{color:var(--fg); border-color:var(--fg)}
   #profilefile{display:flex; align-items:center; gap:.4rem; margin-top:.5rem}
   #profilefile select{flex:1; font-size:var(--t-sm); padding:.2rem .4rem; min-width:0}
   /* the list is capped and scrolls on its own — without this it grows without
@@ -1674,13 +1678,19 @@
   piece you already understand as covered without a conversation (tap
   <b>✓ known</b> to unmark). The map lives with the tree and tracks
   coverage, so you can come back any time.</p>
-  <p><b>profiles</b> — file trees under named interests (say,
-  <i>computer-science</i>) with the <b>this tree:</b> picker under the tree
-  list. The chips above the list switch the active profile, which scopes
-  both the list and the review deck — each interest keeps its own
-  flashcards instead of shuffling into one pile. <b>all</b> shows
-  everything; a tree's profile travels and syncs with it, and the ✎ chip
-  renames the active profile everywhere.</p>
+  <p><b>profiles</b> — named interests (say, <i>computer-science</i>) that
+  scope the whole app. <b>＋</b> above the tree list makes one: it starts
+  empty and selected, and everything you do while it's selected files under
+  it — conversations, flashcards, glossary, highlights, banked questions,
+  the docket, the stats, the study sheet, even which custom tutors are on
+  offer and the tutor style and learner level you read that interest with.
+  Switch chips and the app is about that interest and nothing else;
+  <b>all</b> shows everything. To file an existing conversation somewhere,
+  use the <b>this tree:</b> picker under the list. ✎ renames a profile
+  everywhere at once, ✕ deletes it and moves its conversations back to
+  <i>no profile</i> — they are never deleted with it. A tree's profile
+  travels and syncs with the tree; which profile you're in syncs too, so
+  every device is in the same one.</p>
   <p><b>🔁 review</b> — every defined term in the active profile's trees is
   a flashcard. Recall it, flip, grade yourself (again / good / easy), and
   the card is scheduled further out each time — spaced repetition without
@@ -1980,7 +1990,7 @@
         <button id="exportmd" title="download this tree as readable markdown">export md</button>
         <button id="exporthtml" title="download the standalone dyslexia-friendly reading page (the CLI's HTML export)">export html</button>
         <button id="importbtn" title="open a .know.json from the CLI or another device — or a save-all backup">import</button>
-        <button id="saveall" title="every tree in one backup file — import brings them all back">save all</button>
+        <button id="saveall" title="this profile's trees in one backup file (every tree, on “all”) — import brings them all back">save all</button>
         <button id="sheetbtn" title="one revision document for the whole profile — your notes, best explanations, highlights, and every defined term">study sheet</button>
         <input id="importfile" type="file" accept=".json,.know.json" style="display:none">
       </div>
@@ -2015,6 +2025,11 @@
       <button id="tutortry">ask</button>
     </div>
     <div id="tutorpreview" class="block tutor-b" style="display:none; max-height:14rem; overflow:auto; font-size:.9rem"></div>
+    <label id="tutorscopewrap" class="hint"
+           style="display:none; align-items:center; gap:.45rem; margin-top:.7rem">
+      <input id="tutorscope" type="checkbox" style="width:auto; margin:0">
+      <span id="tutorscopetext">only in this profile</span>
+    </label>
     <div class="foot">
       <button id="tutordelete" class="ghost" style="color:var(--danger)">delete</button>
       <span style="flex:1"></span>
@@ -2516,8 +2531,12 @@ function darkTheme(){ return DARK_THEMES.has(prefs.theme); }
 const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
-                       tmode: "balanced", think: true, llevel: "auto", profile: "",
+                       tmode: "balanced", think: true, llevel: "auto",
                        revtype: false, drill: false, drillwait: 5, examq: 5};
+/* tmode/think/llevel are the live values, but they belong to the active
+   profile — see the profiles section, which saves and restores them per
+   interest. `profile` itself is deliberately NOT here any more: which
+   profile you are in is server-owned now, not a device preference. */
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
                     ls: {d: 0.01, min: 0, max: 0.12, fmt: v => v.toFixed(2) + "em"},
@@ -2612,13 +2631,15 @@ function buildPanel(){
     };
   });
   $("fontsel").onchange = () => { prefs.font = $("fontsel").value; applyPrefs(); };
+  // how you read is part of the interest you're reading, not of the browser:
+  // each of these writes through to the active profile's record
   $("modesel").onchange = () => {
     const v = $("modesel").value;
     if (v === "__new"){ openTutorEditor(null); return; }
-    prefs.tmode = v; savePrefs(); levelHint();
+    prefs.tmode = v; savePrefs(); rememberProfileSettings(); levelHint();
   };
   $("levelsel").onchange = () => {
-    prefs.llevel = $("levelsel").value; savePrefs(); levelHint();
+    prefs.llevel = $("levelsel").value; savePrefs(); rememberProfileSettings(); levelHint();
   };
   $("tutoreditbtn").onclick = () => {
     const t = currentTutor();
@@ -2648,9 +2669,13 @@ function buildPanel(){
   }
   $("rulerbtn").onclick = () => { prefs.ruler = !prefs.ruler; applyPrefs(); };
   $("focusbtn").onclick = () => { prefs.focus = !prefs.focus; applyPrefs(); };
-  $("thinkbtn").onclick = () => { prefs.think = !prefs.think; applyPrefs(); if (rulerActive()) refreshRuler(); };
+  $("thinkbtn").onclick = () => {
+    prefs.think = !prefs.think; applyPrefs(); rememberProfileSettings();
+    if (rulerActive()) refreshRuler();
+  };
   $("aareset").onclick = () => {
     prefs = Object.assign({}, PREF_DEFAULTS); applyPrefs();
+    rememberProfileSettings();   // the reset applies to this profile too
     revModeUI();   // the review-header toggles read prefs too
   };
   $("aabtn").onclick = (e) => {
@@ -2742,11 +2767,21 @@ function loadTutorsDoc(){
   } catch {}
   return {saved_at: "", tutors: []};
 }
+/* a tutor filed under a profile is offered only in that profile — a voice
+   you built for reading history has no business turning up in the compiler
+   notes. One left unfiled is offered everywhere, which is what a general
+   style wants. With no profile selected you see the lot, like every other
+   "all trees" view. */
+function tutorInProfile(t){
+  const p = activeProfile();
+  const tp = cleanProfileName(t && t.profile);
+  return !p || !tp || tp === p;
+}
 function buildModeSelect(){
   const sel = $("modesel");
   const builtin = BUILTIN_MODES.map(([v, l]) =>
     `<option value="${v}">${esc(l)}</option>`).join("");
-  const custom = tutorsDoc.tutors.map(t =>
+  const custom = tutorsDoc.tutors.filter(tutorInProfile).map(t =>
     `<option value="custom:${esc(t.id)}">${esc(t.name)}</option>`).join("");
   sel.innerHTML =
     `<optgroup label="built-in">${builtin}</optgroup>` +
@@ -2798,6 +2833,13 @@ function openTutorEditor(id){
   $("tutorname").value = t ? t.name : "";
   $("tutorstyle").value = t ? t.style : "";
   $("tutordelete").style.display = t ? "" : "none";
+  // scoping only means anything inside a profile. A tutor written while
+  // you're in one is presumed to be for it — untick to keep it everywhere
+  const active = activeProfile();
+  $("tutorscopewrap").style.display = active ? "flex" : "none";
+  $("tutorscopetext").textContent = `only in “${active}”`;
+  $("tutorscope").checked = active
+    ? (t ? cleanProfileName(t.profile) === active : true) : false;
   const preview = $("tutorpreview");
   preview.style.display = "none"; preview.innerHTML = "";
   $("tutoreditor").classList.add("open");
@@ -2831,15 +2873,25 @@ function saveTutor(){
   const style = $("tutorstyle").value.trim();
   if (!name){ $("tutorname").focus(); return; }
   if (!style){ $("tutorstyle").focus(); return; }
+  const active = activeProfile();
+  const scope = active && $("tutorscope").checked ? active : "";
   let id = editingTutorId;
   if (!id){
     id = (slug(name).slice(0, 24) || "tutor") + "-" + randHex(4);
-    tutorsDoc.tutors.push({id, name, style});
+    const t = {id, name, style};
+    if (scope) t.profile = scope;
+    tutorsDoc.tutors.push(t);
   } else {
     const t = tutorsDoc.tutors.find(x => x.id === id);
-    if (t){ t.name = name; t.style = style; }
+    if (t){
+      t.name = name; t.style = style;
+      // only the profile you're in can change a tutor's filing — editing one
+      // from "all trees" must not silently unfile it from where it lives
+      if (active){ if (scope) t.profile = scope; else delete t.profile; }
+    }
   }
   prefs.tmode = "custom:" + id;
+  rememberProfileSettings();
   savePrefs();
   closeTutorEditor();
   persistTutors();
@@ -4202,12 +4254,28 @@ function newTree(topic, source){
   return tree;
 }
 
-/* profiles — named interest areas ("computer-science", "history"…) that a
-   tree files under. The name lives on the tree doc, so it syncs, merges,
-   and travels in .know.json; a profile exists simply by having trees. The
-   ACTIVE profile is a device preference (like theme): it filters the tree
-   list and — the point — the review deck, so each interest keeps its own
-   flashcards instead of shuffling into one pile. Empty = everything. */
+/* profiles — named interest areas ("computer-science", "history"…) that
+   scope the whole app: the tree list, the review deck, the glossary, the
+   docket, the stats, the highlights, the study sheet, both question banks,
+   and which custom tutors are on offer. Switch profile and the app is about
+   that interest and nothing else. Empty = everything.
+
+   A profile has two halves, deliberately:
+
+     * the FILING is a name on the tree doc (`tree.profile`), so it syncs and
+       merges with the tree and travels in .know.json to the CLI and back;
+
+     * the REGISTRY is its own synced doc (`settings:profiles`, the same
+       shape as tutors and the global question bank), so a profile is a
+       record in its own right.
+
+   The registry is what fixes the lifecycle. Deriving existence from the
+   trees alone meant a profile could not be created before its first
+   conversation — "new profile…" was really "refile whatever is open into a
+   new name" — and it evaporated the moment its last tree was refiled or
+   deleted, taking the view you were in with it. `active` lives in the same
+   doc rather than in device prefs, so the server is the authority on which
+   profile you are in and every device agrees instead of drifting. */
 /* names appear inside inline handlers, so quote-ish characters are out;
    one gate keeps stored, synced, and imported names consistent */
 function cleanProfileName(s){
@@ -4216,71 +4284,268 @@ function cleanProfileName(s){
 function treeProfile(t){
   return cleanProfileName(t && typeof t.profile === "string" ? t.profile : "");
 }
+
+const PROFILES_KEY = "lwc.profiles.v1";
+function loadProfilesDoc(){
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(PROFILES_KEY)); } catch {}
+  if (!d || !Array.isArray(d.profiles)) d = {saved_at: "", active: "", profiles: []};
+  // the active profile used to be a device preference — carry it across once
+  if (!d.saved_at && prefs.profile) d.active = cleanProfileName(prefs.profile);
+  return d;
+}
+let profilesDoc = loadProfilesDoc();
+
+/* profiles someone deliberately made */
+function registeredProfiles(){
+  const out = [];
+  for (const p of (profilesDoc.profiles || [])){
+    const name = cleanProfileName(p && p.name);
+    if (name && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+/* every profile that exists: registered, plus any worn by a tree that
+   arrived from the CLI, an import, or a device that made it first. The union
+   is what stops a tree's filing ever pointing at a profile that isn't there
+   — the old failure mode, seen as a conversation vanishing from every list. */
 function allProfiles(){
-  const names = new Set();
+  const names = new Set(registeredProfiles());
   for (const t of Object.values(store)){
     const p = treeProfile(t);
     if (p) names.add(p);
   }
   return [...names].sort((a, b) => a.localeCompare(b));
 }
+/* the record for a name, optionally creating it. The registry is a list, not
+   a map, because it round-trips through JSON and order is the display order. */
+function profileRecord(name, create){
+  const n = cleanProfileName(name);
+  if (!n) return null;
+  if (!Array.isArray(profilesDoc.profiles)) profilesDoc.profiles = [];
+  let rec = profilesDoc.profiles.find(p => cleanProfileName(p && p.name) === n);
+  if (!rec && create){
+    rec = {name: n, created: nowIso()};
+    profilesDoc.profiles.push(rec);
+  }
+  return rec || null;
+}
+/* a name worn by a tree but missing from the registry gets a record, so it
+   becomes as real as one made here — renameable, deletable, and able to hold
+   settings. Returns whether anything changed, so callers can persist once. */
+function adoptTreeProfiles(){
+  const known = new Set(registeredProfiles());
+  let added = false;
+  for (const t of Object.values(store)){
+    const p = treeProfile(t);
+    if (p && !known.has(p)){ known.add(p); profileRecord(p, true); added = true; }
+  }
+  return added;
+}
 function activeProfile(){
-  const p = (prefs.profile || "").trim();
+  const p = cleanProfileName(profilesDoc.active);
   return p && allProfiles().includes(p) ? p : "";
 }
 function inProfile(t){
   const p = activeProfile();
   return !p || treeProfile(t) === p;
 }
-function setProfile(name){
-  prefs.profile = name;
-  savePrefs();
-  // switching context shows that context: land on its freshest tree
-  if (!running && name && cur() && treeProfile(cur()) !== name){
-    const latest = Object.values(store).filter(t => treeProfile(t) === name)
+function profileTrees(){ return Object.values(store).filter(inProfile); }
+
+async function persistProfilesDoc(){
+  profilesDoc.saved_at = new Date().toISOString();
+  try { localStorage.setItem(PROFILES_KEY, JSON.stringify(profilesDoc)); } catch {}
+  try { await api("profiles", {doc: profilesDoc}); setSync("ok"); }
+  catch (e){ if (e.message !== "logged out") setSync("err"); }
+}
+/* the server owns which profiles exist and which one you are in; the local
+   copy is a cache that makes the first paint instant. A newer server stamp
+   replaces it wholesale (the tutors rule), a newer local one is pushed. */
+async function syncProfilesFromServer(){
+  try {
+    const r = await fetch("/api/profiles");
+    if (!r.ok) return;
+    const {doc} = await r.json();
+    if (doc && Array.isArray(doc.profiles) &&
+        (doc.saved_at || "") > (profilesDoc.saved_at || "")){
+      // an investigation in flight is filing its turns under the profile it
+      // started in — the registry can update around it, but the selection
+      // holds until the run is done
+      const held = running ? profilesDoc.active : undefined;
+      profilesDoc = doc;
+      if (held !== undefined) profilesDoc.active = held;
+      try { localStorage.setItem(PROFILES_KEY, JSON.stringify(profilesDoc)); } catch {}
+      if (adoptTreeProfiles()) persistProfilesDoc();
+      applyProfileSettings();
+      // the server put us in a different interest: the conversation on screen
+      // may not be part of it any more, so land on one that is
+      if (!running && currentId && !inProfile(store[currentId] || {})){
+        const latest = profileTrees()
+          .sort((a, b) => (b.saved_at || b.created || "").localeCompare(a.saved_at || a.created || ""))[0];
+        currentId = latest ? latest.id : null;
+        currentNode = latest ? latest.root_id : null;
+      }
+      renderAll(true);
+    } else if (((profilesDoc.profiles || []).length || profilesDoc.active) &&
+               (!doc || (profilesDoc.saved_at || "") > (doc.saved_at || ""))){
+      await api("profiles", {doc: profilesDoc}).catch(() => {});
+    }
+  } catch {}
+}
+
+/* how an interest is read: its tutor style, learner level, and whether the
+   learner thinks out loud. These ride in the registry rather than the device
+   prefs so "history" keeps its plain-words tutor while "computer-science"
+   keeps its technical one — on every device, not just the one you set it on.
+   prefs still holds the LIVE values (every reader of prefs.tmode is
+   unchanged); switching profile saves the outgoing set and loads the
+   incoming one. */
+const PROFILE_SETTINGS = ["tmode", "think", "llevel"];
+function captureProfileSettings(name){
+  const rec = profileRecord(name, true);
+  if (!rec) return;
+  rec.settings = {};
+  for (const k of PROFILE_SETTINGS) rec.settings[k] = prefs[k];
+}
+function applyProfileSettings(){
+  const rec = profileRecord(activeProfile(), false);
+  const s = rec && rec.settings;
+  if (s) for (const k of PROFILE_SETTINGS) if (k in s) prefs[k] = s[k];
+  // the tutor list itself is profile-scoped, so it is rebuilt either way
+  buildModeSelect(); buildLevelSelect(); applyPrefs();
+}
+/* the panel changed a setting — it belongs to the profile you're in */
+function rememberProfileSettings(){
+  const name = activeProfile();
+  if (!name) return;
+  captureProfileSettings(name);
+  persistProfilesDoc();
+}
+
+/* switching context shows that context, and only that context: its freshest
+   conversation, or a clean slate when it hasn't got one yet. Leaving another
+   profile's tree on screen was how a "profile" could look like it had
+   quietly merged with the last one you were in. */
+function switchProfile(name){
+  const to = cleanProfileName(name);
+  const from = activeProfile();
+  if (to === from) return;
+  if (from) captureProfileSettings(from);
+  profilesDoc.active = to;
+  persistProfilesDoc();
+  applyProfileSettings();
+  if (!running && to && cur() && treeProfile(cur()) !== to){
+    const latest = Object.values(store).filter(t => treeProfile(t) === to)
       .sort((a, b) => (b.saved_at || b.created || "").localeCompare(a.saved_at || a.created || ""))[0];
-    if (latest){ openTree(latest.id); return; }
+    currentId = latest ? latest.id : null;
+    currentNode = latest ? latest.root_id : null;
   }
   renderAll(true);
 }
-/* rename an interest area everywhere: every tree filed under it is
-   restamped (so the new name syncs), and the active pref follows. Renaming
-   onto an existing profile merges the two. */
+function setProfile(name){ if (!running) switchProfile(name); }
+
+/* ＋ new — an interest area of its own, before it has a single conversation.
+   This is the whole point of the registry: creating one used to mean filing
+   whatever conversation happened to be open into it, which is not what
+   "new profile" means to anyone. It starts empty and selected, so the next
+   thing you ask is the first thing in it. */
+function createProfile(){
+  if (running) return;
+  const name = cleanProfileName(prompt("name the new profile (e.g. computer-science):"));
+  if (!name) return;
+  if (allProfiles().includes(name)){ setProfile(name); return; }   // already there
+  const from = activeProfile();
+  if (from) captureProfileSettings(from);        // leave it as you found it
+  captureProfileSettings(name);   // and start from what you're reading with now
+  profilesDoc.active = name;
+  persistProfilesDoc();
+  applyProfileSettings();
+  currentId = null; currentNode = null;   // a new interest starts empty
+  renderAll(true);
+  if (!matchMedia("(max-width:900px)").matches) $("topic").focus();
+}
+/* rename an interest everywhere at once: its record, every tree filed under
+   it (restamped so the new name syncs with the tree), its banked questions,
+   and its tutors. Renaming onto an existing profile merges the two. */
 function renameProfile(){
   if (running) return;
   const from = activeProfile();
   if (!from) return;
   const name = cleanProfileName(prompt(`rename profile "${from}" to:`, from));
   if (!name || name === from) return;
+  const rec = profileRecord(from, false);
+  if (rec){
+    if (profileRecord(name, false))   // merging: the target record stands
+      profilesDoc.profiles = profilesDoc.profiles.filter(p => p !== rec);
+    else rec.name = name;
+  } else profileRecord(name, true);
   for (const t of Object.values(store))
     if (treeProfile(t) === from){ t.profile = name; persistTree(t); }
   let movedQ = false;
   for (const q of globalQuestionsOf())
     if (cleanProfileName(q.profile) === from){ q.profile = name; movedQ = true; }
   if (movedQ) persistGlobalQDoc();
-  prefs.profile = name;
-  savePrefs();
+  let movedT = false;
+  for (const t of (tutorsDoc.tutors || []))
+    if (cleanProfileName(t.profile) === from){ t.profile = name; movedT = true; }
+  if (movedT) persistTutors();
+  profilesDoc.active = name;
+  persistProfilesDoc();
   renderAll(true);
 }
-window.renameProfile = renameProfile;
+/* ✕ delete — the interest area, not the conversations in it. Those are the
+   expensive artifact, so they come back out to "no profile" where they stay
+   findable; deleting a chip must never be a way to lose work by accident. */
+function deleteProfile(){
+  if (running) return;
+  const name = activeProfile();
+  if (!name) return;
+  const trees = Object.values(store).filter(t => treeProfile(t) === name);
+  const qs = globalQuestionsOf().filter(q => cleanProfileName(q.profile) === name);
+  const bits = [];
+  if (trees.length) bits.push(`${trees.length} conversation${trees.length === 1 ? "" : "s"}`);
+  if (qs.length) bits.push(`${qs.length} banked question${qs.length === 1 ? "" : "s"}`);
+  if (!confirm(`delete the profile "${name}"?\n\n` +
+      (bits.length ? `Its ${bits.join(" and ")} are kept — they move to "no profile".`
+                   : "Nothing is filed under it."))) return;
+  for (const t of trees){ t.profile = ""; persistTree(t); }
+  for (const q of qs) delete q.profile;
+  if (qs.length) persistGlobalQDoc();
+  let movedT = false;
+  for (const t of (tutorsDoc.tutors || []))
+    if (cleanProfileName(t.profile) === name){ delete t.profile; movedT = true; }
+  if (movedT) persistTutors();
+  profilesDoc.profiles = (profilesDoc.profiles || [])
+    .filter(p => cleanProfileName(p && p.name) !== name);
+  profilesDoc.active = "";
+  persistProfilesDoc();
+  applyProfileSettings();
+  renderAll(true);
+}
 function fileTreeUnder(value){
   const tree = cur();
   if (!tree) return;
   let name = cleanProfileName(value);
   if (value === "__new"){
-    name = cleanProfileName(prompt("name the new profile (e.g. computer-science):"));
+    name = cleanProfileName(prompt("file this conversation under a new profile:"));
     if (!name){ renderTreeList(); return; }   // reset the select
   }
   const wasActive = activeProfile();   // read before the refile changes it
   tree.profile = name;   // "" is an explicit "no profile" (it survives merges)
   persistTree(tree);
+  // a name typed here is a real profile too, not just a string on one tree
+  if (name && !registeredProfiles().includes(name)){
+    profileRecord(name, true);
+    persistProfilesDoc();
+  }
   // filing the open tree elsewhere while a profile is active would make it
   // vanish from the list mid-gesture — follow it instead
-  if (wasActive && name !== wasActive) prefs.profile = name;
-  savePrefs();
+  if (wasActive && name !== wasActive){ switchProfile(name); return; }
   renderAll(true);
 }
 window.setProfile = setProfile; window.fileTreeUnder = fileTreeUnder;
+window.renameProfile = renameProfile; window.deleteProfile = deleteProfile;
+window.createProfile = createProfile;
 function allocId(tree){ const i = tree.next; tree.next = i + 1; return i; }
 function makeNode(tree, label, parentId=null, branchTurn=null, focus=""){
   const node = {
@@ -4604,6 +4869,10 @@ async function syncFromServer(){
   }
   saveDirty();
   try { localStorage.setItem(LS_KEY, JSON.stringify(store)); } catch {}
+  // trees that arrived wearing a profile this device has never heard of (the
+  // CLI, an import, a device that made it first) turn that name into a real
+  // registered profile rather than a string only they can see
+  if (adoptTreeProfiles()) persistProfilesDoc();
   // a deep link pointing at a tree that only existed on the server can be
   // honoured now that the merge brought it in
   if (!hadHashTree && !running) applyHash();
@@ -4614,6 +4883,7 @@ async function syncFromServer(){
   }
   renderAll(true);
   if (dirty.size) flushDirty(); else setSync("ok");
+  syncProfilesFromServer();
   syncTutorsFromServer();
   syncGlobalQFromServer();
 }
@@ -5102,13 +5372,26 @@ function showActiveTree(){
 function renderTreeList(){
   const profiles = allProfiles();
   const active = activeProfile();
-  $("profilerow").innerHTML = !profiles.length ? "" :
-    [["", "all"], ...profiles.map(p => [p, p])].map(([val, lbl]) =>
-      `<button class="pchip${active === val ? " on" : ""}"` +
-      `${active === val ? ` aria-pressed="true"` : ` aria-pressed="false"`}` +
-      ` onclick="setProfile('${esc(val)}')">${esc(oneLine(lbl, 24))}</button>`).join("") +
-    (active ? `<button class="pchip" onclick="renameProfile()" title="rename this profile"` +
-              ` aria-label="rename profile ${esc(active)}">✎</button>` : "");
+  // ＋ is always here, even with no profiles yet: making one is its own
+  // action, never a side effect of filing whatever conversation is open
+  $("profilerow").innerHTML =
+    (profiles.length
+      ? [["", "all"], ...profiles.map(p => [p, p])].map(([val, lbl]) =>
+          `<button class="pchip${active === val ? " on" : ""}"` +
+          ` aria-pressed="${active === val}"` +
+          ` onclick="setProfile('${esc(val)}')">${esc(oneLine(lbl, 24))}</button>`).join("")
+      : "") +
+    (active
+      ? `<button class="pchip" onclick="renameProfile()" title="rename this profile everywhere"` +
+        ` aria-label="rename profile ${esc(active)}">✎</button>` +
+        `<button class="pchip" onclick="deleteProfile()"` +
+        ` title="delete this profile — its conversations move to no profile"` +
+        ` aria-label="delete profile ${esc(active)}">✕</button>`
+      : "") +
+    `<button class="pchip pnew" onclick="createProfile()"` +
+    ` title="a new interest area — it starts empty, and everything you do while` +
+    ` it's selected files under it" aria-label="new profile">` +
+    (profiles.length ? "＋" : "＋ profile") + `</button>`;
   const list = $("treelist");
   const stamp = (t) => t.saved_at || t.created || "";
   const items = Object.values(store).filter(inProfile)
@@ -5151,7 +5434,7 @@ function renderHeader(){
   $("treename").title = tree ? tree.root_topic : "";
   $("treecost").textContent = tree ? fmtCost(totalCost(tree)) : "";
   $("exportjson").disabled = $("exportmd").disabled = $("exporthtml").disabled = !tree;
-  $("saveall").disabled = !Object.keys(store).length;
+  $("saveall").disabled = !profileTrees().length;
   $("sheetbtn").disabled = !sheetHasContent();
   applyTitle();
 }
@@ -6981,7 +7264,6 @@ $("revbtn").onclick = () => openReview();
 /* streak, and quiz history. Everything is derived on open — no new    */
 /* state is stored, so it can never regress a synced tree.             */
 /* ------------------------------------------------------------------ */
-function profileTrees(){ return Object.values(store).filter(inProfile); }
 function dayDiff(day){          // whole days from today to a YYYY-MM-DD
   return Math.round((new Date(day + "T12:00") - new Date(localDay(0) + "T12:00")) / 86400000);
 }
@@ -9678,26 +9960,60 @@ async function importTreeFile(f){
         store[t.id] = t; markDirty(t.id); last = t;
       }
       if (!last) throw new Error("no trees in this backup");
+      // an empty profile carries no trees, so the bundle names them
+      // explicitly — otherwise restoring a backup silently loses them
+      let gained = false;
+      for (const p of (Array.isArray(d.profiles) ? d.profiles : []))
+        if (p && !registeredProfiles().includes(cleanProfileName(p.name))){
+          const rec = profileRecord(p.name, true);
+          if (rec && p.settings && typeof p.settings === "object") rec.settings = p.settings;
+          gained = true;
+        }
+      if (adoptTreeProfiles() || gained) persistProfilesDoc();
       currentId = last.id; currentNode = last.root_id;
       try { localStorage.setItem(LS_KEY, JSON.stringify(store)); }
       catch (e) { setError("could not save to browser storage: " + e.message); }
+      // importing while in a profile must not drop you somewhere you can't
+      // see what just arrived
+      if (!inProfile(last)){
+        profilesDoc.active = treeProfile(last);
+        persistProfilesDoc();
+        applyProfileSettings();
+      }
       renderAll(true);
       clearStatus();
       return;
     }
     if (d.format !== FORMAT) throw new Error("not a knowledge-tree file");
     if (!d.id) d.id = randHex(12);
+    // a conversation arriving with no filing of its own joins the interest
+    // you're in — otherwise it imports straight out of the view you're
+    // looking at and reads as an import that did nothing
+    if (typeof d.profile !== "string" && activeProfile()) d.profile = activeProfile();
     store[d.id] = d; currentId = d.id; currentNode = d.root_id;
+    if (adoptTreeProfiles()) persistProfilesDoc();
+    if (!inProfile(d)){
+      profilesDoc.active = treeProfile(d);
+      persistProfilesDoc();
+      applyProfileSettings();
+    }
     saveStore(); renderAll(true);
     clearStatus();
   } catch (err){ setError("import failed: " + err.message); }
 }
+/* the backup is the profile you're in — the same scope as every other view,
+   so "save all" from inside an interest hands you that interest and not a
+   pile of everything else. On "all trees" it is still the lot. The registry
+   rides along, or an empty profile would not survive the round trip. */
 $("saveall").onclick = () => {
-  const trees = Object.values(store);
+  const active = activeProfile();
+  const trees = profileTrees();
   if (!trees.length) return;
-  download(`learn-with-claude-backup-${localDay(0)}.json`,
-           JSON.stringify({format: FOREST_FORMAT, version: 1,
-                           saved_at: nowIso(), trees}, null, 1),
+  const profiles = (profilesDoc.profiles || [])
+    .filter(p => !active || cleanProfileName(p && p.name) === active);
+  download(`learn-with-claude-${slug(active || "backup")}-${localDay(0)}.json`,
+           JSON.stringify({format: FOREST_FORMAT, version: 1, saved_at: nowIso(),
+                           profile: active || undefined, profiles, trees}, null, 1),
            "application/json");
 };
 $("importbtn").onclick = () => $("importfile").click();
@@ -10050,14 +10366,26 @@ buildPanel();
 buildModeSelect();
 buildLevelSelect();
 wireLocalSettings();
+// the active profile carries its own tutor style and learner level, so the
+// panel has to be built from the profile before the prefs are applied to it
+applyProfileSettings();
 applyPrefs();
 renderAll(true);
 boot();
 /* another tab of this browser changed the trees — pick the change up */
 window.addEventListener("storage", (e) => {
-  if (e.key === LS_KEY && !running){
+  if (running) return;
+  if (e.key === LS_KEY){
     store = loadStore();
     if (currentId && !store[currentId]){ currentId = null; currentNode = null; }
+    renderAll(true);
+  }
+  // …or switched profile. The profile is the app's whole context, so a tab
+  // left on the old one is showing a view of something you have left
+  if (e.key === PROFILES_KEY){
+    profilesDoc = loadProfilesDoc();
+    if (currentId && !inProfile(store[currentId] || {})){ currentId = null; currentNode = null; }
+    applyProfileSettings();
     renderAll(true);
   }
 });
