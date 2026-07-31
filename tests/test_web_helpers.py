@@ -349,6 +349,206 @@ def test_handle_teachback():
     print("ok  teachback handler")
 
 
+def test_handle_exam():
+    import json
+
+    from learn_with_claude.webapi import ApiError, handle_exam
+
+    paper = {"questions": [
+        {"kind": "mechanism", "command": "Explain",
+         "q": "Explain why lookup time degrades as a hash table fills up.",
+         "points": ["links the load factor to collision probability",
+                    "explains that probe sequences lengthen"],
+         "terms": ["load factor", "collision", "probing"]},
+        {"kind": "wharrgarbl", "command": "assess",     # unknown kind -> dropped
+         "q": "Assess the claim that a bigger table is always faster.",
+         "points": ["notes the memory cost"], "terms": ["cache locality"]},
+        {"q": "too short"},                             # under the length floor
+        {"kind": "transfer", "q": "A cache keeps 8 slots and never resizes. Predict "
+                                  "what happens as the tenth key arrives, and why.",
+         "points": ["applies eviction or chaining"], "terms": ["eviction"]},
+        {"not": "a dict"},
+    ]}
+    seen = {}
+
+    def stub(system, messages, role, **kw):
+        seen["system"], seen["msg"], seen["role"] = system, messages[0]["content"], role
+        return json.dumps(paper), 0.04
+
+    r = handle_exam({"root_topic": "hash tables", "label": "collisions",
+                     "material": "Q: what is it\nA: an array plus a hash function",
+                     "count": 5}, stub)
+    # the exam runs on its own role so a backend can point it at a stronger model
+    assert seen["role"] == "examiner"
+    assert "syllabus" in seen["msg"] and "an array plus a hash function" in seen["msg"]
+    assert "5 questions" in seen["msg"]
+    # the paper never quotes the tutorial, and says so in its own instructions
+    assert "NEVER quote the transcript" in seen["system"]
+    assert r["cost"] == 0.04
+    assert len(r["questions"]) == 3                 # the short one and the non-dict go
+    q0 = r["questions"][0]
+    assert q0["marks"] == 10 and q0["kind"] == "mechanism" and q0["command"] == "explain"
+    assert q0["terms"] == ["load factor", "collision", "probing"]
+    assert r["questions"][1]["kind"] == ""          # unrecognised kind is dropped, not kept
+    # the count is clamped, and it caps how many questions come back
+    r2 = handle_exam({"material": "m", "count": 99}, stub)
+    assert len(r2["questions"]) == 3                # clamped to 8, model returned 3 usable
+    assert "8 questions" in seen["msg"]
+    r3 = handle_exam({"material": "m", "count": 1}, stub)
+    assert "3 questions" in seen["msg"] and len(r3["questions"]) == 3
+
+    # no material is a 400; an unusable paper is a 502
+    try:
+        handle_exam({"material": "  "}, stub)
+        raise AssertionError("expected ApiError")
+    except ApiError as e:
+        assert e.status == 400
+    try:
+        handle_exam({"material": "m"}, lambda *a, **k: ("not json", 0.0))
+        raise AssertionError("expected ApiError")
+    except ApiError as e:
+        assert e.status == 502
+    print("ok  exam paper handler")
+
+
+def test_handle_mark_exam():
+    import json
+
+    from learn_with_claude.webapi import ApiError, handle_mark_exam
+
+    questions = [
+        {"q": "Explain why lookup degrades as the table fills.",
+         "points": ["links load factor to collisions", "probe sequences lengthen"],
+         "terms": ["load factor"], "marks": 10},
+        {"q": "Assess the claim that a bigger table is always faster.",
+         "points": ["notes the memory cost"], "terms": ["cache locality"], "marks": 10},
+    ]
+    marked = {"results": [
+        {"marks": 8, "earned": "You were right that the slot comes from the key. That is the core of it.",
+         "improve": "You stopped short of clustering. A full answer says probes lengthen.",
+         "hit": ["links load factor to collisions"], "missed": ["probe sequences lengthen"]},
+        {"marks": 2, "earned": "Not much to go on here.",
+         "improve": "The memory cost is what the claim ignores.",
+         "hit": [], "missed": ["notes the memory cost"]},
+    ], "overall": "The mechanism is solid. Consequences are where you keep stopping."}
+    seen = {}
+
+    def stub(system, messages, role, **kw):
+        seen["system"], seen["msg"], seen["role"] = system, messages[0]["content"], role
+        return json.dumps(marked), 0.09
+
+    r = handle_mark_exam({"root_topic": "hash tables", "label": "collisions",
+                          "material": "Q: what is it\nA: an array plus a hash function",
+                          "questions": questions,
+                          "answers": ["it gets fuller so more clashes", ""]}, stub)
+    assert seen["role"] == "examiner"
+    # the marker sees the scheme, the material, and which answer was left blank
+    assert "Mark scheme" in seen["msg"] and "links load factor to collisions" in seen["msg"]
+    assert "an array plus a hash function" in seen["msg"]
+    assert "it gets fuller so more clashes" in seen["msg"]
+    assert "(left blank)" in seen["msg"]
+    # both credit dimensions are actually in the examiner's instructions
+    assert "CONTENT" in seen["system"] and "PRECISION" in seen["system"]
+    assert r["cost"] == 0.09
+    assert r["total"] == 10 and r["max"] == 20      # arithmetic is ours, not the model's
+    assert len(r["results"]) == 2
+    assert r["results"][0]["marks"] == 8
+    assert r["results"][0]["hit"] == ["links load factor to collisions"]
+    assert r["results"][0]["missed"] == ["probe sequences lengthen"]
+    # feedback is sentence-spaced like every other block of prose in the app
+    assert "\n\n" in r["results"][0]["earned"]
+    assert r["overall"].startswith("The mechanism is solid.")
+
+    # marks are clamped and a missing/garbage result scores 0 rather than
+    # throwing the whole script away
+    wild = {"results": [{"marks": 47, "earned": "x"}, {"marks": "??", "improve": "y"}],
+            "overall": ""}
+    r2 = handle_mark_exam({"material": "m", "questions": questions, "answers": ["a", "b"]},
+                          lambda *a, **k: (json.dumps(wild), 0.0))
+    assert [x["marks"] for x in r2["results"]] == [10, 0]
+    assert r2["total"] == 10 and r2["max"] == 20
+    # fewer results than questions still returns one entry per question
+    short = {"results": [{"marks": 5, "earned": "only one came back"}]}
+    r3 = handle_mark_exam({"material": "m", "questions": questions, "answers": ["a", "b"]},
+                          lambda *a, **k: (json.dumps(short), 0.0))
+    assert len(r3["results"]) == 2 and r3["results"][1]["marks"] == 0
+
+    # guards: no material, no questions, an entirely blank script, junk output
+    for bad in ({"questions": questions, "answers": ["a"]},
+                {"material": "m", "questions": [], "answers": []},
+                {"material": "m", "questions": questions, "answers": ["", "  "]}):
+        try:
+            handle_mark_exam(bad, stub)
+            raise AssertionError("expected ApiError")
+        except ApiError as e:
+            assert e.status == 400
+    try:
+        handle_mark_exam({"material": "m", "questions": questions, "answers": ["a", "b"]},
+                         lambda *a, **k: ("not json", 0.0))
+        raise AssertionError("expected ApiError")
+    except ApiError as e:
+        assert e.status == 502
+    print("ok  exam marking handler")
+
+
+def test_exam_exports():
+    """A marked paper survives a .know.json round-trip and reaches both
+    exports; an unsubmitted one is work in progress and reaches neither."""
+    d = {
+        "format": "learn-with-claude/knowledge-tree", "version": 1, "id": "t2",
+        "root_topic": "hash tables", "created": "2026-07-31", "root_id": 1, "next": 2,
+        "nodes": {"1": {"id": 1, "label": "collisions", "children": [],
+                        "turns": [{"turn": 1, "action": "q", "tutor": "a"}]}},
+        "exams": [
+            {"id": "e1", "node": 1, "made": "2026-07-30T09:00:00Z",
+             "submitted": "2026-07-30T10:00:00Z", "total": 8, "max": 20,
+             "overall": "The mechanism is solid.",
+             "questions": [{"q": "Explain why lookup degrades.", "marks": 10},
+                           {"q": "Assess the bigger-is-faster claim.", "marks": 10}],
+             "answers": ["more clashes as it fills", ""],
+             "results": [{"marks": 6, "earned": "You had the clash.",
+                          "improve": "Clustering was the missing step."},
+                         {"marks": 2, "earned": "Nothing written.",
+                          "improve": "The memory cost is what it ignores."}]},
+            {"id": "e2", "node": 1, "made": "2026-07-31T09:00:00Z",
+             "questions": [{"q": "A paper still being written.", "marks": 10}],
+             "answers": ["half an answer"]},
+            {"id": "e3", "node": 99, "submitted": "2026-07-31T09:00:00Z",
+             "questions": [{"q": "An orphaned paper."}], "results": [{"marks": 1}]},
+            "not a dict",
+        ],
+    }
+    kb = KnowledgeTree.from_dict(d)
+    assert kb.to_dict()["exams"] == d["exams"]        # extras survive the CLI untouched
+    exams = kb.exam_map()
+    assert list(exams) == [1] and len(exams[1]) == 1   # unsubmitted + orphan dropped
+    rows = KnowledgeTree.exam_rows(exams[1][0])
+    assert len(rows) == 2 and rows[1][1] == ""         # the blank answer keeps its slot
+
+    md = kb.to_markdown()
+    assert "## Exams" in md and "collisions — 8/20" in md
+    assert "**Q1 — 6/10.** Explain why lookup degrades." in md
+    assert "> ✍ more clashes as it fills" in md
+    assert "(left blank)" in md                        # the unanswered question
+    assert "Clustering was the missing step." in md
+    assert "The mechanism is solid." in md
+    assert "A paper still being written." not in md    # not submitted
+    assert "An orphaned paper." not in md              # node was pruned
+
+    html = tree_to_html(kb)
+    assert "Exams" in html and "8/20" in html
+    assert "Explain why lookup degrades." in html
+    assert "Clustering was the missing step." in html
+    assert "A paper still being written." not in html
+
+    # no exams at all -> no key in the file, no section in either export
+    d2 = dict(d); d2.pop("exams")
+    kb2 = KnowledgeTree.from_dict(d2)
+    assert "exams" not in kb2.to_dict()
+    assert "## Exams" not in kb2.to_markdown() and "✍ Exams" not in tree_to_html(kb2)
+    print("ok  exam exports (round-trip, markdown, html)")
+
+
 def test_handle_survey():
     import json
 
@@ -722,6 +922,9 @@ if __name__ == "__main__":
     test_message_builders()
     test_handle_interview()
     test_handle_teachback()
+    test_handle_exam()
+    test_handle_mark_exam()
+    test_exam_exports()
     test_handle_survey()
     test_source_threading()
     test_learner_brief_threading()
