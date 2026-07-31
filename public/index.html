@@ -1879,7 +1879,7 @@
     <label for="lssession">carry a past Copilot session into the tutor's memory</label>
     <div class="newrow">
       <input id="lssession" type="text" spellcheck="false" autocomplete="off"
-             placeholder="session id from “copilot --resume …” (blank for none)" style="flex:1">
+             placeholder="session id, or the name you gave it with /rename" style="flex:1">
       <button id="lssessionclear" class="ghost" title="forget that session">✕</button>
     </div>
     <div id="lssessionpick"></div>
@@ -1891,6 +1891,13 @@
     want a character cap). Its transcript is read, never written to: your
     session is left exactly as you left it. Tutor only; the simulated learner
     never sees it.</p>
+    <p class="hint"><b>You don't have to leave the session to pick it.</b> The
+    CLI writes each turn out as it happens, so a session you're in right now is
+    already in the list above — newest first. To grab it by hand instead, run
+    <code>/session</code> inside it, or type <code>/rename something</code>
+    there and put that name in the box. An anchored session that's still going
+    keeps up: each tutor reply re-reads it, so what you covered a minute ago is
+    already known here.</p>
 
     <label>MCP tools the tutor can call before answering</label>
     <div id="mcplist"></div>
@@ -2704,16 +2711,28 @@ function sessionAgo(secs){
 function sessionSize(chars){
   return chars >= 1000 ? `${Math.round(chars / 1000)}k chars` : `${chars} chars`;
 }
+function sessionFolder(cwd){
+  const parts = String(cwd || "").replace(/[\\/]+$/, "").split(/[\\/]/);
+  return parts[parts.length - 1] || "";
+}
+/* what to call a session in the list: the name you gave it with /rename if
+   there is one (that's also what you can type in the box), otherwise the
+   question it opened with */
+function sessionLabel(s){
+  return s.name || oneLine(s.title || s.id, 70);
+}
 function renderSessionPick(){
   const list = localSettingsDoc.available_sessions || [];
   const chosen = ($("lssession").value || "").trim().toLowerCase();
   $("lssessionpick").innerHTML = !list.length ? "" : list.map(s => {
-    const on = chosen && s.id.startsWith(chosen);
+    const on = chosen && (s.id.startsWith(chosen) || (s.name || "").toLowerCase() === chosen);
+    const folder = sessionFolder(s.cwd);
     return `<div class="sessrow${on ? " on" : ""}" role="button" tabindex="0"` +
-      ` data-id="${esc(s.id)}" title="${esc(s.id)}">` +
+      ` data-id="${esc(s.name || s.id)}" title="${esc(s.id)}${folder ? " · " + esc(s.cwd) : ""}">` +
       `<span class="sesswhen">${esc(sessionAgo(s.when))} · ${s.messages} msg` +
-      `${s.chars ? " · " + esc(sessionSize(s.chars)) : ""}</span>` +
-      `<span class="sesstitle">${esc(oneLine(s.title || s.id, 70))}</span></div>`;
+      `${s.chars ? " · " + esc(sessionSize(s.chars)) : ""}` +
+      `${folder ? " · " + esc(oneLine(folder, 18)) : ""}</span>` +
+      `<span class="sesstitle">${s.name ? "✎ " : ""}${esc(sessionLabel(s))}</span></div>`;
   }).join("");
   updateSessionMeta();
 }
@@ -2731,12 +2750,14 @@ function updateSessionMeta(){
   const info = localSettingsDoc.session_info;
   const el = $("lssessionmeta");
   if (!typed){ el.textContent = "no session — the tutor starts fresh, as usual."; return; }
-  const s = (info && typed.toLowerCase() === (info.id || "").toLowerCase()) ? info
+  const low = typed.toLowerCase();
+  const s = (info && low === (info.id || "").toLowerCase()) ? info
     : (localSettingsDoc.available_sessions || [])
-        .find(x => x.id.toLowerCase().startsWith(typed.toLowerCase()));
+        .find(x => x.id.toLowerCase().startsWith(low) || (x.name || "").toLowerCase() === low);
   el.textContent = s
     ? `✓ ${sessionExtent(s)}` + (s.title ? ` — “${oneLine(s.title, 50)}”` : "")
-    : "checked when you save — a unique prefix of the id is enough.";
+    : "checked when you save — an id, a unique prefix of one, or the name you " +
+      "gave the session with /rename.";
 }
 function pickSession(id){
   $("lssession").value = id;

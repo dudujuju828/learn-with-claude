@@ -370,10 +370,27 @@ def test_global_question_store():
     print("ok  global question store (round-trip, answered fields, validation)")
 
 
-def _fake_session(root: Path, session_id: str, exchanges, *, noise=True):
-    """Write a session-state dir the way the Copilot CLI lays one out."""
+def _fake_session(root: Path, session_id: str, exchanges, *, noise=True,
+                  name=None, cwd=r"C:\work\thing"):
+    """Write a session-state dir the way the Copilot CLI lays one out.
+
+    `name` mirrors what /rename does: it sets the name AND flips user_named.
+    Without it the CLI still writes a name — the first prompt, as a block
+    scalar — which is exactly what must NOT count as a name here.
+    """
     d = root / session_id
     d.mkdir(parents=True, exist_ok=True)
+    auto = (exchanges[0][0] if exchanges else "").splitlines() or [""]
+    ws = [f"id: {session_id}", f"cwd: {cwd}", "client_name: github/cli"]
+    if name is None:
+        ws.append("name: |-")
+        ws += [f"  {line}" for line in auto]
+        ws.append("user_named: false")
+    else:
+        ws += [f"name: {name}", "user_named: true"]
+    ws += ["summary_count: 0", "created_at: 2026-07-30T09:00:00.000Z",
+           "updated_at: 2026-07-30T09:30:00.000Z"]
+    (d / "workspace.yaml").write_text("\n".join(ws) + "\n", encoding="utf-8")
     lines = []
     if noise:   # the events a real session is mostly made of, all ignorable
         lines.append({"type": "session.info", "data": {"message": "configuration"}})
@@ -459,6 +476,85 @@ def test_session_reading():
         finally:
             os.environ.pop("COPILOT_HOME", None)
     print("ok  copilot session reading (parse, resolve, filter, budget)")
+
+
+def test_session_names():
+    """/rename is the one handle you can get without leaving the session, so
+    a named session has to be usable by that name."""
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        os.environ["COPILOT_HOME"] = str(home)
+        try:
+            root = home / "session-state"
+            named = "11111111-aaaa-bbbb-cccc-dddddddddddd"
+            plain = "22222222-aaaa-bbbb-cccc-dddddddddddd"
+            _fake_session(root, named, [("how does the scheduler back off?", "exponentially")],
+                          name="parser-work", cwd=r"C:\work\compiler")
+            _fake_session(root, plain, [("unrelated question", "unrelated answer")])
+
+            ws = copilot_sessions._workspace(named)
+            assert ws["id"] == named and ws["user_named"] is True     # bools, not strings
+            assert ws["cwd"] == r"C:\work\compiler"
+
+            assert copilot_sessions._label(named) == ("parser-work", r"C:\work\compiler")
+            # an auto-generated name is the first prompt, and must not count
+            assert copilot_sessions._label(plain)[0] == ""
+
+            assert copilot_sessions.resolve("parser-work") == named
+            assert copilot_sessions.resolve("PARSER-WORK") == named   # case-insensitive
+            assert copilot_sessions.resolve("parser") is None         # exact only, like the CLI
+            assert copilot_sessions.resolve("11111111") == named      # id prefix still works
+            assert copilot_sessions.resolve("unrelated question") is None
+
+            # a name gets saved as the *id*, so renaming later can't break it
+            clean = local_settings.sanitize({"tutor_session": "parser-work"}, strict=True)
+            assert clean["tutor_session"] == named, clean
+
+            info = copilot_sessions.describe(named)
+            assert info["name"] == "parser-work" and info["cwd"] == r"C:\work\compiler"
+            assert copilot_sessions.describe(plain)["name"] == ""
+
+            # an ambiguous id prefix is refused rather than guessed
+            _fake_session(root, "11111111-eeee-ffff-0000-111111111111", [("q", "a")])
+            assert copilot_sessions.resolve("11111111") is None
+        finally:
+            os.environ.pop("COPILOT_HOME", None)
+    print("ok  session names (/rename), cwd labels, ambiguous prefixes")
+
+
+def test_session_memory_tracks_a_live_session():
+    """The CLI flushes each turn as it happens, so an anchored session that is
+    still running must be picked up as it grows — not frozen at first read."""
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        os.environ["COPILOT_HOME"] = str(home)
+        try:
+            sid = "33333333-aaaa-bbbb-cccc-dddddddddddd"
+            root = home / "session-state"
+            _fake_session(root, sid, [("what's the retry policy?", "three attempts")],
+                          noise=False)
+            copilot_backend.configure(
+                local_settings.sanitize({"tutor_session": sid}, strict=True))
+            copilot_backend._memory_cache["stamp"] = None
+            assert "three attempts" in copilot_backend.grounding_text()
+
+            # the session keeps going in another terminal
+            events = (root / sid / "events.jsonl")
+            events.write_text(
+                events.read_text(encoding="utf-8") +
+                json.dumps({"type": "user.message", "data": {"content": "and after that?"}}) + "\n" +
+                json.dumps({"type": "assistant.message",
+                            "data": {"content": "it lands in the DLQ called HALIBUT"}}) + "\n",
+                encoding="utf-8")
+
+            grounding = copilot_backend.grounding_text()
+            assert "HALIBUT" in grounding, "a growing session must be re-read"
+            assert "three attempts" in grounding
+        finally:
+            os.environ.pop("COPILOT_HOME", None)
+            copilot_backend.configure(local_settings.default())
+            copilot_backend._memory_cache["stamp"] = None
+    print("ok  memory keeps up with a session that's still running")
 
 
 def test_tutor_session_setting():
@@ -552,6 +648,8 @@ if __name__ == "__main__":
     test_tutor_store()
     test_global_question_store()
     test_session_reading()
+    test_session_names()
+    test_session_memory_tracks_a_live_session()
     test_tutor_session_setting()
     test_session_memory_is_tutor_only()
     print("\nall green")

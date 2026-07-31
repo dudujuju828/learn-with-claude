@@ -69,6 +69,21 @@ re-explaining it. Tutor only — the learner and glossary personas never see it.
   its own record of working with this learner: treat it as established, let it
   set the level, never mention the session or recap it, and never let it
   displace the actual question.
+- **You never need to leave the session to anchor it.** Slash commands are
+  interactive-only (`copilot -p "/session"` just treats it as a prompt), but
+  the CLI flushes `events.jsonl` per turn — watched live, it went 0 → 12,676 →
+  20,571 bytes while the process was still running — so a session in progress
+  is already in the picker, and because the memory is cached on (size, mtime)
+  it *keeps up* as that session grows. Anchor a session you're still working
+  in and the tutor tracks it.
+- **`/rename` names resolve too.** Each session dir has a `workspace.yaml`
+  with `id`, `cwd`, `name`, and `user_named`; `--resume` accepts a name, so
+  `resolve()` now does as well (exact, case-insensitive, and only for names a
+  human actually set — the auto-generated one is just the first prompt). That
+  makes the without-exiting workflow one step: `/rename parser-work` in the
+  live session, type `parser-work` here. The *id* is what gets stored, so
+  renaming the session later can't break the anchor. The YAML is hand-parsed
+  (flat keys plus the odd block scalar) to keep the package stdlib-only.
 - **The picker hides the app's own calls.** Every model call this app makes is
   itself a Copilot session, and on a machine that has run `learn --web` for a
   while they vastly outnumber the real ones — so sessions whose first message

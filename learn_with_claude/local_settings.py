@@ -124,18 +124,20 @@ def sanitize(doc, *, strict: bool = False) -> dict:
             out["code_dir"] = str(p.resolve())
 
     # the Copilot session whose transcript seeds the tutor's memory. Saving
-    # resolves a pasted prefix to the full id (and rejects one that matches
-    # nothing or several); loading keeps whatever is on disk even if that
-    # session has since been deleted — the panel reports it as missing and the
-    # tutor simply gets no memory, which beats refusing to start.
+    # resolves an id prefix or a /rename'd name to the full id, and always
+    # stores the id — so renaming the session later can't break the anchor.
+    # Loading keeps whatever is on disk even if that session has since been
+    # deleted: the panel reports it as missing and the tutor simply gets no
+    # memory, which beats refusing to start.
     session = str(doc.get("tutor_session") or "").strip().lower()
     if session:
         if strict:
             full = copilot_sessions.resolve(session)
             if not full:
                 raise ValueError(
-                    f'no Copilot session matches "{session}" — paste the id it '
-                    "printed when you left the session (a unique prefix is fine)"
+                    f'no Copilot session matches "{session}" — use its id (a '
+                    "unique prefix is fine), or the name you gave it with "
+                    "/rename inside the session"
                 )
             out["tutor_session"] = full
         elif copilot_sessions.SESSION_REF.match(session):

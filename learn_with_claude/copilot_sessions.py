@@ -62,6 +62,54 @@ def _events_path(session_id: str) -> Path:
     return session_root() / session_id / "events.jsonl"
 
 
+def _workspace(session_id: str) -> dict:
+    """The handful of fields we want out of a session's workspace.yaml:
+    ``name`` (auto-generated from the first prompt, or whatever ``/rename``
+    set), ``user_named`` (true once someone renamed it deliberately), and
+    ``cwd`` (where the session was working — often the clearest label of all).
+
+    Hand-parsed rather than via PyYAML: this package is stdlib-only, and the
+    file is flat ``key: value`` lines with the occasional block scalar. Any
+    shape we don't recognise is skipped, same as everywhere else here.
+    """
+    path = session_root() / session_id / "workspace.yaml"
+    out: dict = {}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return out
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        i += 1
+        if not line or line[:1].isspace() or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key, value = key.strip(), value.strip()
+        if value in ("|", "|-", "|+", ">", ">-"):     # block scalar: take the indented run
+            block = []
+            while i < len(lines) and (not lines[i].strip() or lines[i][:1].isspace()):
+                block.append(lines[i].strip())
+                i += 1
+            value = "\n".join(block).strip()
+        elif len(value) > 1 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        if value in ("true", "false"):
+            out[key] = value == "true"
+        else:
+            out[key] = value
+    return out
+
+
+def _label(session_id: str) -> "tuple[str, str]":
+    """(name, cwd) for a session — name only when someone actually named it
+    with /rename, since the auto-generated one is just the first prompt and
+    the picker already shows that."""
+    ws = _workspace(session_id)
+    name = str(ws.get("name") or "").strip() if ws.get("user_named") is True else ""
+    return " ".join(name.split())[:80], str(ws.get("cwd") or "").strip()
+
+
 def _messages(path: Path) -> list:
     """[{role, text}] for the human-readable turns of one session.
 
@@ -101,21 +149,41 @@ def _messages(path: Path) -> list:
 
 
 def resolve(ref: str) -> "str | None":
-    """The full session id for `ref` — an exact id, or a prefix that matches
-    exactly one session. None if it matches nothing or is ambiguous."""
-    ref = (ref or "").strip().lower()
-    if not ref or not SESSION_REF.match(ref):
+    """The full session id for `ref` — an exact id, an id prefix, or the name
+    you gave a session with ``/rename`` (exact, case-insensitive). None if it
+    matches nothing or is ambiguous.
+
+    Names matter because they're the only handle you can get **without
+    leaving the session**: `/rename parser-work` inside a live session, then
+    type `parser-work` here. Same three forms `copilot --resume` accepts.
+    """
+    ref = (ref or "").strip()
+    if not ref:
         return None
     root = session_root()
-    if (root / ref / "events.jsonl").is_file():
-        return ref
+    lower = ref.lower()
+
+    if SESSION_REF.match(lower):
+        if (root / lower / "events.jsonl").is_file():
+            return lower
+        try:
+            hits = [d.name for d in root.iterdir()
+                    if d.is_dir() and d.name.lower().startswith(lower)
+                    and (d / "events.jsonl").is_file()]
+        except OSError:
+            return None
+        if len(hits) == 1:
+            return hits[0]
+        if hits:
+            return None       # ambiguous prefix — don't guess between sessions
+
     try:
-        hits = [d.name for d in root.iterdir()
-                if d.is_dir() and d.name.lower().startswith(ref)
-                and (d / "events.jsonl").is_file()]
+        named = [d.name for d in root.iterdir()
+                 if d.is_dir() and (d / "events.jsonl").is_file()
+                 and _label(d.name)[0].lower() == lower]
     except OSError:
         return None
-    return hits[0] if len(hits) == 1 else None
+    return named[0] if len(named) == 1 else None
 
 
 def describe(session_id: str) -> "dict | None":
@@ -132,11 +200,15 @@ def describe(session_id: str) -> "dict | None":
     except OSError:
         when = 0
     chars = sum(len(m["text"]) + len(m["role"]) + 4 for m in msgs)
+    name, cwd = _label(session_id)
     return {
         "id": session_id,
         "when": when,
         "messages": len(msgs),
         "chars": chars,
+        "name": name,                      # only if you /rename'd it
+        "cwd": cwd,                        # where the session was working
+
         # a cap is opt-in, and when one bites we say so instead of quietly
         # handing the tutor half a conversation
         "trimmed": bool(TRANSCRIPT_BUDGET and chars > TRANSCRIPT_BUDGET),

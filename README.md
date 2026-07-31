@@ -335,8 +335,13 @@ How it differs from the Vercel deployment:
   assistant.
 - **The tutor can start from a past Copilot session.** When you leave an
   interactive `copilot` session it prints the id you'd resume it with; paste
-  that into **⚙ local settings** (a unique prefix is enough, or pick it from
-  the list of recent sessions right there) and everything you worked through
+  that into **⚙ local settings** (a unique prefix is enough, or the name you
+  gave it with `/rename`, or just pick it from the list of recent sessions
+  right there — labelled with the name, folder, size, and opening question).
+  **You don't have to leave the session first:** the CLI writes each turn out
+  as it happens, so a session you're in right now is already in that list, and
+  an anchored session that's still going keeps up — every tutor reply re-reads
+  it, so what you covered a minute ago is already known here and everything you worked through
   in it — a codebase you explored, a design you argued out — is already known
   to the tutor, so you can ask about it here without setting it up again. The
   **whole session** goes over, not a summary of it — the panel tells you its
