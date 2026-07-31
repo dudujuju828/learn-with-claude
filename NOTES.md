@@ -5,6 +5,48 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 50 — 💬 ask a question about the passage you selected
+
+*(user-requested: "the ability to highlight then send a question which
+references the text that you highlighted, so that the tutor can respond in the
+context of what you are learning".)*
+
+### What it is
+Select any sentence in an answer, press **💬 ask**, and a bar opens with that
+passage quoted above it. Type your question; it goes to the tutor with the
+passage attached, so the answer is about *that claim* rather than the topic in
+general.
+
+### Design notes
+- **It fills a real gap between two things that already existed.** `⛏ dig`
+  asks a *fixed* question about a selection; "ask the tutor yourself" asks
+  *your* question but anchored to nothing narrower than the node. Neither lets
+  you ask your own question about a specific sentence, which is what you
+  actually want mid-read.
+- **The quote is its own field, not glued into the question.** `rec.quote`
+  holds the passage; `rec.action` stays the question you literally typed.
+  Only the model sees them combined (`askedWithQuote`, in a `<<< >>>` block).
+  That keeps the transcript, the digests that seed branches, search, and the
+  exports all working with a clean question, and lets the passage render as a
+  quotation above it rather than as noise inside it.
+- **It reuses the ❓ capture bar rather than adding a dialog.** That bar exists
+  precisely to take a question without dimming the page or losing your scroll
+  position — exactly right here too. It gained a third mode (`ask`) alongside
+  global and local banking; `saveQCap` branches once at the top, since ask
+  doesn't bank anything, it sends.
+- **Turn fields survive the CLI round trip already** (`Node(**…)` filters
+  node-level keys; turns pass through as raw dicts), so `quote` travels in
+  `.know.json` with no Python change beyond rendering it — a `> ❝ About: …`
+  line in the markdown export and a quoted block in the HTML one.
+- Verified with a real Copilot call: quoting *"Lookup is average O(1) because
+  the slot is computed, not searched"* and asking *"so when does that stop
+  being true?"* got collisions, load factor, and degradation to O(n) — the
+  answer to that claim, not a re-definition of hash tables. Plus 19 browser
+  assertions over the whole flow, and a check that the chip's seventh button
+  still wraps to fit a 390px phone (666px natural, 58px in two rows).
+
+---
+
 ## Feature 49 — profiles actually contain everything
 
 *(user-requested: "ensure that profiles fully encapsulate all aspects of the

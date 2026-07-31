@@ -1279,6 +1279,17 @@
   #qcap .qcaprow{display:flex; gap:.5rem}
   #qcap .qcaprow input{flex:1}
   #qcap .qcapok{display:flex; align-items:center; gap:.4rem; flex-wrap:wrap; font-size:var(--t-md)}
+  #qcap .qcapquote{
+    font-size:var(--t-sm); color:var(--muted); font-style:italic;
+    border-left:3px solid var(--term); padding:.1rem 0 .1rem .5rem;
+    margin-bottom:.45rem; max-height:3.4em; overflow:hidden;
+  }
+  /* the passage a question was asked about, above the question itself */
+  .block.action .askquote{
+    font-size:var(--t-sm); color:var(--muted); font-style:italic;
+    border-left:3px solid var(--term); padding:.1rem 0 .1rem .55rem;
+    margin:0 0 .45rem;
+  }
   @media (max-width:900px){
     #qcap{bottom:calc(3.8rem + env(safe-area-inset-bottom))}
   }
@@ -1616,6 +1627,12 @@
   <p><b>ask the tutor yourself</b> — the box under any conversation sends your
   own question with the same context. It's recorded as your turn (🧑), and the
   simulated learner never sees it.</p>
+  <p><b>💬 ask about a passage</b> — select any sentence in an answer and the
+  chip's <b>💬 ask</b> opens a bar with that passage quoted above it. Type
+  your question and it goes to the tutor <i>with</i> the passage, so the reply
+  is about that exact claim rather than the topic at large. It's saved as your
+  turn (🧑) with the passage above it, in the transcript and in both exports.
+  <b>⛏ dig</b> is the same idea with the question already written for you.</p>
   <p><b>📝 my notes</b> (<b>Shift+N</b>) — your own synthesis of a tree, and
   it <b>formats as you type</b>: type <code>## </code> and the line becomes a
   heading, close a <code>**</code> and the word goes bold. The markers stay
@@ -2217,6 +2234,7 @@
   <button id="seladd"></button>
   <button id="seldef"></button>
   <button id="seldig"></button>
+  <button id="selask"></button>
   <button id="selinv"></button>
   <button id="selhi"></button>
   <button id="selfc"></button>
@@ -4618,10 +4636,12 @@ function turnHtml(node, t, prevConf, allowBranch){
     h += `<div class="block thinking"><div class="who">${ico("💭")}thinking to myself${copyBtn}</div>${esc(t.thinking)}</div>`;
   }
   if (t.action){
+    const quoted = t.quote
+      ? `<div class="askquote">${ico("❝")}${esc(t.quote)}</div>` : "";
     h += `<div class="block action${t.user ? " user-q" : ""}">` +
          `<div class="who">${t.user ? ico("🧑") + "you ask " + provName() : ico("🙋") + "I ask " + provName()}` +
          (t.new_term ? termChipHtml(t.new_term, t.turn) : "") +
-         `${copyBtn}</div>${esc(t.action)}</div>`;
+         `${copyBtn}</div>${quoted}${esc(t.action)}</div>`;
   }
   if (t.tutor){
     h += `<div class="block tutor-b"><div class="who">${ico("📘")}${provName()} answers${copyBtn}</div>` +
@@ -7142,16 +7162,23 @@ function guessReadingTurn(){
   return +turns[i].dataset.turn;
 }
 let qcapPrevFocus = null, qcapTimer = null;
-function qcapFormHtml(mode, turn){
-  const head = mode === "global" ? "your question — global bank" : `your question — turn ${turn}`;
+function qcapFormHtml(mode, turn, quote){
+  const head = mode === "global" ? "your question — global bank"
+    : mode === "ask" ? "ask about this passage"
+    : `your question — turn ${turn}`;
   const placeholder = mode === "global"
     ? "what are you curious about? (investigated fresh, later)"
+    : mode === "ask" ? "what do you want to know about it?"
     : "what are you wondering?";
-  return `<div class="qcaphead">${esc(head)}</div>` +
+  // the passage sits above the box so it's plain what the answer will be about
+  const quoted = mode === "ask" && quote
+    ? `<div class="qcapquote">${ico("❝")}${esc(oneLine(quote, 240))}</div>` : "";
+  return `<div class="qcaphead">${esc(head)}</div>` + quoted +
     `<div class="qcaprow">` +
     `<input id="qcapinput" type="text" maxlength="500" placeholder="${esc(placeholder)}"` +
-    ` aria-label="your question" enterkeyhint="done" autocomplete="off">` +
-    `<button id="qcapsave" class="primary" aria-label="save to question bank">save</button>` +
+    ` aria-label="your question" enterkeyhint="${mode === "ask" ? "send" : "done"}" autocomplete="off">` +
+    `<button id="qcapsave" class="primary" aria-label="${mode === "ask"
+       ? "ask the tutor" : "save to question bank"}">${mode === "ask" ? "ask" : "save"}</button>` +
     `<button id="qcapcancel" class="ghost" aria-label="cancel">✕</button></div>`;
 }
 function wireQcapForm(){
@@ -7166,10 +7193,10 @@ function wireQcapForm(){
 }
 /* mode "global" (q, from anywhere — no tree needed) or "local" (Shift+Q,
    tied to the node/turn you're reading; requires one with a tutor reply) */
-function openQCap(mode){
-  mode = mode === "global" ? "global" : "local";
+function openQCap(mode, quote){
+  mode = mode === "global" ? "global" : mode === "ask" ? "ask" : "local";
   let turn = null;
-  if (mode === "local"){
+  if (mode !== "global"){
     const tree = cur(); if (!tree || currentNode == null) return;
     const node = getNode(tree, currentNode);
     if (!node || !node.turns.some(t => t.tutor)) return;
@@ -7178,7 +7205,8 @@ function openQCap(mode){
   clearTimeout(qcapTimer);
   $("qcap").dataset.mode = mode;
   $("qcap").dataset.turn = turn ?? "";
-  $("qcap").innerHTML = qcapFormHtml(mode, turn);
+  $("qcap").dataset.quote = mode === "ask" ? (quote || "") : "";
+  $("qcap").innerHTML = qcapFormHtml(mode, turn, quote);
   qcapPrevFocus = document.activeElement;
   $("qcap").hidden = false;
   wireQcapForm();
@@ -7192,8 +7220,21 @@ function closeQCap(){
 }
 window.closeQCap = closeQCap;
 function saveQCap(){
-  const mode = $("qcap").dataset.mode === "global" ? "global" : "local";
+  const mode = $("qcap").dataset.mode;
   const text = $("qcapinput") ? $("qcapinput").value : "";
+  // "ask" doesn't bank anything — it goes straight to the tutor, carrying
+  // the passage, and the answer lands in the conversation as your turn
+  if (mode === "ask"){
+    const tree = cur(), q = String(text || "").trim();
+    if (!tree || currentNode == null || !q){ closeQCap(); return; }
+    const quote = $("qcap").dataset.quote || "";
+    closeQCap();
+    const nodeId = currentNode;
+    enqueue(askThunk(tree.id, nodeId, q, quote));
+    const t = getNode(tree, nodeId)?.turns.at(-1);
+    if (t && t.user && t.action === q) jumpToTerm(nodeId, t.turn);
+    return;
+  }
   const q = mode === "global"
     ? addGlobalQuestion(text)
     : addQuestion(currentNode, +($("qcap").dataset.turn || 0) || null, text);
@@ -7542,6 +7583,10 @@ document.addEventListener("selectionchange", () => {
       $("seldig").setAttribute("aria-label",
         `dig into “${info.text}” — ask the tutor what it is in this context`);
     }
+    // your own question about exactly this passage — a term or a sentence
+    $("selask").innerHTML = `${ico("💬")}ask`;
+    $("selask").title = "ask your own question about this passage";
+    $("selask").setAttribute("aria-label", `ask the tutor about “${oneLine(info.text, 40)}”`);
     // investigate takes a passage as happily as a term — a highlighted
     // sentence makes a perfectly good topic for its own tree
     $("selinv").innerHTML = `${ico("▶")}investigate`;
@@ -7661,6 +7706,18 @@ $("selinv").onclick = (ev) => {
   if (!topic || running) return;   // a run in flight owns the reader's view
   closeMenu();
   cmdNew(topic);
+};
+/* 💬 ask — dig asks a fixed question about the selection; this asks YOURS.
+   The passage travels with it, so the answer is about that sentence rather
+   than the topic at large. */
+$("selask").onclick = (ev) => {
+  ev.stopPropagation();
+  const tree = cur();
+  const quote = selchip.dataset.term || "";
+  hideSelchip();
+  document.getSelection()?.removeAllRanges();
+  if (!tree || !quote || currentNode == null || running) return;
+  openQCap("ask", quote);
 };
 $("selhi").onclick = (ev) => {
   ev.stopPropagation();
@@ -8518,8 +8575,19 @@ window.continueNode = continueNode;
 /* the human can step in and ask the tutor directly; the question is
    recorded as their own turn (user: true) and never enters the simulated
    learner's history */
-function askThunk(treeId, nodeId, question){
+/* your own question to the tutor. `quote` is optional: a passage you
+   selected, so the answer is about THAT sentence rather than the topic in
+   general. It rides as its own field — the stored question stays the one
+   you actually typed, and the quote renders above it in the transcript and
+   in both exports — while the model is handed the two together. */
+function askedWithQuote(question, quote){
+  if (!quote) return question;
+  return ["About this, from what you said:", "<<<", quote, ">>>", "", question]
+    .join("\n");
+}
+function askThunk(treeId, nodeId, question, quote){
   let rec = null;
+  const asked = askedWithQuote(question, quote);
   return async () => {
     runLabel = "";
     const tree = store[treeId];
@@ -8527,7 +8595,8 @@ function askThunk(treeId, nodeId, question){
     activeRun = {treeId, nodeId};
     if (!rec){
       rec = {turn: node.turns.length + 1, thinking: "", new_term: "",
-             action: question, confidence: null, done: false, tutor: "", user: true};
+             action: question, ...(quote ? {quote} : {}),
+             confidence: null, done: false, tutor: "", user: true};
       node.turns.push(rec);
       saveStore(); renderAll();
     }
@@ -8537,7 +8606,7 @@ function askThunk(treeId, nodeId, question){
       const before = node.turns.slice(0, node.turns.indexOf(rec));
       const T = await api("tutor", {...rebuildCtx(tree, node),
                                     ...(tree.source ? {source: tree.source} : {}),
-                                    turns: before, action: question, ...tutorParams()});
+                                    turns: before, action: asked, ...tutorParams()});
       node.cost += T.cost;
       rec.tutor = T.tutor;
       if (T.parts) rec.parts = T.parts;

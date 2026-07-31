@@ -347,6 +347,10 @@ class KnowledgeTree:
                 if t.get("new_term"):
                     out.append(f"> 🔍 New word I hit: {t['new_term']}")
                     out.append("")
+                if t.get("quote"):
+                    # a question asked about a specific passage keeps it
+                    out.append(f"> ❝ About: {one_line(t['quote'], 400)}")
+                    out.append("")
                 out.append(f"🙋 **I ask Claude:** {t['action']}")
                 out.append("")
                 if t.get("tutor"):

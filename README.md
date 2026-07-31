@@ -173,7 +173,13 @@ directly (a local `claude` login can't run on a server), so it needs an
   lands in an editable box with *add* / *cancel* so you can tweak the
   wording before anything is actually saved; a term can carry more than
   one reasoned card, each tagged with a small badge in the words tab, the
-  review deck, and the anki/study-sheet exports. Or *⛏ dig*, for when a
+  review deck, and the anki/study-sheet exports. Or **💬 ask**, when you have a
+  question of your own about that exact sentence: a small bar opens with the
+  passage quoted above it, you type the question, and it goes straight to the
+  tutor with the passage attached — so the answer is about *that claim*, not
+  the topic in general. It lands in the conversation as your turn (🧑) with
+  the passage shown above it, and travels that way into both exports.
+  Or *⛏ dig*, for when a
   definition isn't enough: the tutor is
   asked what that thing actually **is** in this context, and the answer
   lands in the conversation as your own turn (🧑), where you can read it,

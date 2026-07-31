@@ -125,6 +125,8 @@ a{{color:var(--ans);}}
 .block.ans .label{{color:var(--ans);}} .block.ans{{border-color:var(--ans);}}
 .term{{display:inline-block; background:var(--term-bg); color:var(--term);
   border:1px solid var(--term-line); border-radius:.45rem; padding:.12rem .55rem; font-weight:bold; margin:.2rem 0 1rem;}}
+.askquote{{color:var(--muted); font-style:italic; border-left:3px solid var(--ask);
+  padding:.1rem 0 .1rem .6rem; margin:0 0 .5rem;}}
 .block.hlt{{border-color:var(--term);}} .block.hlt .label{{color:var(--term);}}
 .block.hlt mark{{background:var(--term-bg); color:inherit; border-radius:.25rem; padding:.05rem .2rem;}}
 details.part{{border:1px solid var(--line); border-radius:.6rem; background:var(--bg);
@@ -630,7 +632,8 @@ def _turn_html(t: dict, highlights=None) -> str:
         parts.append(f'<div class="term">🔍 New word I hit: {_esc(t["new_term"])}</div>')
     parts.append(
         '<div class="block ask"><div class="label">🙋 I ask Claude</div>'
-        f'<p>{_esc_sent(t["action"])}</p></div>'
+        + (f'<div class="askquote">❝ {_esc(t["quote"])}</div>' if t.get("quote") else "")
+        + f'<p>{_esc_sent(t["action"])}</p></div>'
     )
     if t.get("tutor"):
         answer_parts = t.get("parts") if isinstance(t.get("parts"), list) else None
