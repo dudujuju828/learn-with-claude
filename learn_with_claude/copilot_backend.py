@@ -55,7 +55,7 @@ import tempfile
 import threading
 from pathlib import Path
 
-from . import local_settings, personas
+from . import copilot_sessions, local_settings, personas
 from .webapi import ApiError
 
 # Unlike the API backends this defaults to unset: the CLI's default model
@@ -79,6 +79,10 @@ READ_TOOLS = ["view", "grep", "glob"]
 # the lock across a whole request.
 _settings_lock = threading.Lock()
 _settings = local_settings.default()
+
+# parsed session-memory text, keyed by the anchor file's identity
+_memory_lock = threading.Lock()
+_memory_cache: dict = {"stamp": None, "text": ""}
 
 
 def configure(settings: dict) -> None:
@@ -104,14 +108,43 @@ def effective_effort() -> str:
     return _snapshot()["effort"] or EFFORT
 
 
+def session_memory() -> str:
+    """The tutor's memory block for the anchored Copilot session, or "".
+
+    The transcript is re-read only when the session file actually changes
+    (it's append-only, so size+mtime identify it), since a long session can
+    run to hundreds of KB and this is called on every single tutor turn."""
+    session_id = _snapshot()["tutor_session"]
+    if not session_id:
+        return ""
+    try:
+        st = copilot_sessions.session_root().joinpath(session_id, "events.jsonl").stat()
+        stamp = (session_id, st.st_size, st.st_mtime)
+    except OSError:
+        return ""     # the session was deleted since it was chosen
+    with _memory_lock:
+        if _memory_cache.get("stamp") == stamp:
+            return _memory_cache["text"]
+    transcript = copilot_sessions.transcript(session_id)
+    text = personas.session_memory_system(transcript) if transcript else ""
+    with _memory_lock:
+        _memory_cache["stamp"], _memory_cache["text"] = stamp, text
+    return text
+
+
 def grounding_text() -> str:
     """The tutor's local-grounding system-prompt block for the CURRENT
-    settings. Called fresh per request (never cached) since code_dir and the
-    MCP server list can change while the server keeps running."""
+    settings. Called fresh per request (never cached) since code_dir, the MCP
+    server list, and the anchored session can all change while the server
+    keeps running."""
     settings = _snapshot()
     notes = [f'{s["name"]} — {s["note"]}' if s.get("note") else s["name"]
              for s in settings["mcp_servers"] if s.get("enabled")]
-    return personas.local_grounding_system(settings["code_dir"] or None, notes)
+    blocks = [personas.local_grounding_system(settings["code_dir"] or None, notes)]
+    memory = session_memory()
+    if memory:
+        blocks.append(memory)
+    return "\n\n".join(blocks)
 
 
 def _enabled_server_names() -> list:

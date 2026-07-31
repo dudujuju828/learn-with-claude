@@ -32,7 +32,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import copilot_backend, local_settings
+from . import copilot_backend, copilot_sessions, local_settings
 from .knowledge import FORMAT, slug
 from .personas import LEARNER_LEVELS, TUTOR_MODES
 from .webapi import ApiError, model_routes
@@ -89,10 +89,16 @@ class LocalSettingsEndpoint:
         self.store = store
 
     def _payload(self, doc: dict) -> dict:
+        # session_info is how the panel says "yes, that's the one" (or reports
+        # a session that has since been deleted); available_sessions is the
+        # picker, so nobody has to go hunting for the id by hand
+        chosen = doc.get("tutor_session") or ""
         return {
             **doc,
             "presets": self.PRESETS,
             "available_mcp_servers": copilot_backend.list_global_mcp_servers(),
+            "available_sessions": copilot_sessions.recent(),
+            "session_info": copilot_sessions.describe(chosen) if chosen else None,
         }
 
     def get(self) -> dict:

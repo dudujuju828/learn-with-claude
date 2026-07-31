@@ -5,6 +5,81 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 43 — the tutor can start from a past Copilot session (local mode)
+
+*(user-requested: "when you leave a local copilot session it gives you the
+option to resume it with some hash — it would be good if you can set the
+teacher's memory starting from that context (keyed by the hash)".)*
+
+### What it is
+A field in **⚙ local settings**: paste the session id the Copilot CLI prints
+when you leave a session (a unique prefix works, or pick it off a list of
+recent sessions shown right there), and whatever you worked through in that
+session is already known to the tutor. Ask about your ingest pipeline without
+re-explaining it. Tutor only — the learner and glossary personas never see it.
+
+### Design notes
+- **`--resume` per call would have been wrong, and it took a real experiment
+  to know that.** `copilot -p … --resume <id>` does work non-interactively and
+  the model does recall the session. But it **appends**: one trivial
+  `-p --resume` call took a session's `events.jsonl` from 17,752 to 35,538
+  bytes. Since this app composes the *whole* conversation into every prompt,
+  chaining would (a) rewrite the user's own session full of learn-with-claude
+  scaffolding, (b) duplicate the conversation once per turn, and (c) stop
+  being "starting from that context" after turn one. The transport here is
+  one stateless subprocess per call; the honest fit is to read the session
+  once and hand it over as memory.
+- **So: read `events.jsonl`, don't resume.** `copilot_sessions.py` parses the
+  CLI's own session-state directory — `user.message`/`assistant.message`
+  events only, using `content` (what was said) rather than
+  `transformedContent` (which carries the CLI's injected preamble), skipping
+  tool-only turns. The anchor session is opened read-only and is never
+  written to; a test asserts it stays byte-identical across a real tutor call.
+- **The format is private, so every read is defensive.** Unparseable lines are
+  skipped, a missing or deleted session yields no memory rather than an error,
+  and `resolve()` only accepts an id-shaped string (so `../../etc` can't be a
+  session id).
+- **It plugs into the existing grounding seam.** `grounding_text()` was
+  already evaluated fresh per request and already flowed into
+  `tutor_system(grounding=…)`; the memory is just a second block beside the
+  local-tools one. No route changes, no new endpoint. It's cached on the
+  session file's (size, mtime) because a long session is hundreds of KB and
+  this runs on every tutor turn.
+- **Bounded at 16k characters**, keeping the opening exchange and the tail
+  with the middle elided — how a session was framed matters as much as where
+  it ended up, and a coding session can run far past any context window.
+- **Framed as memory, not as a document.** The prompt tells the tutor this is
+  its own record of working with this learner: treat it as established, let it
+  set the level, never mention the session or recap it, and never let it
+  displace the actual question.
+- **The picker hides the app's own calls.** Every model call this app makes is
+  itself a Copilot session, and on a machine that has run `learn --web` for a
+  while they vastly outnumber the real ones — so sessions whose first message
+  opens with `compose_prompt()`'s banner are filtered out of the list.
+- Verified three ways: 6 unit tests (parsing, prefix resolution, filtering,
+  budget elision, tutor-only reach), 25 end-to-end checks driving the real
+  server and the real panel over CDP (pick → save → persist → reject a bad id
+  → clear), and one **real Copilot call** with a session anchored — the tutor
+  answered a question only that session could support (naming the
+  `events_seen` table and the bloom filter), never mentioned a transcript, and
+  left the session byte-identical. 0 premium requests.
+
+### Candidates rejected (this cycle)
+- **Chaining `--resume` per call** — see above; measured, not assumed.
+- **Copying the session into a temp `COPILOT_HOME` to fork it** — would keep
+  the CLI's own resume machinery, but a temp home loses the login, and
+  copying an opaque sqlite session store per call is worse than reading a
+  transcript.
+- **Asking the model to summarise the session once via `--resume`** — a
+  supported interface, but it costs a request, is non-deterministic, and
+  still writes to the session it was meant to leave alone.
+- **Anchoring per tree rather than globally** — arguably better fit (one tree,
+  one project), but the anchor is a property of *this machine's* Copilot
+  install, and tree documents sync to other devices and travel in
+  `.know.json` where a local session id is meaningless.
+
+---
+
 ## Feature 42 — ▶ investigate, from a selection
 
 *(user-requested: "on highlight — an investigate button, along with the

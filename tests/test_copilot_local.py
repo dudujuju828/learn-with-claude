@@ -5,16 +5,17 @@ Run with:  python tests/test_copilot_local.py
 """
 
 import json
+import os
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from learn_with_claude import copilot_backend, local_settings  # noqa: E402
+from learn_with_claude import copilot_backend, copilot_sessions, local_settings  # noqa: E402
 from learn_with_claude.copilot_backend import _parse_stream, compose_prompt  # noqa: E402
 from learn_with_claude.localweb import GlobalQuestionStore, TreeStore, TutorStore  # noqa: E402
-from learn_with_claude.webapi import ApiError  # noqa: E402
+from learn_with_claude.webapi import ApiError, model_routes  # noqa: E402
 
 # A stand-in copilot: prints one assistant.message whose content is the argv
 # it was called with (as JSON), plus a result event with a fractional cost.
@@ -369,6 +370,158 @@ def test_global_question_store():
     print("ok  global question store (round-trip, answered fields, validation)")
 
 
+def _fake_session(root: Path, session_id: str, exchanges, *, noise=True):
+    """Write a session-state dir the way the Copilot CLI lays one out."""
+    d = root / session_id
+    d.mkdir(parents=True, exist_ok=True)
+    lines = []
+    if noise:   # the events a real session is mostly made of, all ignorable
+        lines.append({"type": "session.info", "data": {"message": "configuration"}})
+        lines.append({"type": "assistant.reasoning", "data": {"reasoningId": "opaque"}})
+    for user, assistant in exchanges:
+        lines.append({"type": "user.message",
+                      "data": {"content": user,
+                               "transformedContent": "<current_datetime/>\n" + user}})
+        if noise:   # a turn where the assistant only called a tool says nothing
+            lines.append({"type": "assistant.message",
+                          "data": {"content": "", "toolRequests": [{"name": "view"}]}})
+        lines.append({"type": "assistant.message", "data": {"content": assistant}})
+    (d / "events.jsonl").write_text(
+        "\n".join(json.dumps(x) for x in lines) + "\n", encoding="utf-8")
+    return d
+
+
+def test_session_reading():
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        os.environ["COPILOT_HOME"] = str(home)
+        try:
+            root = home / "session-state"
+            _fake_session(root, "abc12345-1111-2222-3333-444455556666",
+                          [("how does the parser handle nested quotes?",
+                            "it re-enters the scanner with a depth counter"),
+                           ("and on EOF?", "it raises Unterminated")])
+            # this app's own calls must never show up in the picker
+            _fake_session(root, "dddddddd-0000-0000-0000-000000000000",
+                          [("=== SYSTEM INSTRUCTIONS (these govern your reply) ===\nYou are a tutor",
+                            "a hash table maps keys to slots")])
+            (root / "eeeeeeee-0000-0000-0000-000000000000").mkdir(parents=True)  # no events
+
+            msgs = copilot_sessions._messages(
+                root / "abc12345-1111-2222-3333-444455556666" / "events.jsonl")
+            assert [m["role"] for m in msgs] == ["user", "assistant", "user", "assistant"], msgs
+            assert "<current_datetime" not in msgs[0]["text"]     # the clean content, not the CLI's
+            assert all(m["text"] for m in msgs)                   # tool-only turns dropped
+
+            assert copilot_sessions.resolve("abc12345") == "abc12345-1111-2222-3333-444455556666"
+            assert copilot_sessions.resolve("abc12345-1111-2222-3333-444455556666")
+            assert copilot_sessions.resolve("nope") is None
+            assert copilot_sessions.resolve("") is None
+            assert copilot_sessions.resolve("../../etc") is None   # not an id shape
+            assert copilot_sessions.resolve("eeeeeeee") is None    # no transcript to read
+
+            ids = [s["id"][:8] for s in copilot_sessions.recent()]
+            assert ids == ["abc12345"], ids      # own-call + empty sessions filtered out
+
+            info = copilot_sessions.describe("abc12345-1111-2222-3333-444455556666")
+            assert info["messages"] == 4
+            assert info["title"].startswith("how does the parser")
+            assert copilot_sessions.describe("nosuch") is None
+
+            t = copilot_sessions.transcript("abc12345-1111-2222-3333-444455556666")
+            assert "[user]" in t and "nested quotes" in t and "Unterminated" in t
+
+            # over budget: the opening survives, the middle is elided, the end stays
+            _fake_session(root, "ffffffff-0000-0000-0000-000000000000",
+                          [(f"question {i} " + "x" * 400, f"answer {i} " + "y" * 400)
+                           for i in range(40)], noise=False)
+            big = copilot_sessions.transcript("ffffffff-0000-0000-0000-000000000000",
+                                              budget=6000)
+            assert len(big) <= 6000, len(big)
+            assert "question 0" in big and "messages omitted" in big and "answer 39" in big
+            assert "question 20" not in big
+        finally:
+            os.environ.pop("COPILOT_HOME", None)
+    print("ok  copilot session reading (parse, resolve, filter, budget)")
+
+
+def test_tutor_session_setting():
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        os.environ["COPILOT_HOME"] = str(home)
+        try:
+            sid = "abc12345-1111-2222-3333-444455556666"
+            _fake_session(home / "session-state", sid,
+                          [("what does the retry budget do?",
+                            "it caps redeliveries at five per partition")])
+
+            # a pasted prefix is resolved to the full id on save
+            clean = local_settings.sanitize({"tutor_session": "abc123"}, strict=True)
+            assert clean["tutor_session"] == sid, clean
+
+            for bad in ["ffffffff", "not a hash!"]:
+                try:
+                    local_settings.sanitize({"tutor_session": bad}, strict=True)
+                    assert False, f"must reject {bad!r}"
+                except ValueError:
+                    pass
+
+            # loading tolerates a session that has since been deleted...
+            assert local_settings.sanitize({"tutor_session": "deadbeef-9999"})["tutor_session"] \
+                == "deadbeef-9999"
+            # ...but never keeps something that isn't an id at all
+            assert local_settings.sanitize({"tutor_session": "../secrets"})["tutor_session"] == ""
+
+            copilot_backend.configure(clean)
+            grounding = copilot_backend.grounding_text()
+            assert "MEMORY —" in grounding
+            assert "retry budget" in grounding and "five per partition" in grounding
+            assert "LOCAL TOOLS" in grounding      # sits alongside, doesn't replace
+
+            # a deleted session degrades to no memory rather than an error
+            (home / "session-state" / sid / "events.jsonl").unlink()
+            copilot_backend._memory_cache["stamp"] = None
+            assert "MEMORY —" not in copilot_backend.grounding_text()
+
+            copilot_backend.configure(local_settings.default())
+            assert "MEMORY —" not in copilot_backend.grounding_text()
+        finally:
+            os.environ.pop("COPILOT_HOME", None)
+            copilot_backend.configure(local_settings.default())
+            copilot_backend._memory_cache["stamp"] = None
+    print("ok  tutor session memory (resolve on save, grounding, graceful loss)")
+
+
+def test_session_memory_is_tutor_only():
+    """The learner and glossary personas must stay uncontaminated roleplay."""
+    with tempfile.TemporaryDirectory() as tmp:
+        home = Path(tmp)
+        os.environ["COPILOT_HOME"] = str(home)
+        try:
+            sid = "abc12345-1111-2222-3333-444455556666"
+            _fake_session(home / "session-state", sid,
+                          [("secret project codename?", "STARLING")])
+            copilot_backend.configure(
+                local_settings.sanitize({"tutor_session": "abc12345"}, strict=True))
+            seen = {}
+
+            def capture(system, messages, role, **kw):
+                seen[role] = system
+                return ('{"thinking":"t","new_term":null,"action":"a",'
+                        '"confidence":10,"done":false}'), 0.0
+
+            routes = model_routes(capture, tutor_grounding=copilot_backend.grounding_text)
+            routes["tutor"]({"action": "explain it", "turns": []})
+            routes["learner"]({"kind": "root", "topic": "kafka", "turns": []})
+            assert "STARLING" in seen["tutor"]
+            assert "STARLING" not in seen["learner"], seen["learner"]
+        finally:
+            os.environ.pop("COPILOT_HOME", None)
+            copilot_backend.configure(local_settings.default())
+            copilot_backend._memory_cache["stamp"] = None
+    print("ok  session memory reaches the tutor only, never the learner")
+
+
 if __name__ == "__main__":
     test_compose_prompt()
     test_parse_stream()
@@ -382,4 +535,7 @@ if __name__ == "__main__":
     test_tree_store_revs()
     test_tutor_store()
     test_global_question_store()
+    test_session_reading()
+    test_tutor_session_setting()
+    test_session_memory_is_tutor_only()
     print("\nall green")

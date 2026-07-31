@@ -24,6 +24,8 @@ import json
 import re
 from pathlib import Path
 
+from . import copilot_sessions
+
 EFFORT_CHOICES = {"", "none", "minimal", "low", "medium", "high", "xhigh", "max"}
 ROLES = ("learner", "tutor", "glossary")
 
@@ -53,6 +55,7 @@ def default() -> dict:
         "models": {"learner": "", "tutor": "", "glossary": ""},
         "effort": "",
         "code_dir": "",
+        "tutor_session": "",
         "mcp_servers": [],
     }
 
@@ -119,6 +122,24 @@ def sanitize(doc, *, strict: bool = False) -> dict:
                 raise ValueError(f'"{code_dir}" is not a directory on this machine')
         else:
             out["code_dir"] = str(p.resolve())
+
+    # the Copilot session whose transcript seeds the tutor's memory. Saving
+    # resolves a pasted prefix to the full id (and rejects one that matches
+    # nothing or several); loading keeps whatever is on disk even if that
+    # session has since been deleted — the panel reports it as missing and the
+    # tutor simply gets no memory, which beats refusing to start.
+    session = str(doc.get("tutor_session") or "").strip().lower()
+    if session:
+        if strict:
+            full = copilot_sessions.resolve(session)
+            if not full:
+                raise ValueError(
+                    f'no Copilot session matches "{session}" — paste the id it '
+                    "printed when you left the session (a unique prefix is fine)"
+                )
+            out["tutor_session"] = full
+        elif copilot_sessions.SESSION_REF.match(session):
+            out["tutor_session"] = session
 
     raw_servers = doc.get("mcp_servers")
     if raw_servers is not None and not isinstance(raw_servers, list):

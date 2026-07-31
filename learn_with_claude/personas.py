@@ -356,6 +356,39 @@ def local_grounding_system(code_dir: "str | None", mcp_notes: "list[str] | None"
     return "\n".join(lines)
 
 
+def session_memory_system(transcript: str) -> str:
+    """Local-mode only: an earlier Copilot session, handed to the tutor as its
+    own memory of working with this learner.
+
+    Framed as memory rather than as a document on purpose — the point is that
+    the tutor already knows this, so it neither re-explains what was settled
+    there nor treats it as something to summarise back. It stays background:
+    it informs the answer, it isn't the subject of the answer, and the
+    question in front of it always wins.
+    """
+    return "\n".join([
+        "MEMORY — you have worked with this learner before. What follows is "
+        "your own record of that earlier session, not something you were "
+        "handed just now:",
+        "",
+        "<<<",
+        transcript.strip(),
+        ">>>",
+        "",
+        "- Treat all of it as already established between you. Don't "
+        "re-explain what was settled there, and don't ask them to repeat "
+        "context it already gives you.",
+        "- Use it when it bears on the question — their code, their project, "
+        "the decisions and the vocabulary you both landed on — and let it set "
+        "the level you pitch at.",
+        "- Never mention the session, a transcript, or 'memory'. Don't open "
+        "by recapping it. If the current question has nothing to do with it, "
+        "ignore it completely.",
+        "- It is context, never the question. Answer what was actually asked, "
+        "in exactly the style your other instructions require.",
+    ])
+
+
 def tutor_system(*, diagrams: bool, mode: str = "balanced", custom_style: "str | None" = None,
                  segments: bool = False, grounding: "str | None" = None) -> str:
     """The tutor's full system prompt: base rules, a style addendum (a built-in
