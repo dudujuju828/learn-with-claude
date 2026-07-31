@@ -63,7 +63,13 @@ directly (a local `claude` login can't run on a server), so it needs an
 
 - `api/index.py` — stateless backend: login (HMAC cookie from `APP_PASSWORD`),
   one endpoint per model step; imports `personas.py` / `knowledge.py` /
-  `render.py` / `simulator.py` unchanged.
+  `render.py` / `simulator.py` unchanged. Roles map to models here: the
+  learner and tutor run on `claude-sonnet-5`, glossary definitions on a cheap
+  fast model, and the **examiner** (📄 exam's paper-setter and marker) on
+  `claude-opus-5` — setting a fair paper and marking essays to a scheme are
+  the two judgement calls whose failures are least visible to the person they
+  land on, since a soft mark reads exactly like a good one. Set
+  `LEARN_EXAMINER_MODEL` to bring it back down to the tutor's model.
 - `api/trees.js` — tree history in Vercel Blob (`trees/<id>.json`), so every
   logged-in device sees the same past investigations. The browser keeps a
   localStorage working copy and syncs (debounced push, boot merge,
@@ -248,7 +254,28 @@ directly (a local `claude` login can't run on a server), so it needs an
   actually covered (one model call, kept with the tree — retakes just
   reshuffle), explains every answer, and records your scores; the 🔊 beside
   the question — or the **s** key — reads it and each choice aloud, then the
-  explanation once you've answered. **🗣 explain it back** is
+  explanation once you've answered. **📄 exam** is the quiz's harder
+  sibling — a written paper on the conversation you have open, where nothing
+  can be answered by recognising it. Pick a length (3–8 questions, 5 by
+  default) and the examiner sets essay questions *from* that conversation
+  without ever quoting it: explain a mechanism, apply the idea to a case that
+  never came up, predict what a change would do, take apart a claim that
+  sounds right. One box per question, one submit at the end, **10 marks**
+  each. Every question is set together with the mark scheme it will be marked
+  against, and the marker is held to that scheme — so two sittings are judged
+  to one standard rather than to whatever the model felt like that day. What
+  comes back per question is two paragraphs — what your answer earned, and
+  what a full-mark answer would have said — plus the scheme points you hit and
+  missed, a mark, and one comment on the script as a whole. Marks go to the
+  ideas and the reasoning first, with credit for using the technical
+  vocabulary correctly: never for name-dropping it, and never lost for
+  explaining the right thing in plain words. A blank answer scores 0 and comes
+  back with a model answer, so it still teaches you something. Answers save as
+  you type — a paper survives closing the tab, and an unfinished one waits in
+  📅 today — any question you can't answer goes to the global bank with
+  **❓ bank it** without breaking off the sitting, and the marked script syncs,
+  travels in `.know.json`, and heads into both exports.
+  **🗣 explain it back** is
   the Feynman loop: explain a conversation in your own words, from memory,
   as if teaching a friend, and the tutor reads it against what was actually
   covered and answers with what's solid, the one gap that matters, one

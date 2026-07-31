@@ -5,6 +5,99 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 51 — 📄 exam: a written paper on the open conversation
+
+*(user-requested: "an open-ended university style-question page that asks essay
+like questions… configurable with question count (default-5)… Marking will be
+done by a smart model - feedback will be ~2 paragraphs / question - with
+10marks/question… It should award use of technical terms - along with
+conceptual ideas".)*
+
+### What it is
+**📄 exam** in the conversation header, beside quiz and explain. Pick a
+question count (3–8, default 5), and the examiner sets an essay paper on that
+conversation: one textbox per question, one submit at the end. Each is out of
+10. Marking comes back as two paragraphs per question — what your answer
+earned, and what a full-mark answer would have said — plus a total, the scheme
+points you hit and missed, and one comment on the script as a whole.
+
+### Design notes
+- **The paper is set from the conversation but never quotes it.** This is the
+  whole point of the feature existing next to `🎓 quiz`. Multiple choice can be
+  passed on recognition, and recognition is exactly the false signal
+  `_LEARNER_CORE` already warns about ("a tidy answer you have just read is NOT
+  an answer you hold"). So `EXAM_SYSTEM` gets the transcript framed as the
+  *syllabus* — the boundary of what may be examined — with an explicit ban on
+  quoting it, referring to it, or asking for a definition it stated.
+- **Six question archetypes, chosen for what they extract**, not for variety's
+  sake: mechanism (a causal chain is where half-understanding snaps),
+  discriminate (understanding lives at concept boundaries), transfer (a case
+  the tutorial never mentioned — recall simply cannot answer it, which makes it
+  the strongest evidence a model is held), counterfactual (a real model
+  predicts; a remembered one goes quiet), claim-to-assess (aimed at the
+  misconception the transcript shows the learner actually having), and
+  judgement under constraint. Any paper of 4+ must contain a transfer and a
+  claim. Ordered by ascending demand, so someone about to fall over gets to
+  stand up first.
+- **The mark scheme is written WITH each question, and published to the
+  marker.** This is the single biggest lever on whether the feedback is sound:
+  marking essays "from vibes" drifts between sittings, and a question nobody
+  can write a scheme for is a vague question. Each question carries 3–5
+  `points` (specific claims a full-mark answer establishes) and 2–6 `terms`.
+  Rejected: marking straight from the transcript with no scheme — much cheaper
+  to build, and it makes two sittings of the same paper incomparable.
+- **Marks split 7 content / 3 precision**, which is how "award technical terms
+  *along with* conceptual ideas" stays fair in both directions. Terms earn for
+  correct *use*, never for appearing; and an answer that is conceptually right
+  in everyday words keeps all its content marks and can still reach 7. Nobody
+  is marked down for not reaching for a word.
+- **One marking call for the whole script**, not one per question: an examiner
+  marks a script. It is what makes the overall comment worth anything, and it
+  lets the marker notice the same confusion surfacing twice instead of scoring
+  it as two unrelated failures.
+- **Arithmetic is ours, not the model's.** `handle_mark_exam` clamps every mark
+  to 0–10 and sums the total itself, so the number on screen is right even when
+  the prose around it is generous. A missing or garbage result scores 0 rather
+  than throwing the whole script away.
+- **Two paragraphs, as two fields.** `earned` / `improve` rather than one
+  `feedback` string the model can quietly collapse into one paragraph — and it
+  lets each render in its own labelled card, reusing the explain-it-back
+  pattern. A blank answer gets 0, and `improve` becomes a compact model answer,
+  so an unanswered question still teaches something.
+- **Scoped to the open conversation, not the tree.** A tree spans several
+  investigations; an exam roaming across all of them would test breadth, which
+  the quiz already does. Profile scoping comes free (papers live on the tree),
+  and both aggregate views — 📊 progress and 📅 today — walk `profileTrees()`.
+- **Full transcript, not `conversationDigest()`.** The digest clips every tutor
+  answer to 240 characters. Fine for reminding a learner what was covered,
+  useless as a syllabus: it produces questions the material never supported,
+  and marks a correct answer wrong because the marker never saw the sentence
+  that licensed it.
+- **A new `examiner` role**, so the two hardest judgement calls in the app can
+  point at a stronger model — hosted defaults to `claude-opus-5`
+  (`LEARN_EXAMINER_MODEL` dials it back); locally it rides the tutor's model
+  rather than adding a fourth dropdown nobody would set differently. A soft
+  mark reads exactly like a good one, which is why this is the place to spend.
+- **Answers autosave as you type** (debounced, plus blur/close/hide/unload).
+  An essay half-written and lost to a phone evicting the tab would be the worst
+  bug this feature could have. The merge rule follows from that: union by id, a
+  *submitted* paper always beats an unsubmitted copy of itself, and between two
+  drafts the later `saved` stamp wins.
+- **❓ bank it on every question**, in both the answering and the marked view —
+  an exam question you can't answer is the purest "something I don't know" this
+  app produces. It goes to the global bank (profile-scoped like everything
+  there) and the sitting carries on, rather than being abandoned to go look it
+  up.
+- Submitting with blanks asks once, then submits. Leaving a question blank is a
+  legitimate move; doing it by mis-click on a paper you meant to finish is not.
+- Verified with 55 browser assertions over the whole flow (setup → paper →
+  autosave → banking → confirm-on-blank → marking → badge → reopen), including
+  cross-profile isolation with a real second profile, pruned-node handling, and
+  all four merge cases; plus 3 new Python tests over the two handlers and the
+  export path.
+
+---
+
 ## Feature 50 — 💬 ask a question about the passage you selected
 
 *(user-requested: "the ability to highlight then send a question which

@@ -35,6 +35,12 @@ Adding a route means three things, and the third is easy to forget:
 3. **the route name added to `vercel.json`'s rewrite list** — miss this and it
    works locally and 404s in production
 
+`call_model(system, messages, role, …)`'s `role` picks the model per backend:
+`learner` / `tutor` / `glossary` / `examiner`. Hosted maps them in
+`api/index.py`'s `ROLE_MODELS` (examiner → `claude-opus-5`); local maps them in
+`copilot_backend.effective_model()`, where an unknown role means "auto" and no
+tools. Adding a role means touching both.
+
 ## Three deployment targets, one frontend
 
 - **CLI** (`learn`) — `repl.py`/`cli.py`, model calls via `claude -p`.
