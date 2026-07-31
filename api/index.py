@@ -44,10 +44,17 @@ LEARNER_MODEL = os.environ.get("LEARN_LEARNER_MODEL", "claude-sonnet-5")
 TUTOR_MODEL = os.environ.get("LEARN_TUTOR_MODEL", "claude-sonnet-5")
 # glossary definitions are two plain sentences — a small fast model is plenty
 GLOSSARY_MODEL = os.environ.get("LEARN_GLOSSARY_MODEL", "claude-haiku-4-5-20251001")
+# setting a written paper and marking essays against its own mark scheme are
+# the two hardest judgement calls the app makes, and the two whose failures are
+# least visible to the person they land on — a soft mark reads exactly like a
+# good one. So the examiner gets the strongest model by default; set
+# LEARN_EXAMINER_MODEL to the tutor's model to bring the cost back down.
+EXAMINER_MODEL = os.environ.get("LEARN_EXAMINER_MODEL", "claude-opus-5")
 EFFORT = os.environ.get("LEARN_EFFORT", "xhigh")
 MAX_TURNS = int(os.environ.get("LEARN_MAX_TURNS", "20"))
 
-ROLE_MODELS = {"learner": LEARNER_MODEL, "tutor": TUTOR_MODEL, "glossary": GLOSSARY_MODEL}
+ROLE_MODELS = {"learner": LEARNER_MODEL, "tutor": TUTOR_MODEL,
+               "glossary": GLOSSARY_MODEL, "examiner": EXAMINER_MODEL}
 
 COOKIE_NAME = "lwc_auth"
 TOKEN_DAYS = 30

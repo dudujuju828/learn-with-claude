@@ -108,7 +108,14 @@ def _snapshot() -> dict:
 
 def effective_model(role: str) -> str:
     """The model actually used for `role`: a live override, else the
-    LEARN_COPILOT_*_MODEL env var, else "" (the CLI's own "auto")."""
+    LEARN_COPILOT_*_MODEL env var, else "" (the CLI's own "auto").
+
+    The examiner (the written exam's paper-setter and marker) has no settings
+    entry of its own — locally there is no per-token bill to protect, so it
+    rides the tutor's model rather than adding a fourth dropdown nobody would
+    have a reason to set differently."""
+    if role == "examiner":
+        role = "tutor"
     return _snapshot()["models"].get(role, "") or ROLE_MODELS.get(role, "")
 
 

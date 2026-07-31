@@ -21,11 +21,14 @@ import re
 
 from .knowledge import KnowledgeTree, conversation_digest
 from .personas import (
+    EXAM_KINDS,
+    EXAM_SYSTEM,
     GLOSSARY_REASONS,
     GLOSSARY_SYSTEM,
     INTERVIEW_FINISH,
     INTERVIEW_SYSTEM,
     LEARNER_LEVELS,
+    MARK_EXAM_SYSTEM,
     NEXT_CONCEPT_SYSTEM,
     ORDER_QUESTIONS_SYSTEM,
     QUIZ_SYSTEM,
@@ -38,6 +41,7 @@ from .personas import (
     deepen_learner_message,
     deepen_tutor_context,
     define_message,
+    exam_message,
     feedback_message,
     first_learner_message,
     followup_learner_message,
@@ -47,6 +51,7 @@ from .personas import (
     interview_budget_note,
     interview_opening,
     learner_system,
+    mark_exam_message,
     next_concept_message,
     order_questions_message,
     quiz_message,
@@ -567,6 +572,155 @@ def handle_quiz(body: dict, call_model) -> dict:
     return {"questions": questions, "cost": cost}
 
 
+# --------------------------------------------------------------------------- #
+# the written exam: one route writes the paper, one marks the script. Both run
+# on the "examiner" role so a backend can point them at a stronger model than
+# the conversation itself uses — setting a fair paper and marking essays are
+# the two judgement calls in this app that most reward one.
+# --------------------------------------------------------------------------- #
+EXAM_MATERIAL_MAX = 40000   # the tutorial transcript, in full — see handle_exam
+EXAM_MIN_Q, EXAM_MAX_Q, EXAM_DEFAULT_Q = 3, 8, 5
+EXAM_MARKS = 10             # per question, fixed — the client says so on screen
+EXAM_ANSWER_MAX = 6000      # one essay answer
+EXAM_Q_MAX = 700
+
+
+def exam_count(raw) -> int:
+    try:
+        return max(EXAM_MIN_Q, min(EXAM_MAX_Q, int(raw or EXAM_DEFAULT_Q)))
+    except (TypeError, ValueError):
+        return EXAM_DEFAULT_Q
+
+
+def _exam_material(body: dict) -> str:
+    """The conversation being examined, untruncated.
+
+    Deliberately NOT conversation_digest(): that clips every tutor answer to
+    240 characters, which is fine for reminding a learner what was covered and
+    useless as a syllabus. Both setting a fair paper and marking against it
+    need the actual substance — a question the material never supported, or a
+    correct answer marked wrong because the marker never saw the sentence that
+    licensed it, are both failures of this one input.
+    """
+    material = (body.get("material") or "").strip()
+    if not material:
+        raise ApiError("missing 'material'")
+    return material[:EXAM_MATERIAL_MAX]
+
+
+def _str_list(raw, limit: int, cap: int) -> list:
+    return [" ".join(str(x or "").split())[:cap]
+            for x in (raw if isinstance(raw, list) else [])
+            if str(x or "").strip()][:limit]
+
+
+def handle_exam(body: dict, call_model) -> dict:
+    """Set a written paper on one conversation: essay questions with the mark
+    scheme each will be marked against."""
+    material = _exam_material(body)
+    count = exam_count(body.get("count"))
+    message = exam_message(
+        (body.get("root_topic") or "").strip()[:200],
+        (body.get("label") or "").strip()[:200],
+        material,
+        count,
+    )
+    text, cost = call_model(EXAM_SYSTEM, [{"role": "user", "content": message}], "examiner")
+    data = first_json_object(text)
+    questions = []
+    for q in (data.get("questions") if isinstance(data, dict) else None) or []:
+        if not isinstance(q, dict):
+            continue
+        stem = " ".join(str(q.get("q") or "").split())[:EXAM_Q_MAX]
+        if len(stem) < 10:
+            continue
+        kind = str(q.get("kind") or "").strip().lower()
+        questions.append({
+            "q": stem,
+            "kind": kind if kind in EXAM_KINDS else "",
+            "command": " ".join(str(q.get("command") or "").split())[:40].lower(),
+            "marks": EXAM_MARKS,
+            "points": _str_list(q.get("points"), 6, 300),
+            "terms": _str_list(q.get("terms"), 8, 60),
+        })
+        if len(questions) >= count:
+            break
+    if not questions:
+        raise ApiError("the examiner returned no usable questions — try again", 502)
+    return {"questions": questions, "cost": cost}
+
+
+def handle_mark_exam(body: dict, call_model) -> dict:
+    """Mark a whole script in one call, against the scheme the paper was set
+    with. Marks are clamped and totalled here rather than trusted from the
+    model, so the arithmetic on screen is always right even when the prose
+    around it is generous."""
+    material = _exam_material(body)
+    raw = body.get("answers")
+    questions = body.get("questions")
+    if not isinstance(questions, list) or not questions:
+        raise ApiError("missing 'questions'")
+    answers = raw if isinstance(raw, list) else []
+    script = []
+    for i, q in enumerate(questions[:EXAM_MAX_Q]):
+        if not isinstance(q, dict):
+            continue
+        stem = " ".join(str(q.get("q") or "").split())[:EXAM_Q_MAX]
+        if not stem:
+            continue
+        written = answers[i] if i < len(answers) else ""
+        script.append({
+            "q": stem,
+            "points": _str_list(q.get("points"), 6, 300),
+            "terms": _str_list(q.get("terms"), 8, 60),
+            "answer": (written if isinstance(written, str) else "")[:EXAM_ANSWER_MAX],
+        })
+    if not script:
+        raise ApiError("nothing to mark")
+    if not any(item["answer"].strip() for item in script):
+        raise ApiError("every answer is blank — write something first")
+
+    message = mark_exam_message(
+        (body.get("root_topic") or "").strip()[:200],
+        (body.get("label") or "").strip()[:200],
+        material,
+        script,
+    )
+    text, cost = call_model(
+        MARK_EXAM_SYSTEM, [{"role": "user", "content": message}], "examiner",
+    )
+    data = first_json_object(text)
+    raw_results = (data.get("results") if isinstance(data, dict) else None) or []
+    results = []
+    for i, item in enumerate(script):
+        r = raw_results[i] if i < len(raw_results) and isinstance(raw_results[i], dict) else {}
+        try:
+            marks = int(round(float(r.get("marks"))))
+        except (TypeError, ValueError):
+            marks = 0
+        earned = space_sentences(str(r.get("earned") or "").strip())[:2500]
+        improve = space_sentences(str(r.get("improve") or "").strip())[:2500]
+        results.append({
+            "marks": max(0, min(EXAM_MARKS, marks)),
+            "earned": earned,
+            "improve": improve,
+            "hit": _str_list(r.get("hit"), 6, 300),
+            "missed": _str_list(r.get("missed"), 6, 300),
+        })
+    if not any(r["earned"] or r["improve"] for r in results):
+        raise ApiError("the examiner returned no usable feedback — try again", 502)
+    overall = space_sentences(
+        str((data.get("overall") if isinstance(data, dict) else "") or "").strip()
+    )[:2000]
+    return {
+        "results": results,
+        "overall": overall,
+        "total": sum(r["marks"] for r in results),
+        "max": len(results) * EXAM_MARKS,
+        "cost": cost,
+    }
+
+
 def _survey_items(raw, depth: int) -> list:
     """Validate/clip a survey breakdown: [{name, why, items?}] at most
     `depth` levels deep, at most 6 items per level."""
@@ -659,6 +813,8 @@ def model_routes(call_model, tutor_grounding=None, learner_grounding=None) -> di
         "teachback": lambda body: handle_teachback(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
+        "exam": lambda body: handle_exam(body, call_model),
+        "mark_exam": lambda body: handle_mark_exam(body, call_model),
         "order_questions": lambda body: handle_order_questions(body, call_model),
         "suggest_questions": lambda body: handle_suggest_questions(body, call_model),
         "survey": lambda body: handle_survey(body, call_model),
