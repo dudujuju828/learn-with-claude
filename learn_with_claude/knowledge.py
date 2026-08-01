@@ -46,6 +46,35 @@ def fmt_conf(value) -> str:
     return f"{value}%" if isinstance(value, int) else "—"
 
 
+def apply_asides(text: str, asides: list, wrap=None) -> str:
+    """Splice the reader's own words into a passage, in brackets, after the
+    phrase each one annotates — the same place the app shows them.
+
+    Matches across whitespace (the stored anchor is collapsed to single
+    spaces, the tutor's prose is not) and only the first occurrence, exactly
+    like the browser does, so a re-export never drifts from what was on
+    screen. `wrap` lets the HTML export mark its insertions up; the default
+    is the plain " (words)" the markdown export wants.
+    """
+    if not asides:
+        return text
+    for a in asides:
+        words = str(a.get("words") or "").strip()
+        anchor = str(a.get("text") or "").strip()
+        if not words or not anchor:
+            continue
+        pattern = r"\s+".join(re.escape(w) for w in anchor.split())
+        try:
+            match = re.search(pattern, text)
+        except re.error:
+            continue
+        if not match:
+            continue
+        insert = wrap(words) if wrap else f" ({words})"
+        text = text[: match.end()] + insert + text[match.end():]
+    return text
+
+
 def conversation_digest(turns: list, upto: int | None = None) -> str:
     """Compact 'you asked / tutor answered' recap of a conversation, used to seed
     branches with the context the learner already has."""
@@ -181,6 +210,31 @@ class KnowledgeTree:
             text = one_line(str(h.get("text") or ""), 300)
             if text:
                 m.setdefault(key, []).append(text)
+        return m
+
+    def aside_map(self) -> dict:
+        """(node_id, turn) -> [{text, words}, …]: the reader's own words,
+        written in the web app's 🏷 my words and shown inline in brackets.
+
+        Unlike a highlight, which an export can render beside the turn, an
+        aside only means anything *in place* — "mitochondria (power house of
+        the cell)". So both exports splice it into the sentence rather than
+        listing it underneath; see apply_asides().
+        """
+        m: dict = {}
+        for a in (self.extras.get("asides") or []):
+            if not isinstance(a, dict):
+                continue
+            text = " ".join(str(a.get("text") or "").split())
+            words = " ".join(str(a.get("words") or "").split())
+            if not text or not words:
+                continue
+            try:
+                key = (int(a.get("node")), int(a.get("turn")))
+            except (TypeError, ValueError):
+                continue
+            if key[0] in self.nodes:
+                m.setdefault(key, []).append({"text": text, "words": words})
         return m
 
     def fact_groups(self) -> list:
@@ -416,6 +470,7 @@ class KnowledgeTree:
 
         hl_map = self.highlight_map()
         img_map = self.image_map()
+        aside_map = self.aside_map()
 
         def walk(nid: int, depth: int) -> None:
             node = self.nodes[nid]
@@ -448,7 +503,9 @@ class KnowledgeTree:
                 out.append(f"🙋 **I ask Claude:** {t['action']}")
                 out.append("")
                 if t.get("tutor"):
-                    out.append(f"📘 **Claude answers:** {space_sentences(t['tutor'])}")
+                    answer = apply_asides(space_sentences(t["tutor"]),
+                                          aside_map.get((node.id, t.get("turn"))))
+                    out.append(f"📘 **Claude answers:** {answer}")
                     out.append("")
                 for passage in hl_map.get((node.id, t.get("turn")), []):
                     out.append(f"> ★ I highlighted: {passage}")

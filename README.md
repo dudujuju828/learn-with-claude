@@ -211,6 +211,17 @@ directly (a local `claude` login can't run on a server), so it needs an
   grounding passage), precisely as if you'd typed that text into the topic
   box and pressed *new*. It inherits only what a new tree always inherits:
   the active profile, the tutor style, and the learner level.
+  Or **🏷 my words**, the mirror of *✎ define*: that one asks the tutor what
+  a term means, this is **you** saying it, in brackets, right there in the
+  sentence. Select a word, type your own explanation, press Enter — and
+  *"so if a plant mitochondria is active"* reads *"so if a plant mitochondria
+  (power house of the cell) is active"* from then on. No model call, no cost,
+  no glossary entry unless you want one. Your words are tinted so a re-read
+  months later can never mistake them for something the tutor said, and the
+  brackets are real characters, so copying the passage copies them too. Tap
+  them to reword; an empty box takes them out again. They travel in
+  `.know.json`, sync, and are spliced into the sentence in both exports —
+  in place, where you put them.
   Or **🖼 image**, when a
   sentence would land better as a picture: select the descriptive passage you
   want to *see* and a figure is drawn and filed under that answer. Nothing is

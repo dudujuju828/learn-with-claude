@@ -5,6 +5,61 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 56 — 🏷 my words: your own gloss, inline in the sentence
+
+*(user-requested, with the example spelled out: highlight "mitochondria",
+type "power house of the cell", and the text reads "so if a plant
+mitochondria (power house of the cell) is active".)*
+
+The glossary answers *what does this mean* by asking the model and filing the
+answer somewhere else. This is the opposite move: you already know what it
+means, you just want it written down where you keep tripping over it. Select,
+type, Enter. No model call, no cost, nothing added to any list.
+
+Mechanically it is `★ highlight`'s twin — `{node, turn, text}` on the tree,
+re-found and re-decorated on every render — except the content is yours and
+editable, so the merge resolves a conflict by `when` rather than letting the
+server copy win. Naming: **not** `gloss`, which would collide with the
+existing `glossaryOf`/`showGloss`/`gpopShow` and mean something different;
+`aside` in code, "my words" on the button, deliberately paired against
+`✎ define` so the contrast reads on the chip itself.
+
+**Two integrity decisions, both about the same risk.** An annotation that
+looks like the tutor's own prose is worse than no annotation, because a
+re-read months later quietly promotes your guess into something Claude said.
+So the gloss is tinted and dotted-underlined rather than blending in — and
+the brackets are **real characters, not `::before`/`::after` content**. The
+harness caught that one: every block has a copy button, pseudo-elements don't
+travel through a copy, and the pasted sentence would have read "mitochondria
+power house of the cell is active" with the gloss silently absorbed. The
+same reasoning applies in the exported page, which also gets read aloud.
+
+**Both exports splice it in place**, which is the only rendering that means
+anything — a list of asides under a turn would lose the whole point. That
+needed `apply_asides()` in knowledge.py (shared, matching across whitespace
+and first-occurrence-only so an export can never drift from the screen) and,
+for the HTML export, private-use sentinels: `_md_lite` escapes before it
+builds tags, so a `<span>` spliced in beforehand would come out as visible
+markup. The sentinels survive escaping untouched and become the element
+afterwards. Where an answer is split into labelled cards, the pending list is
+consumed across parts so each aside lands in exactly one of them.
+
+**Rejected:** storing it in the glossary (wrong shape — a glossary entry is a
+term with a definition in a list; this is a parenthetical bound to one spot
+in one sentence, and forcing them together would damage both); a separate
+dialog (the `#qcap` bar already exists for exactly this "small input, no
+modal, no lost scroll position" job, so it grew an `aside` mode); and a
+delete button (an empty box clearing it is one interaction instead of two,
+and matches how the redraw hint already behaves).
+
+Verified: 48 Python tests — including the splice against the user's own
+mitochondria example, regex metacharacters in the anchor, and both exports —
+plus a 24-check headless harness covering select → type → Enter → inline
+render, the copyable brackets, edit-in-place, empty-box removal, and the
+merge keeping the newer wording.
+
+---
+
 ## Feature 55 — ⚡ fact me out: the breadth mode
 
 *(user-requested, after being asked what the learning loop was missing: "a

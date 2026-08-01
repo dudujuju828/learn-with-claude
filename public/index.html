@@ -1423,6 +1423,21 @@
     #qcap{bottom:calc(3.8rem + env(safe-area-inset-bottom))}
   }
 
+  /* 🏷 my words — your own explanation, inline in brackets right after the
+     passage it explains. Deliberately NOT styled like the surrounding prose:
+     it has to be obvious at a glance that these are your words and not the
+     tutor's, or a re-read months later quietly promotes your guess into
+     something Claude said. Muted, bracketed, and tinted with the same colour
+     the app uses everywhere for "yours". */
+  /* the brackets are real characters, not ::before/::after content: every
+     block here has a copy button, and pseudo-elements don't come along —
+     which would paste your gloss into the tutor's sentence unmarked. */
+  .aside{
+    color:var(--term); font-size:.92em; cursor:pointer;
+    border-bottom:1px dotted var(--term); padding:0 .05rem;
+  }
+  .aside:hover{background:var(--termbg)}
+
   /* generated figures (🖼 image on the selection chip).
      The picture sits on white in every theme: it was drawn on an off-white
      ground, so a dark card behind it reads as a hole punched in the page.
@@ -1798,6 +1813,16 @@
   (tap a mark to lift it). The <b>★ highlights</b> button in the words tab
   collects every marked passage across the profile's trees — tap one to
   jump back to it in context.</p>
+  <p><b>🏷 my words</b> — the mirror of <b>✎ define</b>. That one asks the
+  tutor what a term means; this is you saying it, in brackets, right there in
+  the sentence. Select a word, type your own explanation, press Enter, and
+  "so if a plant mitochondria is active" reads "so if a plant mitochondria
+  (power house of the cell) is active" from then on. No model call, no cost.
+  Your words are tinted so they can never be mistaken later for something the
+  tutor said, and the brackets are real text, so copying the block copies
+  them too. Tap your own words to reword them — an empty box takes them back
+  out. They travel with the tree, sync, and are spliced into the sentence in
+  both exports, exactly where you put them.</p>
   <p><b>⚡ facts</b> — the breadth mode, next to <b>new</b>/<b>full</b>/<b>survey</b>.
   Everything else here ends in a conversation: slow, scoped, one idea at a
   time. This is one call that returns the <i>landscape</i> — a few dozen
@@ -2491,6 +2516,7 @@
   <button id="seladd"></button>
   <button id="seldef"></button>
   <button id="seldig"></button>
+  <button id="selmy"></button>
   <button id="selask"></button>
   <button id="selimg"></button>
   <button id="selinv"></button>
@@ -4810,6 +4836,19 @@ function mergeTrees(local, server){
     if (!hlSeen.has(k)){ hlSeen.add(k); outHl.push(h); }
   }
   if (outHl.length) out.highlights = outHl; else delete out.highlights;
+  // your own words: union by node|turn|text like highlights, except that the
+  // content is yours and editable — so where both devices have one for the
+  // same passage, the later `when` wins rather than the server copy
+  const localAs = Array.isArray(local.asides) ? local.asides : [];
+  const outAs = Array.isArray(out.asides) ? out.asides.slice() : [];
+  const asKey = (a) => `${a.node}|${a.turn}|${a.text}`;
+  const asBy = new Map(outAs.map(a => [asKey(a), a]));
+  for (const la of localAs){
+    const se = asBy.get(asKey(la));
+    if (!se){ const c = structuredClone(la); outAs.push(c); asBy.set(asKey(c), c); }
+    else if ((la.when || "") > (se.when || "")){ se.words = la.words; se.when = la.when; }
+  }
+  if (outAs.length) out.asides = outAs; else delete out.asides;
   // generated figures: union by id (minted per figure, never reused), then
   // the tombstones win. A removed figure has had its bytes deleted, so
   // letting another device's copy resurrect the record would put a
@@ -5389,6 +5428,7 @@ function renderConversation(keepScroll){
   hideGloss();
   hideSelchip();
   applyHighlights();
+  applyAsides();
   annotateTerms();
   $("askrow").style.display = (!running && node.turns.some(t => t.tutor)) ? "" : "none";
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
@@ -8138,7 +8178,7 @@ function applyHighlights(){
     let re;
     try { re = new RegExp(words.join("\\s+")); } catch { continue; }
     const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => n.parentElement.closest("code,pre,.who,.hl,button,.nodeinfo,figcaption")
+      acceptNode: (n) => n.parentElement.closest("code,pre,.who,.hl,button,.nodeinfo,figcaption,.aside")
         ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -8161,6 +8201,115 @@ function applyHighlights(){
     }
   }
 }
+/* ------------------------------------------------------------------ */
+/* 🏷 my words — your own explanation, inline in brackets.             */
+/*                                                                     */
+/* The glossary answers "what does this mean" by asking the model and  */
+/* filing the answer in a list somewhere else. This is the opposite    */
+/* move: you already know what it means, you just want it written down */
+/* where you keep tripping over it. Select, type, done — no model call, */
+/* no cost, and the sentence reads "mitochondria (power house of the   */
+/* cell) is active" from then on.                                       */
+/*                                                                     */
+/* Stored like highlights ({node, turn, text} plus your words) and      */
+/* re-applied on every render, so it survives reloads, syncs, travels   */
+/* in .know.json, and goes into both exports — where it is inlined into */
+/* the sentence exactly as it appears here.                             */
+/* ------------------------------------------------------------------ */
+const ASIDE_MAX = 120;   // a parenthetical; longer belongs in 📝 notes
+function asidesOf(tree){
+  return Array.isArray(tree.asides) ? tree.asides : [];
+}
+/* one aside per passage per turn — glossing the same word twice in the same
+   breath is not a thing anyone wants, and it keeps the merge key simple */
+function asideFor(turn, text){
+  const tree = cur();
+  if (!tree || currentNode == null || turn == null) return null;
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  return asidesOf(tree).find(a =>
+    a.node === currentNode && a.turn === turn && a.text === t) || null;
+}
+function saveAside(turn, text, words){
+  const tree = cur();
+  if (!tree || currentNode == null || turn == null || Number.isNaN(turn)) return;
+  const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const w = String(words || "").replace(/\s+/g, " ").trim().slice(0, ASIDE_MAX);
+  if (t.length < 2) return;
+  const list = asidesOf(tree).slice();
+  const i = list.findIndex(a => a.node === currentNode && a.turn === turn && a.text === t);
+  // an empty box on an existing aside is how you take it back out
+  if (!w){
+    if (i < 0) return;
+    list.splice(i, 1);
+  } else if (i >= 0){
+    list[i] = {...list[i], words: w, when: new Date().toISOString()};
+  } else {
+    if (list.length >= 300) return;
+    list.push({node: currentNode, turn, text: t, words: w,
+               when: new Date().toISOString()});
+  }
+  if (list.length) tree.asides = list; else delete tree.asides;
+  persistTree(tree);
+  renderConversation(true);
+}
+window.saveAside = saveAside;
+
+/* Runs AFTER applyHighlights so the older feature is never disturbed, and
+   before annotateTerms, which skips .aside — otherwise a defined term
+   appearing inside your own words would sprout a definition popover on text
+   the tutor never wrote. Highlighted text is deliberately NOT skipped: a
+   word worth marking is exactly the kind you also want a note on. */
+function applyAsides(){
+  const tree = cur();
+  if (!tree || currentNode == null) return;
+  const mine = asidesOf(tree).filter(a => a.node === currentNode);
+  if (!mine.length) return;
+  for (const a of mine){
+    const turnEl = document.querySelector(`#conv .turn[data-turn="${a.turn}"]`);
+    if (!turnEl) continue;
+    const words = String(a.text || "").trim().split(/\s+/).map(escRe);
+    if (!words.length || !words[0]) continue;
+    let re;
+    try { re = new RegExp(words.join("\\s+")); } catch { continue; }
+    const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.parentElement.closest("code,pre,.who,button,.nodeinfo,figcaption,.aside")
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const tn of nodes){
+      const m = re.exec(tn.textContent);
+      if (!m) continue;
+      const end = m.index + m[0].length;
+      const frag = document.createDocumentFragment();
+      // the space belongs to the text, not to the span's ::before bracket —
+      // CSS content whitespace is unreliable, and this way a copy of the
+      // sentence reads "mitochondria (power house...)" too
+      frag.appendChild(document.createTextNode(tn.textContent.slice(0, end) + " "));
+      const span = document.createElement("span");
+      span.className = "aside";
+      span.textContent = `(${a.words})`;
+      span.title = "your own words — tap to change or clear them";
+      span.dataset.turn = a.turn;
+      span.dataset.anchor = a.text;
+      span.dataset.words = a.words;   // without the brackets, for editing
+      frag.appendChild(span);
+      frag.appendChild(document.createTextNode(tn.textContent.slice(end)));
+      tn.replaceWith(frag);
+      break;   // first occurrence only, like highlights
+    }
+  }
+}
+/* tap your own words to edit them (an empty box clears them) */
+$("conv").addEventListener("click", (e) => {
+  const span = e.target.closest("span.aside");
+  if (!span) return;
+  const sel = document.getSelection();
+  if (sel && !sel.isCollapsed) return;   // a tap that is really a selection
+  e.stopPropagation();                   // don't also read the block aloud
+  openQCap("aside", span.dataset.anchor, {turn: +span.dataset.turn,
+                                          words: span.dataset.words || ""});
+});
+
 function annotateTerms(){
   const tree = cur();
   if (!tree || !tree.glossary) return;
@@ -8170,7 +8319,7 @@ function annotateTerms(){
   const re = new RegExp("(^|[^\\w])(" + terms.map(escRe).join("|") + ")(?![\\w])", "gi");
   document.querySelectorAll("#conv .tutor-b p").forEach(p => {
     const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => n.parentElement.closest("code,.gref,.hl")
+      acceptNode: (n) => n.parentElement.closest("code,.gref,.hl,.aside")
         ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -8508,6 +8657,7 @@ function qcapFormHtml(mode, turn, quote){
   const head = mode === "global" ? "your question — global bank"
     : mode === "ask" ? "ask about this passage"
     : mode === "redraw" ? "draw it again"
+    : mode === "aside" ? `your own words for “${oneLine(quote || "", 40)}”`
     : `your question — turn ${turn}`;
   const placeholder = mode === "global"
     ? "what are you curious about? (investigated fresh, later)"
@@ -8515,18 +8665,24 @@ function qcapFormHtml(mode, turn, quote){
     // an empty box is a real answer here: image models are stochastic, so
     // "just try again" is often all a disappointing figure needs
     : mode === "redraw" ? "what should it show instead? (blank = just try again)"
+    // and here it is how you take an aside back out again
+    : mode === "aside" ? "in your own words — shows inline, in brackets"
     : "what are you wondering?";
   // the passage sits above the box so it's plain what the answer will be about
   const quoted = (mode === "ask" || mode === "redraw") && quote
     ? `<div class="qcapquote">${ico(mode === "redraw" ? "🖼" : "❝")}${esc(oneLine(quote, 240))}</div>` : "";
-  const send = mode === "ask" ? "ask" : mode === "redraw" ? "draw" : "save";
+  const send = mode === "ask" ? "ask" : mode === "redraw" ? "draw"
+    : mode === "aside" ? "add" : "save";
   return `<div class="qcaphead">${esc(head)}</div>` + quoted +
     `<div class="qcaprow">` +
-    `<input id="qcapinput" type="text" maxlength="500" placeholder="${esc(placeholder)}"` +
-    ` aria-label="${mode === "redraw" ? "what the figure should show" : "your question"}"` +
+    `<input id="qcapinput" type="text" maxlength="${mode === "aside" ? ASIDE_MAX : 500}"` +
+    ` placeholder="${esc(placeholder)}"` +
+    ` aria-label="${mode === "redraw" ? "what the figure should show"
+       : mode === "aside" ? "your own words for this passage" : "your question"}"` +
     ` enterkeyhint="${mode === "ask" || mode === "redraw" ? "send" : "done"}" autocomplete="off">` +
     `<button id="qcapsave" class="primary" aria-label="${mode === "ask"
        ? "ask the tutor" : mode === "redraw" ? "draw the figure again"
+       : mode === "aside" ? "save your own words"
        : "save to question bank"}">${send}</button>` +
     `<button id="qcapcancel" class="ghost" aria-label="cancel">✕</button></div>`;
 }
@@ -8544,18 +8700,22 @@ function wireQcapForm(){
    tied to the node/turn you're reading; requires one with a tutor reply) */
 function openQCap(mode, quote, extra){
   mode = mode === "global" ? "global" : mode === "ask" ? "ask"
-       : mode === "redraw" ? "redraw" : "local";
+       : mode === "redraw" ? "redraw" : mode === "aside" ? "aside" : "local";
   let turn = null;
   if (mode !== "global"){
     const tree = cur(); if (!tree || currentNode == null) return;
     const node = getNode(tree, currentNode);
     if (!node || !node.turns.some(t => t.tutor)) return;
     turn = guessReadingTurn() || node.turns[node.turns.length - 1].turn;
+    // an aside belongs to the exact turn the passage is in — not to whatever
+    // happens to be at the top of the viewport
+    if (mode === "aside" && extra && Number.isInteger(extra.turn)) turn = extra.turn;
   }
   clearTimeout(qcapTimer);
   $("qcap").dataset.mode = mode;
   $("qcap").dataset.turn = turn ?? "";
-  $("qcap").dataset.quote = (mode === "ask" || mode === "redraw") ? (quote || "") : "";
+  $("qcap").dataset.quote =
+    (mode === "ask" || mode === "redraw" || mode === "aside") ? (quote || "") : "";
   // redraw carries the figure it is replacing, so the old one is retired at
   // the same moment the new one lands rather than both sitting there
   $("qcap").dataset.fig = mode === "redraw" ? (extra || "") : "";
@@ -8563,6 +8723,11 @@ function openQCap(mode, quote, extra){
   qcapPrevFocus = document.activeElement;
   $("qcap").hidden = false;
   wireQcapForm();
+  // editing: start from what you wrote, selected, so retyping replaces it
+  if (mode === "aside" && extra && extra.words){
+    $("qcapinput").value = extra.words;
+    $("qcapinput").select();
+  }
 }
 window.openQCap = openQCap;
 function closeQCap(){
@@ -8575,6 +8740,15 @@ window.closeQCap = closeQCap;
 function saveQCap(){
   const mode = $("qcap").dataset.mode;
   const text = $("qcapinput") ? $("qcapinput").value : "";
+  // "aside" banks nothing and calls no model — it just writes your own words
+  // into the sentence. An empty box clears them again.
+  if (mode === "aside"){
+    const anchor = $("qcap").dataset.quote || "";
+    const turn = +($("qcap").dataset.turn || 0) || null;
+    closeQCap();
+    if (anchor && turn != null) saveAside(turn, anchor, text);
+    return;
+  }
   // "redraw" banks nothing either — it re-runs the figure that button
   // belongs to, optionally steered by what you typed
   if (mode === "redraw"){
@@ -8974,6 +9148,21 @@ document.addEventListener("selectionchange", () => {
       $("seldig").setAttribute("aria-label",
         `dig into “${info.text}” — ask the tutor what it is in this context`);
     }
+    /* 🏷 my words — the mirror of ✎ define: that one asks the model what a
+       term means, this one is you saying it, in brackets, right there in the
+       sentence. Offered on a term-ish selection only; a whole paragraph
+       doesn't take a parenthetical. */
+    $("selmy").style.display = short ? "" : "none";
+    if (short){
+      const mine = asideFor(info.turn, info.text);
+      $("selmy").innerHTML = `${ico("🏷")}${mine ? "edit my words" : "my words"}`;
+      $("selmy").title = mine
+        ? "change what you wrote here"
+        : "write your own words for this — they show inline, in brackets";
+      $("selmy").setAttribute("aria-label",
+        (mine ? "edit your own words for " : "write your own words for ") +
+        `“${info.text}”`);
+    }
     // your own question about exactly this passage — a term or a sentence
     $("selask").innerHTML = `${ico("💬")}ask`;
     $("selask").title = "ask your own question about this passage";
@@ -9133,6 +9322,18 @@ $("selhi").onclick = (ev) => {
   hideSelchip();
   document.getSelection()?.removeAllRanges();   // let the new mark show
   addHighlight(turn, text);
+};
+/* 🏷 my words — no model call, no cost. You already know what it means;
+   this just writes it into the sentence where you keep tripping over it. */
+$("selmy").onclick = (ev) => {
+  ev.stopPropagation();
+  const text = selchip.dataset.term || "";
+  const turn = selchip.dataset.turn ? +selchip.dataset.turn : null;
+  hideSelchip();
+  document.getSelection()?.removeAllRanges();
+  if (!text || turn == null) return;
+  const mine = asideFor(turn, text);
+  openQCap("aside", text, {turn, words: mine ? mine.words : ""});
 };
 
 /* ------------------------------------------------------------------ */

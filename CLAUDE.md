@@ -99,6 +99,13 @@ Breaking one of these is a regression even if nothing errors.
   arriving from the CLI or another device becomes a real record.
 - **Nothing enters the glossary automatically.** Terms join only by an
   explicit `➕ add` / flashcard. `✎ define` is a *lookup* that stores nothing.
+  `🏷 my words` stores nothing there either — it is an *inline* annotation
+  bound to one spot in one sentence (`tree.asides`), not a list entry.
+- **The reader's own words must never read as the tutor's.** Asides are
+  tinted, underlined, and bracketed with **real characters** — never
+  `::before`/`::after`, which don't survive the copy button or the exports.
+  Anything else that puts the reader's writing next to the tutor's owes the
+  same distinction.
 - **Nothing is illustrated automatically either**, and for the same reason.
   A figure is drawn only from a passage the reader selected, and the
   art-director stage is allowed to answer `{"drawable": false}` — an idea
@@ -127,7 +134,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 45 tests
+python -m pytest -q                     # 48 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

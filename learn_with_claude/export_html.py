@@ -34,6 +34,7 @@ import os
 import re
 from pathlib import Path
 
+from .knowledge import apply_asides
 from .render import space_sentences
 
 # "Ask AI": the exported page can query DeepSeek about the highlighted line.
@@ -139,6 +140,10 @@ figure.fig figcaption{{color:var(--muted); font-size:.9em; margin-top:.4rem;
   max-width:34rem;}}
 figure.fig .nofig{{border:1px dashed var(--line); border-radius:.7rem;
   padding:.9rem 1rem; color:var(--muted); max-width:34rem;}}
+/* the reader's own words, spliced into the sentence they explain. Tinted
+   and bracketed so they can never be mistaken, on a later read, for
+   something the tutor actually said. */
+.aside{{color:var(--term); font-size:.92em;}}
 /* the fact landscape */
 #facts ul{{margin:.2rem 0; padding-left:1.2rem;}}
 #facts li{{margin:.35rem 0;}}
@@ -672,7 +677,38 @@ def _figures_html(figures) -> str:
     return "".join(out)
 
 
-def _turn_html(t: dict, highlights=None, figures=None) -> str:
+# The reader's own words go in *inside* the prose, but _md_lite escapes
+# before it builds tags — so a <span> spliced in beforehand would come out as
+# visible markup. Private-use sentinels pass through the escaper untouched
+# (it only rewrites &<>"') and get swapped for the real element afterwards.
+_ASIDE_OPEN, _ASIDE_CLOSE = "", ""
+
+
+def _aside_wrap(words: str) -> str:
+    # real brackets, real leading space: the exported page gets read aloud and
+    # copied out of, and CSS-drawn punctuation survives neither
+    return f" {_ASIDE_OPEN}({words}){_ASIDE_CLOSE}"
+
+
+def _asides_into(text: str, pending: list) -> str:
+    """Splice in whichever pending asides match `text`, removing them from
+    `pending` as they land. Shared mutable state across an answer's parts on
+    purpose: each aside belongs at exactly ONE place, the same first
+    occurrence the browser picks, even when the answer is split into cards."""
+    for aside in list(pending):
+        after = apply_asides(text, [aside], wrap=_aside_wrap)
+        if after != text:
+            text = after
+            pending.remove(aside)
+    return text
+
+
+def _aside_spans(html: str) -> str:
+    return (html.replace(_ASIDE_OPEN, '<span class="aside">')
+                .replace(_ASIDE_CLOSE, "</span>"))
+
+
+def _turn_html(t: dict, highlights=None, figures=None, asides=None) -> str:
     parts = ['<div class="turn">']
     conf = (f' <span class="conf">· confidence {t["confidence"]}%</span>'
             if t.get("confidence") is not None else "")
@@ -694,6 +730,7 @@ def _turn_html(t: dict, highlights=None, figures=None) -> str:
         labelled = answer_parts and any(
             isinstance(p, dict) and p.get("label") for p in answer_parts
         )
+        pending = list(asides or [])
         if labelled:
             inner = []
             for p in answer_parts:
@@ -702,7 +739,7 @@ def _turn_html(t: dict, highlights=None, figures=None) -> str:
                 text = str(p.get("text") or "").strip()
                 if not text:
                     continue
-                body = _md_lite(space_sentences(text))
+                body = _md_lite(_asides_into(space_sentences(text), pending))
                 label = str(p.get("label") or "").strip()
                 if label:
                     inner.append(
@@ -712,10 +749,10 @@ def _turn_html(t: dict, highlights=None, figures=None) -> str:
                     inner.append(body)
             answer_html = "".join(inner)
         else:
-            answer_html = _md_lite(space_sentences(t["tutor"]))
+            answer_html = _md_lite(_asides_into(space_sentences(t["tutor"]), pending))
         parts.append(
             '<div class="block ans"><div class="label">📘 Claude answers</div>'
-            f"{answer_html}</div>"
+            f"{_aside_spans(answer_html)}</div>"
         )
     if highlights:
         marks = "".join(f"<p><mark>{_esc(h)}</mark></p>" for h in highlights)
@@ -748,6 +785,7 @@ def tree_to_html(tree) -> str:
     sections = []
     hl_map = tree.highlight_map() if hasattr(tree, "highlight_map") else {}
     img_map = tree.image_map() if hasattr(tree, "image_map") else {}
+    aside_map = tree.aside_map() if hasattr(tree, "aside_map") else {}
 
     def emit(nid: int) -> None:
         node = tree.nodes[nid]
@@ -761,7 +799,8 @@ def tree_to_html(tree) -> str:
         if node.focus:
             body.append(f'<div class="muted">Re-investigating: {_esc(node.focus)}</div>')
         body.extend(_turn_html(t, hl_map.get((node.id, t.get("turn"))),
-                               img_map.get((node.id, t.get("turn"))))
+                               img_map.get((node.id, t.get("turn"))),
+                               aside_map.get((node.id, t.get("turn"))))
                     for t in node.turns)
         body.append("</section>")
         sections.append("".join(body))

@@ -601,6 +601,85 @@ def test_handle_survey():
     print("ok  handle_survey (validation, clipping, depth cap, focus)")
 
 
+def test_aside_exports():
+    """🏷 my words: the reader's own gloss, spliced into the sentence it
+    explains — in place, in both exports, exactly where the app shows it."""
+    from learn_with_claude.knowledge import apply_asides
+
+    # the plain splice, on the shape the feature was asked for
+    assert apply_asides(
+        "so if a plant mitochondria is active",
+        [{"text": "mitochondria", "words": "power house of the cell"}],
+    ) == "so if a plant mitochondria (power house of the cell) is active"
+
+    # the anchor is stored whitespace-collapsed; the prose is not
+    assert apply_asides("a hash\ntable stores pairs",
+                        [{"text": "hash table", "words": "a lookup array"}]) \
+        == "a hash\ntable (a lookup array) stores pairs"
+    # first occurrence only, like the browser
+    assert apply_asides("bucket then bucket",
+                        [{"text": "bucket", "words": "a slot"}]) \
+        == "bucket (a slot) then bucket"
+    # anything that doesn't match, or has no words, changes nothing
+    for junk in ([{"text": "absent", "words": "x"}], [{"text": "a", "words": ""}], []):
+        assert apply_asides("plain text", junk) == "plain text"
+    # regex metacharacters in the anchor are matched literally
+    assert apply_asides("call f(x) now", [{"text": "f(x)", "words": "a function"}]) \
+        == "call f(x) (a function) now"
+
+    d = {
+        "format": "learn-with-claude/knowledge-tree", "version": 1, "id": "t5",
+        "root_topic": "plant cells", "created": "2026-08-01", "root_id": 1, "next": 2,
+        "nodes": {"1": {"id": 1, "label": "respiration", "children": [], "turns": [
+            {"turn": 1, "action": "q",
+             "tutor": "So if a plant mitochondria is active, it makes ATP."},
+            # `tutor` is every part joined, the way handle_tutor stores it
+            {"turn": 2, "action": "q2",
+             "tutor": "The chloroplast does the opposite.\n\nBecause a stroma stores sugar.",
+             "parts": [{"label": "", "text": "The chloroplast does the opposite."},
+                       {"label": "why", "text": "Because a stroma stores sugar."}]},
+        ]}},
+        "asides": [
+            {"node": 1, "turn": 1, "text": "mitochondria",
+             "words": "power house of the cell", "when": "2026-08-01T10:00:00Z"},
+            # one anchored inside a labelled answer card
+            {"node": 1, "turn": 2, "text": "stroma", "words": "the goo bit"},
+            {"node": 99, "turn": 1, "text": "orphan", "words": "dropped"},
+            {"node": 1, "turn": 1, "text": "", "words": "no anchor"},
+            {"node": 1, "turn": 1, "text": "ATP", "words": ""},
+            "not a dict",
+        ],
+    }
+    kb = KnowledgeTree.from_dict(d)
+    assert kb.to_dict()["asides"] == d["asides"]   # extras survive the CLI untouched
+
+    m = kb.aside_map()
+    assert sorted(m) == [(1, 1), (1, 2)]
+    assert m[(1, 1)] == [{"text": "mitochondria", "words": "power house of the cell"}]
+
+    md = kb.to_markdown()
+    assert "So if a plant mitochondria (power house of the cell) is active" in md
+    assert "a stroma (the goo bit) stores sugar" in md
+    assert "dropped" not in md and "no anchor" not in md
+
+    html = tree_to_html(kb)
+    assert 'mitochondria <span class="aside">(power house of the cell)</span>' in html
+    # it lands in the right answer card, not the first one
+    assert 'stroma <span class="aside">(the goo bit)</span>' in html
+    assert html.count('class="aside"') == 2, "an aside must land exactly once"
+    # the sentinels never survive into the page
+    assert "" not in html and "" not in html
+    assert "dropped" not in html
+
+    # no asides -> no key, and neither export mentions them
+    d2 = dict(d); d2.pop("asides")
+    kb2 = KnowledgeTree.from_dict(d2)
+    assert "asides" not in kb2.to_dict()
+    assert "power house" not in kb2.to_markdown()
+    assert 'class="aside"' not in tree_to_html(kb2)
+    print("ok  asides (splice, both exports, labelled parts, sentinels)")
+
+
 def test_handle_facts():
     """⚡ fact me out: grouping, clamping, and the de-duplication that keeps
     the same fact from appearing under two headings."""
@@ -1308,6 +1387,7 @@ if __name__ == "__main__":
     test_handle_exam()
     test_handle_mark_exam()
     test_exam_exports()
+    test_aside_exports()
     test_handle_facts()
     test_facts_exports()
     test_image_prompt()
