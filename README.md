@@ -69,7 +69,11 @@ directly (a local `claude` login can't run on a server), so it needs an
   `claude-opus-5` — setting a fair paper and marking essays to a scheme are
   the two judgement calls whose failures are least visible to the person they
   land on, since a soft mark reads exactly like a good one. Set
-  `LEARN_EXAMINER_MODEL` to bring it back down to the tutor's model.
+  `LEARN_EXAMINER_MODEL` to bring it back down to the tutor's model. The
+  **reviewer** (🔍 double-check) defaults to the *tutor's* model rather than
+  the strongest one — unlike the examiner it runs on every single turn, so a
+  third opus call would roughly treble a conversation; `LEARN_REVIEWER_MODEL`
+  raises it if catching the subtle ones matters more than the cost.
 - `api/trees.js` — tree history in Vercel Blob (`trees/<id>.json`), so every
   logged-in device sees the same past investigations. The browser keeps a
   localStorage working copy and syncs (debounced push, boot merge,
@@ -104,7 +108,24 @@ directly (a local `claude` login can't run on a server), so it needs an
   (the original terse style), applied from the next turn — or write your own
   **custom tutor** (name + how it should answer, with a try-before-saving
   preview), which syncs across devices like the trees and keeps the base
-  rules in force. A **learner** picker sets how much the simulated learner
+  rules in force.
+  Beside it, **🔍 double-check** turns on a second pass over every answer
+  before you see it. A reviewer — handed the tutor's own brief verbatim, plus
+  the question, the previous exchange and (for a 📚 sourced tree) the passage
+  — reads the reply for wrong claims, wording that will predictably be read
+  the wrong way, ambiguity, and the rules the tutor broke. It exists because
+  of the one asymmetry the app can't design away: a wrong answer and a right
+  one read exactly the same to someone who came here *because* they don't know
+  the subject. Nothing is replaced silently — a corrected answer is badged
+  **✎ 2 fixes**, and opening it shows what was wrong and what it said first;
+  a clean read gets a quiet **✓ checked** so you can tell "read and sound"
+  from "never checked". A rewrite with no stated reason, one much longer than
+  the original (that's the reviewer answering the question again rather than
+  repairing it), or a review that simply fails all leave the answer exactly as
+  written and put no mark on it at all. It costs a third model call per turn,
+  so it's off by default and remembered per profile — worth paying for on the
+  topic you're learning cold, not on the one where you'd catch the errors
+  yourself. A **learner** picker sets how much the simulated learner
   already knows (curious novice → student → practitioner → expert from a
   neighbouring field), so its questions scale with the tutor; **auto** (the
   default) derives the level from the tutor style, and each investigation
@@ -678,6 +699,7 @@ knowledge/                    # your saved trees (*.know.json) + exported markdo
 | `-m, --model` | `claude-sonnet-5` | model for both personas (`opus`, `claude-opus-4-8`, …) |
 | `--learner-model` / `--tutor-model` | = `--model` | per-persona override |
 | `--effort` | `xhigh` | reasoning effort for both personas (`low`…`max`) |
+| `--double-check` | off | read every tutor answer back before showing it — wrong claims, misleading wording, broken rules. Corrections are printed and saved with what it said first. A third model call per turn. |
 | `-d, --dir` | `knowledge` | knowledge directory |
 | `--width` | `66` | terminal wrap width (dyslexia-friendly short measure) |
 | `--line-spacing` | `1` | `2` adds a blank line between lines for extra airiness |
@@ -688,7 +710,8 @@ knowledge/                    # your saved trees (*.know.json) + exported markdo
 ## Notes & limitations
 
 - **It costs money.** Every turn is two real model calls — roughly $0.05–0.07/turn on
-  `sonnet`. A root investigation usually self-stops in a handful of turns; each branch is
+  `sonnet`, or three calls with `--double-check` / 🔍. A root investigation usually
+  self-stops in a handful of turns; each branch is
   another small conversation. Keep `--max-turns` modest and use `sonnet` to stay cheap.
 - The tutor is a *conceptual* tutor, deliberately terse to force granular
   learning. In the CLI it gets no tools at all: both personas run with the

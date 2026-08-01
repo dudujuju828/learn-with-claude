@@ -57,7 +57,7 @@ class Shell:
     def __init__(self, knowledge_dir="knowledge", *, color=True, max_turns=20,
                  learner_model="claude-sonnet-5", tutor_model="claude-sonnet-5",
                  effort="xhigh", level="student", timeout=300,
-                 width=66, line_spacing=1) -> None:
+                 double_check=False, width=66, line_spacing=1) -> None:
         self.dir = Path(knowledge_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.r = Renderer(color=color, width=width, spacing=line_spacing)
@@ -67,6 +67,7 @@ class Shell:
         self.effort = effort
         self.level = level
         self.timeout = timeout
+        self.double_check = double_check
         self.kb: KnowledgeTree | None = None
 
     # ------------------------------------------------------------------ #
@@ -135,7 +136,7 @@ class Shell:
         result = run_conversation(
             topic, max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
-            timeout=self.timeout, renderer=self.r,
+            timeout=self.timeout, double_check=self.double_check, renderer=self.r,
         )
         kb.add_root(topic, result, learner_model=self.learner_model, tutor_model=self.tutor_model,
                     learner_level=self.level)
@@ -166,7 +167,7 @@ class Shell:
             return run_conversation(
                 topic, max_turns=self.max_turns, learner_model=self.learner_model,
                 tutor_model=self.tutor_model, effort=self.effort, level=self.level,
-                timeout=self.timeout, renderer=silent,
+                timeout=self.timeout, double_check=self.double_check, renderer=silent,
             )
 
         trees: dict[str, KnowledgeTree] = {}
@@ -254,7 +255,7 @@ class Shell:
             tutor_extra_system=followup_tutor_context(recap, concept),
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
-            timeout=self.timeout, renderer=self.r,
+            timeout=self.timeout, double_check=self.double_check, renderer=self.r,
         )
         result.cost += pick_cost  # the picker call belongs to this node
 
@@ -312,7 +313,7 @@ class Shell:
             anchor=focus or f'going deeper on this point: "{one_line(bt["tutor"], 160)}"',
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
-            timeout=self.timeout, renderer=self.r,
+            timeout=self.timeout, double_check=self.double_check, renderer=self.r,
         )
 
         label = focus or self._derive_label(result, bt["tutor"])

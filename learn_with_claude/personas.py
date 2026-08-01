@@ -396,6 +396,121 @@ def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
     return "\n\n".join(parts)
 
 
+# --------------------------------------------------------------------------- #
+# 🔍 double-check — the second pass over a tutor reply, before anyone sees it.
+#
+# The one asymmetry this app can't design away: a wrong answer and a right one
+# read exactly the same to someone who came here BECAUSE they don't know the
+# subject. Every other quality lever in the tool aims at the tutor's prompt and
+# then trusts the output. This reads the output.
+#
+# Deliberately a separate call rather than "be careful" bolted onto the tutor's
+# own prompt: the tutor is mid-conversation, holding a persona and a style, and
+# is the last party you'd ask whether it just made something up. A fresh
+# context reading finished prose is a genuinely different judgement.
+# --------------------------------------------------------------------------- #
+REVIEW_KINDS = ("error", "misleading", "unclear", "contract")
+
+REVIEW_JOB = """\
+You are the last read-through of a tutor's reply before it reaches a learner.
+The reply has not been sent. Nobody has seen it. If something is wrong with
+it, you are the only chance to catch it — and the reader can't catch it
+themselves, because not knowing this subject is exactly why they are here.
+
+Read it for four kinds of defect, most serious first:
+
+- error — a claim that is simply false: a wrong number, name, date or
+  mechanism; a causal story running the wrong way; an example that doesn't do
+  what the sentence says it does.
+- misleading — defensible word by word, but predictably read the wrong way:
+  an "always" that is only usually, an analogy that quietly implies something
+  false, a simplification the learner will later have to unlearn.
+- unclear — a pronoun with two possible referents, a term used before it means
+  anything, a sentence that has to be read twice, two ideas in an order that
+  hides which one causes the other.
+- contract — it broke the brief it was written to (quoted below): more than
+  the one question answered, a menu ending, sentences run together instead of
+  one per paragraph, well past the length ceiling.
+
+MOST REPLIES HAVE NOTHING WRONG WITH THEM. Saying so is the expected answer,
+not a failure to find something. Do NOT rewrite for taste, for your own
+preferred phrasing, or to add the thing you would also have mentioned. A reply
+you changed for no real reason is worse than one you left alone, because the
+reader is told a fix was made and now trusts the sentence more than before.
+
+Never add a topic, a pile of caveats, or a follow-up the tutor didn't raise —
+that is the tutor's brief being broken by the person hired to enforce it. If a
+claim is wrong and you do not know what the right one is, cut it or state it
+as the uncertainty it actually is. Never invent a replacement fact.
+
+The rewrite goes out in the tutor's voice, not yours. Keep its structure, its
+[tag] lines, its length and its one-sentence-per-paragraph layout, and change
+only the words the defects force you to change. Never address the reader and
+never mention that anything was checked or corrected.
+
+Answer with ONLY a JSON object.
+
+Nothing wrong:
+{"verdict": "clean"}
+
+Something wrong:
+{"verdict": "revise",
+ "issues": [{"kind": "error|misleading|unclear|contract",
+             "note": "one short sentence: what was WRONG, not what you did"}],
+ "answer": "the full corrected reply, ready to show"}
+
+"answer" is the WHOLE reply as the learner should now read it — not a diff,
+not just the part you changed."""
+
+
+def review_system(*, mode: str = "balanced", custom_style: "str | None" = None,
+                  segments: bool = False) -> str:
+    """The reviewer's system prompt: its own job, then the tutor's brief
+    verbatim.
+
+    Quoting tutor_system() rather than restating it is the point — the
+    reviewer's "contract" category is only meaningful if it is holding the
+    reply to the *same* text the tutor was given, including the style the
+    reader picked and the [tag] markup the reading UI needs back. Restating it
+    would drift the moment either prompt changed. The grounding clause is left
+    off: which tools the tutor had is none of the reviewer's business, and it
+    has none of its own.
+    """
+    return "\n\n".join([
+        REVIEW_JOB,
+        "THE BRIEF THE TUTOR WAS WRITING TO. Every rule in it binds your "
+        "rewrite too — you are enforcing this, not replacing it:",
+        "<<<",
+        tutor_system(mode=mode, custom_style=custom_style, segments=segments),
+        ">>>",
+    ])
+
+
+def review_message(question: str, answer: str, context: str = "",
+                   source: str = "") -> str:
+    parts = []
+    if source:
+        parts += [
+            "This conversation is grounded in a passage the tutor was told to "
+            "answer FROM. Check the reply against it — a claim it contradicts "
+            "is an error even if it would be true elsewhere:",
+            "<<<", source.strip(), ">>>", "",
+        ]
+    if context:
+        parts += [
+            "The exchange just before, for context only — do not review it:",
+            "<<<", context.strip(), ">>>", "",
+        ]
+    parts += [
+        "The learner asked:",
+        "<<<", question.strip(), ">>>", "",
+        "The tutor wrote this reply. It has not been shown to anyone yet:",
+        "<<<", answer.strip(), ">>>", "",
+        "Review it now. JSON only.",
+    ]
+    return "\n".join(parts)
+
+
 def first_learner_message(topic: str) -> str:
     return (
         f'You have just decided to learn about: "{topic}".\n'

@@ -1398,6 +1398,180 @@ def test_question_anchoring():
     print("ok  question anchoring (per-turn anchor, sub-node anchors, parking rule)")
 
 
+def test_review_system():
+    """The reviewer is only able to judge "it broke its brief" if it is holding
+    the reply to the SAME text the tutor was given — so review_system quotes
+    tutor_system() rather than restating it."""
+    from learn_with_claude.personas import review_message, review_system
+
+    brief = "You are a tutor in a live back-and-forth chat"
+    s = review_system(mode="concise", segments=True)
+    # its own job first, then the tutor's brief verbatim
+    assert "You are the last read-through" in s
+    assert brief in s
+    assert "STYLE — CONCISE" in s          # the style the reader actually picked
+    assert "MARKUP" in s                   # …and the [tag] contract it must give back
+    assert s.index("last read-through") < s.index(brief)
+    # a custom tutor's own words reach the reviewer too, or it would "fix" a
+    # deliberately odd voice back into the house one
+    assert "speak only in haiku" in review_system(custom_style="speak only in haiku")
+    # tools are none of the reviewer's business, and it has none of its own
+    assert "LOCAL TOOLS" not in review_system()
+
+    m = review_message("why?", "because.", context="earlier stuff", source="the passage")
+    assert "the passage" in m and "earlier stuff" in m
+    assert "why?" in m and "because." in m
+    assert "do not review it" in m         # the context is context, not the subject
+    # no source / no context => neither block appears at all
+    plain = review_message("why?", "because.")
+    assert "do not review it" not in plain and "grounded in a passage" not in plain
+    print("ok  review system (tutor brief quoted, style + markup carried, context framed)")
+
+
+def test_review_result():
+    """Every clamp here stops the cure being worse than the disease."""
+    from learn_with_claude.simulator import REVIEW_GROWTH_FLOOR, review_result
+
+    orig = "The cat sat on the mat." * 8   # ~184 chars
+
+    # clean => original stands, and the turn is marked as read-and-sound
+    assert review_result({"verdict": "clean"}, orig) == (orig, {"issues": []})
+    # a real repair carries both the reasons and what it replaced
+    good = {"verdict": "revise", "answer": "Fixed text.",
+            "issues": [{"kind": "error", "note": "wrong number"},
+                       {"kind": "nonsense-kind", "note": "unknown kinds are dropped, notes kept"}]}
+    text, checked = review_result(good, orig)
+    assert text == "Fixed text."
+    assert checked["before"] == orig
+    assert checked["issues"][0] == {"kind": "error", "note": "wrong number"}
+    assert checked["issues"][1]["kind"] == ""       # unrecognised kind, note survives
+
+    # a rewrite nobody can check is the position this feature exists to escape
+    assert review_result({"verdict": "revise", "answer": "Fixed."}, orig) == (orig, None)
+    # …and a "revision" that changed nothing is just a clean read with a badge
+    assert review_result({"verdict": "revise", "answer": orig,
+                          "issues": [{"note": "x"}]}, orig) == (orig, {"issues": []})
+    # a reply that came back much longer is the reviewer answering the question
+    # again in its own words — the tutor's brief broken by its enforcer
+    bloat = {"verdict": "revise", "answer": "y" * (len(orig) * 3),
+             "issues": [{"kind": "unclear", "note": "muddled"}]}
+    assert review_result(bloat, orig) == (orig, None)
+    # …but a short answer is allowed to grow, where one added clause is a big
+    # relative jump and not a rewrite at all
+    short = "Yes."
+    grown = {"verdict": "revise", "answer": "y" * (REVIEW_GROWTH_FLOOR - 1),
+             "issues": [{"kind": "misleading", "note": "over-general"}]}
+    assert review_result(grown, short)[1] is not None
+    # nothing parseable => no mark at all, because claiming a check that never
+    # happened is the one outcome worse than not checking
+    assert review_result(None, orig) == (orig, None)
+    assert review_result("not a dict", orig) == (orig, None)
+    assert review_result({}, orig) == (orig, None)
+    print("ok  review result clamps (repair vs rewrite, unaccountable, bloat, junk)")
+
+
+def test_handle_tutor_double_check():
+    from learn_with_claude.webapi import ApiError, handle_tutor
+
+    answer = "Water boils at 90C at sea level.\n\n[why]\nBecause pressure.\n"
+    fixed = json.dumps({
+        "verdict": "revise",
+        "issues": [{"kind": "error", "note": "said 90C; it is 100C at sea level"}],
+        "answer": "Water boils at 100C at sea level.\n\n[why]\nBecause pressure.",
+    })
+    seen = []
+
+    def stub(system, messages, role, **kw):
+        seen.append({"role": role, "system": system, "msg": messages[-1]["content"], "kw": kw})
+        return (fixed if role == "reviewer" else answer), 0.02
+
+    # off by default: one call, no second bill, nothing stored on the turn
+    r = handle_tutor({"action": "does water boil at 90?"}, stub)
+    assert [s["role"] for s in seen] == ["tutor"]
+    assert "checked" not in r and r["cost"] == 0.02
+
+    seen.clear()
+    body = {"action": "does water boil at 90?", "double_check": True,
+            "source": "At sea level water boils at 100C.",
+            "turns": [{"action": "what is pressure?", "tutor": "Force per area."}]}
+    r = handle_tutor(body, stub)
+    assert [s["role"] for s in seen] == ["tutor", "reviewer"]
+    review = seen[1]
+    # the reviewer's own role, so a backend can point it at its own model
+    assert review["kw"] == {"effort": "medium", "max_tokens": 8000}
+    # a claim the tree's own source contradicts is an error even if it would be
+    # true elsewhere — so the passage and the prior exchange both reach it
+    assert "At sea level water boils at 100C." in review["msg"]
+    assert "what is pressure?" in review["msg"]
+    # one turn, one bill
+    assert r["cost"] == 0.04
+    # the CORRECTED text is what gets split, stored and shown
+    assert "100C" in r["tutor"] and "90C" not in r["tutor"]
+    assert [p["label"] for p in r["parts"]] == ["", "why"]
+    # …and the superseded wording is kept, given the same tag-stripping as the
+    # shown text so "what it said first" is a like-for-like read
+    assert r["checked"]["before"].startswith("Water boils at 90C")
+    assert "[why]" not in r["checked"]["before"]
+
+    # a clean read still marks the turn, so a reader can tell "checked, sound"
+    # from "never checked"
+    r = handle_tutor(dict(body), lambda s, m, role, **kw: (
+        '{"verdict": "clean"}' if role == "reviewer" else answer, 0.01))
+    assert r["checked"] == {"issues": []} and "90C" in r["tutor"]
+
+    # the answer is written and already paid for: a checker that is down must
+    # not take it away, and the missing mark is the honest signal
+    def flaky(system, messages, role, **kw):
+        if role == "reviewer":
+            raise ApiError("rate limited", 429)
+        return answer, 0.02
+
+    r = handle_tutor(dict(body), flaky)
+    assert "checked" not in r and "90C" in r["tutor"] and r["cost"] == 0.02
+    print("ok  handle_tutor double-check (off by default, corrected text, cost, failure)")
+
+
+def test_checked_exports():
+    """A corrected answer travels with its correction. An export showing only
+    the repaired text would present a second pass's sentences as the tutor's."""
+    from learn_with_claude.export_html import tree_to_html
+    from learn_with_claude.knowledge import KnowledgeTree
+
+    tree = KnowledgeTree.from_dict({
+        "root_topic": "boiling", "root_id": 1, "next": 2,
+        "nodes": {"1": {"id": 1, "label": "boiling", "parent_id": None,
+                        "branch_from_turn": 0, "children": [], "turns": [
+            {"turn": 1, "action": "at what temperature?",
+             "tutor": "Water boils at 100C at sea level.",
+             "checked": {"issues": [{"kind": "error", "note": "it first said 90C"}],
+                         "before": "Water boils at 90C at sea level."}},
+            {"turn": 2, "action": "why?", "tutor": "Vapour pressure matches air pressure.",
+             "checked": {"issues": []}},
+        ]}},
+    })
+
+    # first: it has to survive the portable file at all — unknown TURN keys
+    # pass through as raw dicts, which is what makes this a turn field and not
+    # a Node one (_NODE_FIELDS would drop it)
+    rt = KnowledgeTree.from_dict(json.loads(json.dumps(tree.to_dict())))
+    assert rt.nodes[1].turns[0]["checked"]["before"].startswith("Water boils at 90C")
+
+    md = tree.to_markdown()
+    assert "Double-checked" in md and "*wrong* — it first said 90C" in md
+    assert "What it said first" in md and "> Water boils at 90C at sea level." in md
+    # a clean turn changed nothing the reader saw, so it says nothing
+    assert md.count("Double-checked") == 1
+
+    html = tree_to_html(tree)
+    assert "ckpanel" in html and "1 fix" in html
+    assert "it first said 90C" in html
+    assert "Water boils at 90C at sea level." in html
+    assert html.count("ckpanel") >= 1 and html.count('class="ckmark"') == 1
+    # the styles for it actually ship in the self-contained page
+    assert "details.ckpanel" in html and ".ckbefore" in html
+    print("ok  checked exports (markdown + html carry the fixes and the old wording)")
+
+
 if __name__ == "__main__":
     test_learner_levels()
     test_tutor_system_segments()
@@ -1425,4 +1599,8 @@ if __name__ == "__main__":
     test_suggest_questions()
     test_deepen_threading()
     test_question_anchoring()
+    test_review_system()
+    test_review_result()
+    test_handle_tutor_double_check()
+    test_checked_exports()
     print("\nall green")

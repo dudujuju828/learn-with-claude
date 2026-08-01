@@ -56,12 +56,18 @@ EXAMINER_MODEL = os.environ.get("LEARN_EXAMINER_MODEL", "claude-opus-5")
 # half-remembered number here is repeated rather than caught. Breadth and
 # recall accuracy are exactly what the strongest model buys, so it gets one.
 FACTS_MODEL = os.environ.get("LEARN_FACTS_MODEL", "claude-opus-5")
+# 🔍 double-check reads back every tutor reply before it is shown. Unlike the
+# examiner it runs on EVERY turn, so the default is the tutor's own model
+# rather than the strongest one — a third opus call per turn would roughly
+# treble the bill for a conversation. Set LEARN_REVIEWER_MODEL to claude-opus-5
+# if catching the subtle ones matters more than the cost.
+REVIEWER_MODEL = os.environ.get("LEARN_REVIEWER_MODEL", TUTOR_MODEL)
 EFFORT = os.environ.get("LEARN_EFFORT", "xhigh")
 MAX_TURNS = int(os.environ.get("LEARN_MAX_TURNS", "20"))
 
 ROLE_MODELS = {"learner": LEARNER_MODEL, "tutor": TUTOR_MODEL,
                "glossary": GLOSSARY_MODEL, "examiner": EXAMINER_MODEL,
-               "facts": FACTS_MODEL}
+               "facts": FACTS_MODEL, "reviewer": REVIEWER_MODEL}
 
 COOKIE_NAME = "lwc_auth"
 TOKEN_DAYS = 30

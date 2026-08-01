@@ -140,6 +140,26 @@ class Renderer:
         text = space_sentences(text)
         self._emit_block("📘 Claude answers", wrap_paragraphs(text, self.width - 2), self.c.blue)
 
+    def checked(self, issues: list) -> None:
+        """🔍 what the double-check changed in the answer just printed.
+
+        Its own method rather than a couple of info() calls so SilentRenderer
+        can swallow it with the rest of the conversation — a parallel `many`
+        run would otherwise interleave four investigations' corrections into
+        the progress line.
+        """
+        if not issues:
+            return
+        c = self.c
+        n = len(issues)
+        print(f"{c.magenta}✎ double-checked — {n} fix{'es' if n > 1 else ''}:{c.reset}")
+        for issue in issues:
+            kind = issue.get("kind")
+            note = f"{f'({kind}) ' if kind else ''}{issue.get('note', '')}"
+            for i, ln in enumerate(wrap_paragraphs(note, self.width - 6)):
+                print(f"{c.grey}  {'- ' if i == 0 else '  '}{ln}{c.reset}")
+        print()
+
     # --- shell chrome ----------------------------------------------------
     def shell_banner(self, knowledge_dir) -> None:
         c = self.c
@@ -182,6 +202,9 @@ class Renderer:
                          t.get("action", ""), t.get("confidence"))
             if t.get("tutor"):
                 self.tutor(t["tutor"])
+                checked = t.get("checked")
+                if isinstance(checked, dict):
+                    self.checked(checked.get("issues") or [])
 
 
 class SilentRenderer(Renderer):
@@ -199,4 +222,7 @@ class SilentRenderer(Renderer):
         pass
 
     def tutor(self, *args, **kwargs) -> None:
+        pass
+
+    def checked(self, *args, **kwargs) -> None:
         pass

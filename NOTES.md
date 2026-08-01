@@ -5,6 +5,93 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 57 — 🔍 double-check: a second pass over every tutor answer
+
+*(user-requested: "the teacher's response gets re-submitted to an AI after
+it's generated to parse for mistakes, improvements in clarity/phrasing, and
+other sorts of potentially misleading aspects, before it's displayed".)*
+
+The asymmetry this app can't design away: a wrong answer and a right one read
+exactly the same to someone who came here **because** they don't know the
+subject. Every other quality lever here aims at the tutor's prompt and then
+trusts the output. This one reads the output.
+
+Deliberately a **separate call**, not "be careful" bolted onto the tutor's own
+prompt. The tutor is mid-conversation, holding a persona and a style, and is
+the last party you'd ask whether it just made something up. A fresh context
+reading finished prose is a genuinely different judgement.
+
+**Where it lives.** Inside `handle_tutor()`, the one route all four client
+call sites already POST to (sim loop, resume, your own question, banked
+questions). No new route, so no `vercel.json` change, and both web backends
+plus the CLI get it from the same seam. The client side is one field on
+`tutorParams()`, which is what every caller already spreads.
+
+**The reviewer is handed the tutor's own system prompt verbatim** —
+`review_system()` quotes `tutor_system()` rather than restating it. That is
+the whole reason its fourth defect category ("contract") means anything: it is
+holding the reply to the *same* text the tutor was given, including the style
+the reader picked and the `[tag]` markup the reading UI needs back. Restating
+it would drift the moment either prompt changed. It also gets the question,
+the previous exchange, and — when the tree is grounded in a passage — the
+source, because a claim that contradicts the tree's own material is an error
+even where it would be true elsewhere.
+
+**Four clamps, all guarding against the cure being worse than the disease.**
+A rewrite with **no stated reason** is refused (unaccountable). A rewrite much
+**longer** than the original is refused — correcting or cutting a claim
+shortens prose far more often than it lengthens it, so growth means the
+reviewer answered the question again in its own words, which is the tutor's
+brief broken by its own enforcer. A rewrite **identical** to the original
+degrades to a clean read, because issues beside untouched text are a badge
+pointing at nothing. And an **unparseable** reply, or a review call that
+fails outright, leaves the answer exactly as it was with *no mark at all* —
+the answer is already written and already paid for, and claiming a check that
+never happened is the one outcome worse than not checking.
+
+**Honesty over silent replacement.** A corrected turn stores
+`checked: {issues, before}`: the reasons, and what it said first. The header
+shows `✎ 2 fixes`, expandable to both. A clean read stores `{issues: []}` and
+gets a deliberately quiet `✓ checked` — it appears on every answer once the
+toggle is on, and a badge that shouts every turn is one more thing a dyslexic
+reader has to skip past. The panel sits **outside `.block`**, like the
+figures, so the copy button doesn't harvest the review notes into the answer
+you meant to copy. Both exports carry it, for the same reason the asides do.
+
+**Cost and model.** A third model call per turn, so it is **off by default**
+and profile-scoped like the tutor style — it's the subject that decides
+whether a wrong sentence costs you anything, so it's worth paying for on the
+topic you're learning cold and not on the one you could catch errors in
+yourself. New `reviewer` role: hosted defaults to the *tutor's* model (not
+opus like the examiner — this runs on every turn, and a third opus call would
+roughly treble a conversation), overridable with `LEARN_REVIEWER_MODEL`;
+locally it rides the tutor's model like the examiner and fact lister, but
+takes `_role_flags()`' no-tools branch. Effort is `medium` on purpose: the
+judgement is "is any of this wrong", not "work this out from first
+principles", and full effort would double the wait on every single turn.
+
+**Rejected:** folding the check into the tutor's own prompt (self-review by
+the party that just wrote it); a three-call design where the reviewer flags
+and the *tutor* revises (twice the latency for a repair the reviewer can make
+itself, and it hands the correction back to the model that got it wrong);
+showing flagged-but-unfixed issues (a warning over text we then displayed
+unchanged reads worse than nothing — the prompt instead requires repair by
+correcting, cutting or honestly hedging, which is always possible); and
+storing only the issues without `before` (then "what was fixed" is
+unverifiable, and a reviewer that mangled an answer would be undetectable).
+
+`review_result()` sits in `simulator.py` beside `extract_turn()` — same job,
+pull a structure you can trust out of a reply you can't — because both the web
+backends and the CLI need it, which rules out putting it in either.
+
+Verified: 52 Python tests (the clamps, the quoted brief, cost summing, the
+failure path, both exports, and the `.know.json` round-trip) plus a 26-check
+headless harness covering the toggle, the flag on every request, the corrected
+text being what gets stored, the badge/panel rendering, the panel staying out
+of the copy, and a clean read still leaving a mark.
+
+---
+
 ## Feature 56 — 🏷 my words: your own gloss, inline in the sentence
 
 *(user-requested, with the example spelled out: highlight "mitochondria",

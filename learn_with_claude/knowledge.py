@@ -89,6 +89,43 @@ def apply_asides(text: str, asides: list, wrap=None) -> str:
     return text
 
 
+# 🔍 double-check — the reviewer's defect kinds in the reader's words (see
+# REVIEW_KINDS in personas.py). Shared by both exports so a corrected answer
+# reads the same on screen, in markdown and on the exported page.
+CHECK_KIND_LABELS = {"error": "wrong", "misleading": "misleading",
+                     "unclear": "unclear", "contract": "off-brief"}
+
+
+def checked_issues(turn: dict) -> list:
+    """[(label, note), …] for a turn a double-check corrected.
+
+    Empty for a turn that was read and found sound, and for one that was never
+    checked at all — the exports have no reason to distinguish those two, since
+    neither changed a word of what the reader saw.
+    """
+    checked = turn.get("checked")
+    if not isinstance(checked, dict):
+        return []
+    out = []
+    for item in checked.get("issues") or []:
+        if not isinstance(item, dict):
+            continue
+        note = " ".join(str(item.get("note") or "").split())
+        if not note:
+            continue
+        kind = str(item.get("kind") or "").strip()
+        out.append((CHECK_KIND_LABELS.get(kind, kind), note))
+    return out
+
+
+def checked_before(turn: dict) -> str:
+    """What the tutor first wrote, before the double-check repaired it."""
+    checked = turn.get("checked")
+    if not isinstance(checked, dict):
+        return ""
+    return str(checked.get("before") or "").strip()
+
+
 def conversation_digest(turns: list, upto: int | None = None) -> str:
     """Compact 'you asked / tutor answered' recap of a conversation, used to seed
     branches with the context the learner already has."""
@@ -521,6 +558,21 @@ class KnowledgeTree:
                                           aside_map.get((node.id, t.get("turn"))))
                     out.append(f"📘 **Claude answers:** {answer}")
                     out.append("")
+                    # a corrected answer travels with its correction: an export
+                    # showing only the repaired text would quietly present a
+                    # second pass's words as the tutor's own
+                    issues = checked_issues(t)
+                    if issues:
+                        out.append("> ✎ **Double-checked** — corrected before it was shown:")
+                        for label, note in issues:
+                            out.append(f"> - {f'*{label}* — ' if label else ''}{note}")
+                        out.append("")
+                        before = checked_before(t)
+                        if before:
+                            out.append("**What it said first:**")
+                            out.append("")
+                            out.append("> " + before.replace("\n", "\n> "))
+                            out.append("")
                 for passage in hl_map.get((node.id, t.get("turn")), []):
                     out.append(f"> ★ I highlighted: {passage}")
                     out.append("")

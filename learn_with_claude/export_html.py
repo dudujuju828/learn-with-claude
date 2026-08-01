@@ -34,7 +34,7 @@ import os
 import re
 from pathlib import Path
 
-from .knowledge import apply_asides
+from .knowledge import apply_asides, checked_before, checked_issues
 from .render import space_sentences
 
 # "Ask AI": the exported page can query DeepSeek about the highlighted line.
@@ -144,6 +144,25 @@ figure.fig .nofig{{border:1px dashed var(--line); border-radius:.7rem;
    and bracketed so they can never be mistaken, on a later read, for
    something the tutor actually said. */
 .aside{{color:var(--term); font-size:.92em;}}
+/* 🔍 double-check: an answer a second pass corrected before it was ever
+   shown. It travels into the export for the same reason the asides do — a
+   page that showed only the repaired text would present the reviewer's
+   sentences as the tutor's own, with nothing to check them against. */
+.ckmark{{font-size:.78em; letter-spacing:.04em; color:var(--term);
+  background:var(--term-bg); border:1px solid var(--term-line);
+  border-radius:1rem; padding:.05rem .5rem; margin-left:.5rem;
+  font-weight:normal; vertical-align:.1em;}}
+details.ckpanel{{margin:-.6rem 0 1.1rem; font-size:.92em;}}
+details.ckpanel summary{{cursor:pointer; color:var(--muted); font-size:.88em;
+  letter-spacing:.04em; padding:.2rem 0;}}
+details.ckpanel[open] summary{{color:var(--fg);}}
+details.ckpanel ul{{margin:.35rem 0 0; padding-left:1.3rem;}}
+details.ckpanel li{{margin:.25rem 0;}}
+details.ckpanel .cklbl{{margin:.7rem 0 .25rem; font-size:.85em;
+  letter-spacing:.06em; color:var(--muted);}}
+details.ckpanel .ckbefore{{white-space:pre-wrap; color:var(--muted);
+  background:var(--card); border:1px dashed var(--line); border-radius:.55rem;
+  padding:.6rem .8rem;}}
 /* the fact landscape */
 #facts ul{{margin:.2rem 0; padding-left:1.2rem;}}
 #facts li{{margin:.35rem 0;}}
@@ -750,10 +769,26 @@ def _turn_html(t: dict, highlights=None, figures=None, asides=None) -> str:
             answer_html = "".join(inner)
         else:
             answer_html = _md_lite(_asides_into(space_sentences(t["tutor"]), pending))
+        issues = checked_issues(t)
+        mark = (f'<span class="ckmark">✎ {len(issues)} '
+                f'fix{"es" if len(issues) > 1 else ""}</span>') if issues else ""
         parts.append(
-            '<div class="block ans"><div class="label">📘 Claude answers</div>'
+            f'<div class="block ans"><div class="label">📘 Claude answers{mark}</div>'
             f"{_aside_spans(answer_html)}</div>"
         )
+        if issues:
+            items = "".join(
+                f"<li>{f'<b>{_esc(label)}</b> — ' if label else ''}{_esc(note)}</li>"
+                for label, note in issues
+            )
+            before = checked_before(t)
+            was = (f'<div class="cklbl">what it said first</div>'
+                   f'<div class="ckbefore">{_esc(space_sentences(before))}</div>'
+                   if before else "")
+            parts.append(
+                '<details class="ckpanel"><summary>✎ what the double-check '
+                f"changed</summary><ul>{items}</ul>{was}</details>"
+            )
     if highlights:
         marks = "".join(f"<p><mark>{_esc(h)}</mark></p>" for h in highlights)
         parts.append(

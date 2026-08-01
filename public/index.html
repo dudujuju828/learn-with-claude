@@ -355,17 +355,18 @@
   .swatch.active{border-color:var(--accent); outline:2px solid var(--accent); outline-offset:2px}
   /* toggle rows: a bold label with its explanation underneath, and the
      switch pinned top-right so the switches line up in a column however
-     long the explanations wrap */
-  #aapanel .switchrow{align-items:flex-start}
-  #aapanel .switchrow label{display:flex; flex-direction:column; gap:.05rem;
-    line-height:1.45}
-  #aapanel .switchrow label b{color:var(--fg); font-weight:600}
-  #aapanel .switchrow label small{font-size:var(--t-2xs); color:var(--muted)}
-  #aapanel .toggle{flex:none; min-width:3.2rem; text-align:center;
+     long the explanations wrap. Unscoped because the sidebar has switch rows
+     of its own now (🔍 double-check) and they must read as the same control. */
+  .switchrow{align-items:flex-start}
+  .switchrow label{flex:1; display:flex; flex-direction:column; gap:.05rem;
+    line-height:1.45; cursor:pointer}
+  .switchrow label b{color:var(--fg); font-weight:600}
+  .switchrow label small{font-size:var(--t-2xs); color:var(--muted)}
+  .toggle{flex:none; min-width:3.2rem; text-align:center;
     border-radius:var(--r-pill)}
-  #aapanel .toggle.on{background:var(--primary); border-color:var(--primary);
+  .toggle.on{background:var(--primary); border-color:var(--primary);
     color:var(--onprim); font-weight:600}
-  #aapanel .toggle.on:hover:not(:disabled){background:var(--primary)}
+  .toggle.on:hover:not(:disabled){background:var(--primary)}
   #aapanel .foot{display:flex; justify-content:space-between; margin-top:.7rem}
 
   /* ---- sidebar ---- */
@@ -578,6 +579,29 @@
     display:inline-block; background:var(--card); border:1px solid var(--ask);
     color:var(--ask); border-radius:var(--r-sm); padding:.15rem .7rem; font-size:var(--t-sm);
     margin-top:.3rem;
+  }
+  /* 🔍 double-check. The clean mark stays deliberately quiet — it appears on
+     every answer once the toggle is on, and a badge that shouts on every turn
+     is noise a dyslexic reader has to skip past each time. The repaired one
+     earns its colour: something in the text below it changed. */
+  .ckmark{font-size:var(--t-2xs); letter-spacing:.04em; color:var(--muted);
+    border:1px solid var(--line); border-radius:var(--r-pill); padding:.02rem .5rem}
+  .ckmark.fixed{color:var(--term); border-color:var(--termbg); background:var(--termbg)}
+  .ckpanel{margin:.35rem 0 0; font-size:var(--t-sm)}
+  .ckpanel summary{color:var(--muted); cursor:pointer; font-size:var(--t-xs);
+    letter-spacing:.04em; padding:.15rem 0}
+  .ckpanel summary:hover{color:var(--fg)}
+  .ckpanel ul{margin:.35rem 0 0; padding-left:1.3rem; color:var(--fg)}
+  .ckpanel li{margin:.25rem 0}
+  .ckpanel .cklbl{margin:.6rem 0 .2rem; font-size:var(--t-2xs); letter-spacing:.06em;
+    text-transform:lowercase; color:var(--muted)}
+  /* the superseded wording. Muted and boxed so it can never be mistaken for
+     the answer itself — it is the one place in the app showing text the
+     reader was deliberately not shown. */
+  .ckpanel .ckbefore{
+    white-space:pre-wrap; color:var(--muted); background:var(--card);
+    border:1px dashed var(--line); border-radius:var(--r-sm);
+    padding:.5rem .7rem; max-height:18rem; overflow:auto;
   }
   .branchrow{margin:.25rem 0 0; display:flex; gap:.45rem; align-items:center; flex-wrap:wrap}
   .branchrow input{max-width:18rem; font-size:var(--t-md); padding:.3rem .5rem}
@@ -1565,6 +1589,9 @@
     #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #exambox, #gapsbox, #tutoreditor, #overview, #qbankbox, #globalqbox, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
+    /* a corrected answer never travels without its correction, and paper is
+       the one copy nobody can expand later */
+    .ckpanel .ckbefore{max-height:none; overflow:visible}
   }
 
   /* confidence sparkline */
@@ -2056,6 +2083,16 @@
         <button id="tutoreditbtn" title="create or edit custom tutors" aria-label="create or edit custom tutors">✎</button>
       </div>
       <p class="hint">applies to the tutor's answers from the next turn on. ✎ makes your own tutor.</p>
+
+      <div class="newrow switchrow">
+        <label for="dblbtn"><b>🔍 double-check</b></label>
+        <button id="dblbtn" class="toggle" role="switch">off</button>
+      </div>
+      <p class="hint">a second pass reads every answer back before you see it —
+      for wrong claims, for wording that reads the wrong way, and for the rules
+      the tutor was given. Corrections are marked, with what it said first kept
+      underneath. Costs one extra call per answer, so a turn is three instead
+      of two.</p>
 
       <h2>learner</h2>
       <div class="newrow">
@@ -2694,10 +2731,11 @@ const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
                        tmode: "balanced", think: true, llevel: "auto",
+                       dblcheck: false,
                        revtype: false, drill: false, drillwait: 5, examq: 5};
-/* tmode/think/llevel are the live values, but they belong to the active
-   profile — see the profiles section, which saves and restores them per
-   interest. `profile` itself is deliberately NOT here any more: which
+/* tmode/think/llevel/dblcheck are the live values, but they belong to the
+   active profile — see the profiles section, which saves and restores them
+   per interest. `profile` itself is deliberately NOT here any more: which
    profile you are in is server-owned now, not a device preference. */
 const PREF_STEPS = {fs: {d: 1, min: 14, max: 26, fmt: v => v + "px"},
                     lh: {d: 0.15, min: 1.3, max: 2.8, fmt: v => v.toFixed(2)},
@@ -2757,7 +2795,8 @@ function applyPrefs(){
   if ($("voicesel").selectedIndex < 0) $("voicesel").value = "";
   document.body.classList.toggle("hide-think", !prefs.think);
   for (const [id, key] of [["speakbtn", "speak"], ["rulerbtn", "ruler"],
-                           ["focusbtn", "focus"], ["thinkbtn", "think"]]){
+                           ["focusbtn", "focus"], ["thinkbtn", "think"],
+                           ["dblbtn", "dblcheck"]]){
     const b = $(id);
     b.textContent = prefs[key] ? "on" : "off";
     b.classList.toggle("on", prefs[key]);
@@ -2802,6 +2841,11 @@ function buildPanel(){
   };
   $("levelsel").onchange = () => {
     prefs.llevel = $("levelsel").value; savePrefs(); rememberProfileSettings(); levelHint();
+  };
+  // lives in the sidebar rather than the reading panel: it changes what the
+  // tutor sends, not how the page renders it
+  $("dblbtn").onclick = () => {
+    prefs.dblcheck = !prefs.dblcheck; applyPrefs(); rememberProfileSettings();
   };
   $("tutoreditbtn").onclick = () => {
     const t = currentTutor();
@@ -2957,9 +3001,13 @@ function currentTutor(){
     ? tutorsDoc.tutors.find(t => "custom:" + t.id === prefs.tmode) || null
     : null;
 }
+/* everything that shapes a tutor call, in one place — every caller spreads
+   this, so 🔍 double-check reaches the sim loop, ⛏ dig, your own questions and
+   the banked ones without four separate wirings */
 function tutorParams(){
   const t = currentTutor();
-  return t ? {mode: "balanced", custom_style: t.style} : {mode: prefs.tmode};
+  const style = t ? {mode: "balanced", custom_style: t.style} : {mode: prefs.tmode};
+  return prefs.dblcheck ? {...style, double_check: true} : style;
 }
 function styleName(){
   const t = currentTutor();
@@ -4555,14 +4603,18 @@ async function syncProfilesFromServer(){
   } catch {}
 }
 
-/* how an interest is read: its tutor style, learner level, and whether the
-   learner thinks out loud. These ride in the registry rather than the device
-   prefs so "history" keeps its plain-words tutor while "computer-science"
-   keeps its technical one — on every device, not just the one you set it on.
+/* how an interest is read: its tutor style, learner level, whether the
+   learner thinks out loud, and whether answers get double-checked. These ride
+   in the registry rather than the device prefs so "history" keeps its
+   plain-words tutor while "computer-science" keeps its technical one — on
+   every device, not just the one you set it on. Double-checking sits here for
+   the same reason and one more: it's the subject that decides whether a wrong
+   sentence costs you anything, so it's worth paying for on the topic you're
+   learning cold and not on the one you could catch errors in yourself.
    prefs still holds the LIVE values (every reader of prefs.tmode is
    unchanged); switching profile saves the outgoing set and loads the
    incoming one. */
-const PROFILE_SETTINGS = ["tmode", "think", "llevel"];
+const PROFILE_SETTINGS = ["tmode", "think", "llevel", "dblcheck"];
 function captureProfileSettings(name){
   const rec = profileRecord(name, true);
   if (!rec) return;
@@ -5174,7 +5226,8 @@ $("conv").addEventListener("click", (e) => {
     partFold.set(sum.parentElement.dataset.fold, !sum.parentElement.open);
 });
 window.addEventListener("beforeprint", () =>
-  document.querySelectorAll("#conv details.part").forEach(d => { d.open = true; }));
+  document.querySelectorAll("#conv details.part, #conv details.ckpanel")
+    .forEach(d => { d.open = true; }));
 
 function sparkHtml(turns){
   const pts = turns.filter(t => Number.isInteger(t.confidence)).map(t => t.confidence);
@@ -5233,6 +5286,39 @@ window.termChipClick = (el) => {
   else addTerm(tree, term, currentNode, +el.dataset.turn || 1);
 };
 
+/* 🔍 double-check left a mark on this answer. Two states worth telling apart:
+   read and found sound, or read and repaired. The second owes the reader both
+   the reasons and the wording it replaced — "corrected" with nothing behind it
+   is just a second unverifiable claim stacked on the first, and this feature
+   exists because the reader can't check the first one either. */
+const CHECK_KINDS = {error: "wrong", misleading: "misleading",
+                     unclear: "unclear", contract: "off-brief"};
+function checkedBadge(t){
+  if (!t.checked) return "";
+  const n = (t.checked.issues || []).length;
+  if (!n) return `<span class="ckmark" title="double-checked — nothing to fix"` +
+                 ` aria-label="double-checked, nothing to fix">${ico("✓")}checked</span>`;
+  const label = `double-checked — ${n} correction${n > 1 ? "s" : ""} made`;
+  return `<span class="ckmark fixed" title="${esc(label)}" aria-label="${esc(label)}">` +
+         `${ico("✎")}${n} fix${n > 1 ? "es" : ""}</span>`;
+}
+/* deliberately OUTSIDE .block, like the figures: the copy button harvests the
+   block's paragraphs, and a note about what was wrong is not part of the
+   answer you meant to copy. Read-aloud and the selection chip skip it too. */
+function checkedPanelHtml(t){
+  const issues = (t.checked && t.checked.issues) || [];
+  if (!issues.length) return "";
+  const list = issues.map(i =>
+    `<li>${i.kind ? `<b>${esc(CHECK_KINDS[i.kind] || i.kind)}</b> — ` : ""}${esc(i.note)}</li>`
+  ).join("");
+  const before = t.checked.before
+    ? `<div class="cklbl">what it said first</div>` +
+      `<div class="ckbefore">${esc(t.checked.before)}</div>`
+    : "";
+  return `<details class="ckpanel"><summary>${ico("✎")}what the double-check ` +
+         `changed</summary><ul>${list}</ul>${before}</details>`;
+}
+
 function turnHtml(node, t, prevConf, allowBranch){
   let h = `<article class="turn" data-turn="${t.turn}">`;
   h += `<div class="turnhead"><span>turn ${t.turn}</span>${confHtml(t, prevConf)}</div>`;
@@ -5249,8 +5335,10 @@ function turnHtml(node, t, prevConf, allowBranch){
          `${copyBtn}</div>${quoted}${esc(t.action)}</div>`;
   }
   if (t.tutor){
-    h += `<div class="block tutor-b"><div class="who">${ico("📘")}${provName()} answers${copyBtn}</div>` +
+    h += `<div class="block tutor-b"><div class="who">${ico("📘")}${provName()} answers` +
+         `${checkedBadge(t)}${copyBtn}</div>` +
          `${tutorBodyHtml(t, `${node.id}:${t.turn}`)}</div>`;
+    h += checkedPanelHtml(t);
     if (t.done){
       h += `<div class="donechip">${ico("✓")}the learner can now explain it in their own words</div>`;
     }
@@ -10342,6 +10430,23 @@ function setRunning(on){
 /* ------------------------------------------------------------------ */
 /* the learner<->tutor loop (mirrors simulator.run_conversation)       */
 /* ------------------------------------------------------------------ */
+
+/* every route that gets an answer out of /api/tutor files it the same way.
+   One helper rather than four copies: a new field travelling on a tutor
+   reply is otherwise three sites remembered and one forgotten, which is
+   exactly how `parts` went missing from ⛏ dig once already. */
+function takeTutorReply(rec, T){
+  rec.tutor = T.tutor;
+  if (T.parts) rec.parts = T.parts;
+  if (T.checked) rec.checked = T.checked;
+}
+/* the wait is visibly longer with 🔍 double-check on — three model calls to a
+   turn instead of two — so the status says so rather than reading as a hang */
+function answeringStatus(what){
+  const who = `${provName()} is answering${what ? " " + what : ""}`;
+  return prefs.dblcheck ? `${who}, then double-checking…` : `${who}…`;
+}
+
 async function runInvestigation(tree, node, ctx){
   // every conversation kind funnels through here, so grounding a tree in
   // its own material (📚 source) is one line, not one per thunk
@@ -10352,11 +10457,10 @@ async function runInvestigation(tree, node, ctx){
   const last = node.turns[node.turns.length - 1];
   if (last && last.action && !last.tutor){
     activity = {nodeId: node.id, kind: "tutor"};
-    setStatus(`turn ${last.turn}: ${provName()} is answering…`); renderAll();
+    setStatus(`turn ${last.turn}: ${answeringStatus()}`); renderAll();
     const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: last.action, ...tutorParams()});
     node.cost += T.cost;
-    last.tutor = T.tutor;
-    if (T.parts) last.parts = T.parts;
+    takeTutorReply(last, T);
     if (Number.isInteger(last.confidence)) node.final_confidence = last.confidence;
     saveStore(); renderAll();
   }
@@ -10378,11 +10482,10 @@ async function runInvestigation(tree, node, ctx){
     if (!rec.action) break;
 
     activity = {nodeId: node.id, kind: "tutor"};
-    setStatus(`turn ${turn}: ${provName()} is answering…`); renderAll();
+    setStatus(`turn ${turn}: ${answeringStatus()}`); renderAll();
     const T = await api("tutor", {...ctx, turns: node.turns.slice(0, -1), action: rec.action, ...tutorParams()});
     node.cost += T.cost;
-    rec.tutor = T.tutor;
-    if (T.parts) rec.parts = T.parts;
+    takeTutorReply(rec, T);
     if (Number.isInteger(rec.confidence)) node.final_confidence = rec.confidence;
     saveStore(); renderAll();
     if (rec.done || stopRequested) break;
@@ -10625,14 +10728,13 @@ function askThunk(treeId, nodeId, question, quote){
     }
     if (!rec.tutor){
       activity = {nodeId, kind: "tutor"};
-      setStatus(provName() + " is answering you…"); renderAll();
+      setStatus(answeringStatus("you")); renderAll();
       const before = node.turns.slice(0, node.turns.indexOf(rec));
       const T = await api("tutor", {...rebuildCtx(tree, node),
                                     ...(tree.source ? {source: tree.source} : {}),
                                     turns: before, action: asked, ...tutorParams()});
       node.cost += T.cost;
-      rec.tutor = T.tutor;
-      if (T.parts) rec.parts = T.parts;
+      takeTutorReply(rec, T);
       saveStore();
     }
     activity = null;
@@ -10675,14 +10777,13 @@ function bankInvestigateThunk(treeId, qid){
     }
     if (!rec.tutor){
       activity = {nodeId: node.id, kind: "tutor"};
-      setStatus(provName() + " is answering a banked question…"); renderAll();
+      setStatus(answeringStatus("a banked question")); renderAll();
       const before = node.turns.slice(0, node.turns.indexOf(rec));
       const T = await api("tutor", {...rebuildCtx(tree, node),
                                     ...(tree.source ? {source: tree.source} : {}),
                                     turns: before, action: q.text, ...tutorParams()});
       node.cost += T.cost;
-      rec.tutor = T.tutor;
-      if (T.parts) rec.parts = T.parts;
+      takeTutorReply(rec, T);
       saveStore();
     }
     q.answered = true; q.answerTurn = rec.turn;

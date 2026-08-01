@@ -36,10 +36,17 @@ Adding a route means three things, and the third is easy to forget:
    works locally and 404s in production
 
 `call_model(system, messages, role, …)`'s `role` picks the model per backend:
-`learner` / `tutor` / `glossary` / `examiner`. Hosted maps them in
-`api/index.py`'s `ROLE_MODELS` (examiner → `claude-opus-5`); local maps them in
-`copilot_backend.effective_model()`, where an unknown role means "auto" and no
-tools. Adding a role means touching both.
+`learner` / `tutor` / `glossary` / `examiner` / `facts` / `reviewer`. Hosted
+maps them in `api/index.py`'s `ROLE_MODELS` (examiner and facts →
+`claude-opus-5`); local maps them in `copilot_backend.effective_model()`, where
+an unknown role means "auto" and no tools. Adding a role means touching both.
+
+`tutor` is the one route that can make **two** model calls: with
+`double_check` on the body, the reply goes back out to the `reviewer` role
+before it is split into parts (🔍 double-check). Both calls' costs are summed
+into the one `cost` the turn is billed. The review can only ever *degrade* —
+a failure or an untrustworthy verdict leaves the original answer and puts no
+`checked` field on the turn.
 
 `illustrate` is the one route that isn't purely `call_model`: stage one is a
 normal `tutor` call, stage two goes to Gemini through `gemini_images.py`
@@ -106,6 +113,13 @@ Breaking one of these is a regression even if nothing errors.
   `::before`/`::after`, which don't survive the copy button or the exports.
   Anything else that puts the reader's writing next to the tutor's owes the
   same distinction.
+- **A corrected answer never passes as the original.** 🔍 double-check may
+  replace the tutor's words, so a repaired turn always carries *why*
+  (`checked.issues`) and *what it said first* (`checked.before`), in the app
+  and in both exports. A rewrite the reviewer gave no reason for is refused
+  outright rather than shown, and a review that failed leaves no mark at all —
+  a `✓ checked` badge on an answer nothing actually read would be worse than
+  no badge, since the whole feature is a trust claim.
 - **Nothing is illustrated automatically either**, and for the same reason.
   A figure is drawn only from a passage the reader selected, and the
   art-director stage is allowed to answer `{"drawable": false}` — an idea
@@ -134,7 +148,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 48 tests
+python -m pytest -q                     # 52 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

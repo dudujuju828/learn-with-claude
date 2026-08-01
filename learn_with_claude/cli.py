@@ -44,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
                    choices=["novice", "student", "practitioner", "expert"],
                    help="How much the simulated learner already knows — shapes the "
                         "questions it can ask (default: student).")
+    p.add_argument("--double-check", action="store_true",
+                   help="Read every tutor answer back before it is shown — for wrong "
+                        "claims, misleading wording, and the rules it was given. "
+                        "Corrections are printed and saved with what it said first. "
+                        "Costs a third model call per turn.")
     p.add_argument("-d", "--dir", default=None,
                    help=f"Knowledge directory (default: $LEARN_DIR or {DEFAULT_DIR}).")
     p.add_argument("--width", type=int, default=66,
@@ -81,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         tutor_model=args.tutor_model or args.model,
         effort=args.effort,
         level=args.level,
+        double_check=args.double_check,
         timeout=args.timeout,
         width=args.width,
         line_spacing=args.line_spacing,

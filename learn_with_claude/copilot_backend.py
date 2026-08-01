@@ -110,11 +110,14 @@ def effective_model(role: str) -> str:
     """The model actually used for `role`: a live override, else the
     LEARN_COPILOT_*_MODEL env var, else "" (the CLI's own "auto").
 
-    The examiner (the written exam's paper-setter and marker) and the fact
-    lister have no settings entry of their own — locally there is no
-    per-token bill to protect, so they ride the tutor's model rather than
-    adding dropdowns nobody would have a reason to set differently."""
-    if role in ("examiner", "facts"):
+    The examiner (the written exam's paper-setter and marker), the fact
+    lister and the double-check reviewer have no settings entry of their own —
+    locally there is no per-token bill to protect, so they ride the tutor's
+    model rather than adding dropdowns nobody would have a reason to set
+    differently. (The reviewer still gets _role_flags()' no-tools branch, not
+    the tutor's: it is a fixed persona reading finished prose, and the local
+    tutor's read-only tools would only invite it to go wandering.)"""
+    if role in ("examiner", "facts", "reviewer"):
         role = "tutor"
     return _snapshot()["models"].get(role, "") or ROLE_MODELS.get(role, "")
 

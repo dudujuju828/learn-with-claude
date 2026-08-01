@@ -61,6 +61,8 @@ from .personas import (
     next_concept_message,
     order_questions_message,
     quiz_message,
+    review_message,
+    review_system,
     session_brief_learner_context,
     source_learner_context,
     source_tutor_context,
@@ -70,7 +72,7 @@ from .personas import (
     tutor_system,
 )
 from .render import space_sentences
-from .simulator import clean_term, extract_turn, first_json_object
+from .simulator import clean_term, extract_turn, first_json_object, review_result
 
 
 class ApiError(Exception):
@@ -245,6 +247,76 @@ def split_tutor_parts(text: str) -> list:
     return out
 
 
+def tutor_payload(text: str) -> tuple:
+    """The treatment every tutor reply gets on the way out: split on its
+    [label] markup, then space the sentences of each piece.
+
+    Returns (clean_text, parts_or_None). The clean text is the parts joined
+    WITHOUT their tags, so the learner sim, digests, search, and exports all
+    keep seeing plain prose.
+    """
+    parts = split_tutor_parts(text)
+    if not parts:
+        return space_sentences(text), None
+    for p in parts:
+        p["text"] = space_sentences(p["text"])
+    return "\n\n".join(p["text"] for p in parts if p["text"]), parts
+
+
+# --------------------------------------------------------------------------- #
+# 🔍 double-check — see REVIEW_JOB in personas.py for what the reviewer is for
+# and review_result() in simulator.py for what its reply is trusted to say.
+# --------------------------------------------------------------------------- #
+REVIEW_CONTEXT_MAX = 1200
+# The reply is ~150 words and the judgement is "is any of this wrong", not
+# "work this out from first principles" — so what it needs is a careful read,
+# not a deep one. Full effort here would double the wait on every single turn,
+# which is the cost the reader actually feels.
+REVIEW_EFFORT = "medium"
+REVIEW_MAX_TOKENS = 8000
+
+
+def review_context(body: dict) -> str:
+    """The exchange immediately before this one.
+
+    Without it the reviewer can't tell a reply that answers the question from
+    one that answers the *previous* question perfectly well — and "unclear"
+    judgements about pronouns need to know what was already on the table.
+    """
+    turns = body.get("turns")
+    if not isinstance(turns, list):
+        return ""
+    for t in reversed(turns):
+        if not isinstance(t, dict):
+            continue
+        asked = str(t.get("action") or "").strip()
+        answered = str(t.get("tutor") or "").strip()
+        if asked and answered:
+            return f"they asked: {asked}\n\nyou answered: {answered}"[:REVIEW_CONTEXT_MAX]
+    return ""
+
+
+def review_answer(body: dict, action: str, answer: str, call_model,
+                  mode: str, custom: "str | None") -> tuple:
+    """Second pass over one tutor reply. Returns (text, checked, cost)."""
+    message = review_message(
+        action, answer, review_context(body), source_of(body),
+    )
+    try:
+        text, cost = call_model(
+            review_system(mode=mode, custom_style=custom, segments=True),
+            [{"role": "user", "content": message}], "reviewer",
+            effort=REVIEW_EFFORT, max_tokens=REVIEW_MAX_TOKENS,
+        )
+    except ApiError:
+        # The answer is already written and already paid for. A checker that
+        # is rate-limited or misconfigured must not take it away — the missing
+        # mark on the turn is the honest signal that no check happened.
+        return answer, None, 0.0
+    shown, checked = review_result(first_json_object(text), answer)
+    return shown, checked, cost
+
+
 def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict:
     action = (body.get("action") or "").strip()
     if not action:
@@ -269,15 +341,26 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
             messages.append({"role": "assistant", "content": t["tutor"]})
     messages.append({"role": "user", "content": action})
     text, cost = call_model(system, messages, "tutor")
-    parts = split_tutor_parts(text)
-    if not parts:
-        return {"tutor": space_sentences(text), "cost": cost}
-    # the stored/plain answer is the parts joined without their tags, so the
-    # learner sim, digests, search, and exports all keep seeing clean text
-    for p in parts:
-        p["text"] = space_sentences(p["text"])
-    clean = "\n\n".join(p["text"] for p in parts if p["text"])
-    return {"tutor": clean, "parts": parts, "cost": cost}
+
+    checked = None
+    if body.get("double_check"):
+        text, checked, review_cost = review_answer(
+            body, action, text, call_model, mode, custom,
+        )
+        # one turn, one bill: the header stays honest about what was spent
+        cost += review_cost
+
+    clean, parts = tutor_payload(text)
+    out = {"tutor": clean, "cost": cost}
+    if parts:
+        out["parts"] = parts
+    if checked is not None:
+        if "before" in checked:
+            # the superseded text gets the same split-and-space treatment as
+            # the shown text, so "what it said first" is a like-for-like read
+            checked["before"] = tutor_payload(checked["before"])[0]
+        out["checked"] = checked
+    return out
 
 
 def handle_next_concept(body: dict, call_model) -> dict:
