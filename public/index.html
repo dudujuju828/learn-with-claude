@@ -1437,6 +1437,13 @@
     border-bottom:1px dotted var(--term); padding:0 .05rem;
   }
   .aside:hover{background:var(--termbg)}
+  /* an aside whose passage can no longer be found — the answer was edited,
+     or the anchor straddles something unmatchable. Your words are still
+     yours: shown under the turn rather than silently dropped. */
+  .asidelost{
+    font-size:var(--t-sm); color:var(--muted); margin:.15rem 0 .6rem;
+    padding-left:1rem; border-left:3px dotted var(--term);
+  }
 
   /* generated figures (🖼 image on the selection chip).
      The picture sits on white in every theme: it was drawn on an off-white
@@ -1817,7 +1824,8 @@
   tutor what a term means; this is you saying it, in brackets, right there in
   the sentence. Select a word, type your own explanation, press Enter, and
   "so if a plant mitochondria is active" reads "so if a plant mitochondria
-  (power house of the cell) is active" from then on. No model call, no cost.
+  (power house of the cell) is active" from then on. <b>Shift+T</b> does it
+  without reaching for the chip — select, press, type. No model call, no cost.
   Your words are tinted so they can never be mistaken later for something the
   tutor said, and the brackets are real text, so copying the block copies
   them too. Tap your own words to reword them — an empty box takes them back
@@ -1927,6 +1935,7 @@
     <tr><td><kbd>q</kbd></td><td>jot a question for the global bank — investigated fresh, later</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>Q</kbd></td><td>jot a question for this tree's local bank</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>open <b>my notes</b> for the tree you're reading</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>T</kbd></td><td><b>🏷 my words</b> on whatever you've just selected</td></tr>
     <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>step the reading ruler / focus line (when on)</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>stop speech · close panels · turn the ruler off</td></tr>
   </table>
@@ -8259,11 +8268,22 @@ window.saveAside = saveAside;
    appearing inside your own words would sprout a definition popover on text
    the tutor never wrote. Highlighted text is deliberately NOT skipped: a
    word worth marking is exactly the kind you also want a note on. */
+function asideSpan(a){
+  const span = document.createElement("span");
+  span.className = "aside";
+  span.textContent = `(${a.words})`;
+  span.title = "your own words — tap to change or clear them";
+  span.dataset.turn = a.turn;
+  span.dataset.anchor = a.text;
+  span.dataset.words = a.words;   // without the brackets, for editing
+  return span;
+}
 function applyAsides(){
   const tree = cur();
   if (!tree || currentNode == null) return;
   const mine = asidesOf(tree).filter(a => a.node === currentNode);
   if (!mine.length) return;
+  const stranded = [];
   for (const a of mine){
     const turnEl = document.querySelector(`#conv .turn[data-turn="${a.turn}"]`);
     if (!turnEl) continue;
@@ -8271,32 +8291,51 @@ function applyAsides(){
     if (!words.length || !words[0]) continue;
     let re;
     try { re = new RegExp(words.join("\\s+")); } catch { continue; }
-    const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => n.parentElement.closest("code,pre,.who,button,.nodeinfo,figcaption,.aside")
-        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+    /* Match over the turn's text as ONE string rather than per text node.
+       The DOM splits text at every inline <code>, every highlight mark, and
+       every aside already inserted — but to the reader who selected it the
+       phrase was continuous, so per-node matching silently drops anchors
+       that happen to straddle one of those. Positions map back to the node
+       they landed in. `.aside` is skipped so a gloss can never be matched
+       inside another gloss, and <pre> because a code listing is not prose. */
     const nodes = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
-    for (const tn of nodes){
-      const m = re.exec(tn.textContent);
-      if (!m) continue;
-      const end = m.index + m[0].length;
-      const frag = document.createDocumentFragment();
-      // the space belongs to the text, not to the span's ::before bracket —
-      // CSS content whitespace is unreliable, and this way a copy of the
-      // sentence reads "mitochondria (power house...)" too
-      frag.appendChild(document.createTextNode(tn.textContent.slice(0, end) + " "));
-      const span = document.createElement("span");
-      span.className = "aside";
-      span.textContent = `(${a.words})`;
-      span.title = "your own words — tap to change or clear them";
-      span.dataset.turn = a.turn;
-      span.dataset.anchor = a.text;
-      span.dataset.words = a.words;   // without the brackets, for editing
-      frag.appendChild(span);
-      frag.appendChild(document.createTextNode(tn.textContent.slice(end)));
-      tn.replaceWith(frag);
-      break;   // first occurrence only, like highlights
+    let full = "";
+    const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => n.parentElement.closest("pre,.who,button,.nodeinfo,figcaption,.aside")
+        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+    while (walker.nextNode()){
+      nodes.push({node: walker.currentNode, start: full.length});
+      full += walker.currentNode.textContent;
     }
+    const m = re.exec(full);           // first occurrence, like highlights
+    if (!m){ stranded.push(a); continue; }
+    const end = m.index + m[0].length;
+    const hit = nodes.find(n => end > n.start &&
+                                end <= n.start + n.node.textContent.length);
+    if (!hit){ stranded.push(a); continue; }
+    const tail = hit.node.splitText(end - hit.start);
+    let parent = tail.parentNode, ref = tail;
+    // an anchor ending inside inline code would put the gloss in monospace,
+    // inside the code — lift it out to just after the <code> instead
+    const code = parent.closest && parent.closest("code");
+    if (code && code.parentNode){ parent = code.parentNode; ref = code.nextSibling; }
+    const span = asideSpan(a);
+    parent.insertBefore(span, ref);
+    // a real space, not a ::before — it has to survive the copy button
+    parent.insertBefore(document.createTextNode(" "), span);
+  }
+  /* Anything that could not be placed — the answer was edited, or the anchor
+     spanned something unmatchable — is still YOUR TYPING, and dropping it on
+     the floor is the one outcome this must not have. Park it under the turn
+     where it can still be read and cleared. */
+  for (const a of stranded){
+    const turnEl = document.querySelector(`#conv .turn[data-turn="${a.turn}"]`);
+    if (!turnEl) continue;
+    const row = document.createElement("div");
+    row.className = "asidelost";
+    row.append(document.createTextNode("🏷 on “" + oneLine(a.text, 60) + "”: "));
+    row.appendChild(asideSpan(a));
+    turnEl.appendChild(row);
   }
 }
 /* tap your own words to edit them (an empty box clears them) */
@@ -11169,6 +11208,28 @@ document.addEventListener("keydown", (e) => {
       !e.ctrlKey && !e.metaKey && !e.altKey){
     e.preventDefault();
     openNotes();
+  }
+  /* Shift+T: 🏷 my words on whatever is selected right now — the chip
+     without reaching for it. Reads the live selection rather than the chip,
+     because scrolling hides the chip while the selection survives, and
+     pressing a key you just scrolled to should still work. Says why when it
+     can't rather than doing nothing: a silent hotkey reads as a broken one. */
+  if (e.key === "T" && !typing && $("qcap").hidden &&
+      !e.ctrlKey && !e.metaKey && !e.altKey){
+    e.preventDefault();
+    const info = cur() ? selInfo() : null;
+    if (info && !info.long && info.turn != null){
+      hideSelchip();
+      const mine = asideFor(info.turn, info.text);
+      const text = info.text, turn = info.turn;
+      document.getSelection()?.removeAllRanges();
+      openQCap("aside", text, {turn, words: mine ? mine.words : ""});
+    } else {
+      setStatus(info
+        ? "🏷 my words takes a word or a short phrase — that selection is too long"
+        : "select a word in an answer first, then press Shift+T");
+      setTimeout(() => { if (!running) clearStatus(); }, 4000);
+    }
   }
 });
 

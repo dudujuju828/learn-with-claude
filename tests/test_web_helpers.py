@@ -626,6 +626,15 @@ def test_aside_exports():
     # regex metacharacters in the anchor are matched literally
     assert apply_asides("call f(x) now", [{"text": "f(x)", "words": "a function"}]) \
         == "call f(x) (a function) now"
+    # The anchor is captured from the RENDERED page, where `malloc` reads as
+    # plain "malloc" — so it has to match the source's backticked form, or the
+    # aside shows in the app and silently vanishes from the export.
+    assert apply_asides("Call `malloc` to get memory",
+                        [{"text": "Call malloc to get", "words": "the C call"}]) \
+        == "Call `malloc` to get (the C call) memory"
+    assert apply_asides("the `bucket` holds it",
+                        [{"text": "bucket", "words": "a slot"}]) \
+        == "the `bucket` (a slot) holds it"
 
     d = {
         "format": "learn-with-claude/knowledge-tree", "version": 1, "id": "t5",

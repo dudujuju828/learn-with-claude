@@ -55,6 +55,12 @@ def apply_asides(text: str, asides: list, wrap=None) -> str:
     like the browser does, so a re-export never drifts from what was on
     screen. `wrap` lets the HTML export mark its insertions up; the default
     is the plain " (words)" the markdown export wants.
+
+    Backticks are tolerated around every word because the anchor was captured
+    from the *rendered* page, where `malloc` shows as plain "malloc" — so an
+    anchor reading "call malloc to get" has to match the stored source's
+    "call `malloc` to get" or the aside silently vanishes from the export
+    while still showing in the app.
     """
     if not asides:
         return text
@@ -63,7 +69,7 @@ def apply_asides(text: str, asides: list, wrap=None) -> str:
         anchor = str(a.get("text") or "").strip()
         if not words or not anchor:
             continue
-        pattern = r"\s+".join(re.escape(w) for w in anchor.split())
+        pattern = r"\s+".join(f"`?{re.escape(w)}`?" for w in anchor.split())
         try:
             match = re.search(pattern, text)
         except re.error:
