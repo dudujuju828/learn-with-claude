@@ -61,9 +61,12 @@ meant to explain. Rejected: inlining base64 on the turn (≈15 figures per tree,
 ≈40 per browser, and a `.know.json` no one could read); Vercel Blob (a second
 store to provision, and the repo had deliberately migrated off it). Chosen: an
 `images` table (bytea) hosted, `knowledge/images/` locally, and the browser
-re-encodes to WebP ≤1280px before upload — ~1.5 MB PNG becomes ~150 KB, and
-the Python package stays stdlib-only because the *canvas* does the work.
-Measured in the harness: localStorage after a figure, 1454 bytes.
+re-encodes to WebP ≤1280px before upload — the Python package stays
+stdlib-only because the *canvas* does the work. Measured on a real generated
+figure rather than estimated: **390 KB JPEG in, 31 KB WebP out** (12×, 95 ms,
+label text still crisp — flat vector art compresses far better than the
+~150 KB this entry originally guessed). localStorage after a figure: 1454
+bytes.
 
 The tree carries only the description (`images: [{id, node, turn, anchor,
 caption, alt, …}]`) — which is what lets a CLI reader, the markdown export,
@@ -95,12 +98,29 @@ to get profile scoping wrong).
 
 Verified with the repo's headless-Edge stub harness — 38 checks, from "the
 chip offers the button" through re-encode, upload, tombstoned redraw, the
-merge, and a refusal not reading as an error. Live against the real Gemini
-API: the endpoint, `x-goog-api-key`, `generationConfig.responseModalities`,
-and all six image model ids are confirmed accepted; generation itself needs a
-billed project, which is why a `limit: 0` quota now reports "enable billing"
-rather than the "wait and retry" a 429 would otherwise get — that message was
-a real defect the live run caught.
+merge, and a refusal not reading as an error.
+
+Then verified live, which is the only way to judge the part that actually
+matters. Three real tutor passages through the whole two-stage route:
+
+- *chaining* → the art director picked `structure`/4:3 and the labels
+  `Bucket, Linked list, Key 1, Key 2`; the figure is a bucket column with the
+  third bucket pointing at a two-node list with next-pointer cells.
+- *the TCP handshake* → `process`/16:9, labels `Client, Server, SYN,
+  SYN-ACK, ACK`; a correct sequence diagram, three arrows, right order,
+  right directions.
+- *"naming things well is mostly a matter of taste"* → **declined**, with
+  "no physical form or spatial layout". The refusal path is not theoretical.
+
+**No hallucinated text in any of them** — the label whitelist is doing the job
+it was written for, which was the whole risk in this feature.
+
+Two defects the live run caught. Gemini returns **JPEG**, not the PNG the
+docs' examples imply (harmless — every layer takes the mime as given — but
+the harness had only ever fed it a PNG). And a project without billing is
+refused as a **429**, which was being reported as "wait a moment and try
+again": an instruction to loop forever on a wall that never moves. It now
+reads the `limit: 0`/`free_tier` marker and says to enable billing instead.
 
 ---
 
