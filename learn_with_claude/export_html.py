@@ -139,6 +139,11 @@ figure.fig figcaption{{color:var(--muted); font-size:.9em; margin-top:.4rem;
   max-width:34rem;}}
 figure.fig .nofig{{border:1px dashed var(--line); border-radius:.7rem;
   padding:.9rem 1rem; color:var(--muted); max-width:34rem;}}
+/* the fact landscape */
+#facts ul{{margin:.2rem 0; padding-left:1.2rem;}}
+#facts li{{margin:.35rem 0;}}
+#facts .fkind{{color:var(--muted); font-size:.85em; border:1px solid var(--line);
+  border-radius:.35rem; padding:0 .3rem; margin-right:.25rem;}}
 details.part{{border:1px solid var(--line); border-radius:.6rem; background:var(--bg);
   margin:.7rem 0; padding:0 .8rem;}}
 details.part summary{{cursor:pointer; padding:.45rem 0; color:var(--muted); font-size:.9em;}}
@@ -768,6 +773,28 @@ def tree_to_html(tree) -> str:
 
     toolbar = toolbar_html()
 
+    # ⚡ the factual landscape — reference material, so it gets its own
+    # section rather than being threaded through the conversations
+    facts_html = ""
+    fact_groups = tree.fact_groups() if hasattr(tree, "fact_groups") else []
+    if fact_groups:
+        def _fact_li(fact: dict) -> str:
+            kind = str(fact.get("kind") or "").strip()
+            tag = f'<span class="fkind">{_esc(kind)}</span> ' if kind else ""
+            return f'<li>{tag}{_esc(str(fact["text"]))}</li>'
+
+        blocks = []
+        for name, items in fact_groups:
+            rows = "".join(_fact_li(f) for f in items)
+            blocks.append('<div class="turn"><div class="block ans">'
+                          f'<div class="label">{_esc(name)}</div>'
+                          f"<ul>{rows}</ul></div></div>")
+        facts_html = (
+            '<section class="node" id="facts"><h2>The landscape</h2>'
+            '<div class="muted">The facts this topic was mapped out with.</div>'
+            + "".join(blocks) + "</section>"
+        )
+
     glossary_html = ""
     defined = sorted(
         (e for e in getattr(tree, "glossary", {}).values()
@@ -893,6 +920,7 @@ def tree_to_html(tree) -> str:
         + '<div class="map"><div class="label">Map of what I explored</div>'
         + nav_html
         + "</div>"
+        + facts_html
         + "".join(sections)
         + glossary_html
         + teach_html

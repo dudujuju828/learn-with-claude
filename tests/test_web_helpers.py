@@ -601,6 +601,146 @@ def test_handle_survey():
     print("ok  handle_survey (validation, clipping, depth cap, focus)")
 
 
+def test_handle_facts():
+    """⚡ fact me out: grouping, clamping, and the de-duplication that keeps
+    the same fact from appearing under two headings."""
+    import json
+
+    from learn_with_claude.webapi import (
+        FACTS_MAX_TOTAL, ApiError, handle_facts,
+    )
+
+    reply = {"groups": [
+        {"name": "The lookup chain", "facts": [
+            {"text": "A recursive resolver queries other servers until it has an answer.",
+             "kind": "mechanism"},
+            {"text": "Root servers hold no domain addresses; they only refer resolvers on.",
+             "kind": "misconception"},
+            # the same fact in different words — the prompt forbids it, this
+            # catches it happening anyway
+            {"text": "A resolver that is recursive will query other servers until an answer.",
+             "kind": "mechanism"},
+            {"text": "short", "kind": "number"},                # a lost heading
+            {"text": "An unknown kind falls back to none.", "kind": "vibes"},
+            "a bare string is accepted as a fact",
+            12345,
+        ]},
+        {"name": "", "facts": [{"text": "a group with no name is dropped"}]},
+        {"name": "Empty group", "facts": []},
+        "not a dict",
+        {"name": "x" * 200, "facts": [{"text": "y" * 500, "kind": "edge"}]},
+    ]}
+
+    seen = {}
+
+    def stub(system, messages, role, **kw):
+        seen.update(role=role, system=system, msg=messages[0]["content"], kw=kw)
+        return "here you go " + json.dumps(reply), 0.06
+
+    r = handle_facts({"topic": "how DNS resolution works"}, stub)
+
+    # the strongest model, and a knowledge-bound task rather than a
+    # reasoning-bound one — full effort would only slow it down
+    assert seen["role"] == "facts" and seen["kw"]["effort"] == "medium"
+    assert "how DNS resolution works" in seen["msg"]
+    assert r["cost"] == 0.06
+
+    names = [g["name"] for g in r["groups"]]
+    assert names[0] == "The lookup chain"
+    assert "" not in names and "Empty group" not in names   # unnamed/empty dropped
+    assert len(names[-1]) == 80                              # clipped
+
+    first = r["groups"][0]["facts"]
+    texts = [f["text"] for f in first]
+    assert texts[0].startswith("A recursive resolver")
+    assert not any("A resolver that is recursive" in t for t in texts), "near-dupe kept"
+    # ...but two facts that merely share a subject stay, both of them
+    from learn_with_claude.webapi import _question_words, _same_fact
+    assert not _same_fact(_question_words("A CNAME record aliases one domain to another."),
+                          _question_words("An MX record names the mail servers for a domain."))
+    assert not any(t == "short" for t in texts)              # too short to be a fact
+    assert "a bare string is accepted as a fact" in texts    # tolerated shape
+    assert [f["kind"] for f in first if "unknown kind" in f["text"]] == [""]
+    assert r["groups"][-1]["facts"][0]["text"] == "y" * 300  # clipped
+    assert r["count"] == sum(len(g["facts"]) for g in r["groups"])
+
+    # an angle slants the selection and reaches the model
+    handle_facts({"topic": "DNS", "angle": "for a security review"}, stub)
+    assert "for a security review" in seen["msg"]
+
+    # the mix rules are what keep this from being a glossary
+    assert "roughly a THIRD" in seen["system"]
+    assert "NEVER INVENT PRECISION" in seen["system"]
+    assert 'never prefix it with "Misconception:"' in seen["system"]
+
+    # the total cap holds even when every group is full
+    big = {"groups": [{"name": f"g{i}",
+                       "facts": [{"text": f"Fact number {i}-{j} says a specific thing."}
+                                 for j in range(12)]}
+                      for i in range(10)]}
+    r2 = handle_facts({"topic": "x"},
+                      lambda *a, **k: (json.dumps(big), 0.0))
+    assert r2["count"] <= FACTS_MAX_TOTAL
+    assert sum(len(g["facts"]) for g in r2["groups"]) == r2["count"]
+
+    try:
+        handle_facts({"topic": ""}, stub)
+        assert False, "missing topic must raise"
+    except ApiError:
+        pass
+    try:
+        handle_facts({"topic": "x"}, lambda *a, **k: ("no json here", 0.0))
+        assert False, "an unusable reply must raise"
+    except ApiError:
+        pass
+    print("ok  handle_facts (grouping, dedupe, clamping, caps, angle)")
+
+
+def test_facts_exports():
+    """The landscape survives the .know.json round-trip and heads both
+    exports as its own section — it is reference material, not a turn."""
+    d = {
+        "format": "learn-with-claude/knowledge-tree", "version": 1, "id": "t4",
+        "root_topic": "DNS", "created": "2026-08-01", "root_id": 1, "next": 2,
+        "nodes": {"1": {"id": 1, "label": "resolvers", "children": [],
+                        "turns": [{"turn": 1, "action": "q", "tutor": "a"}]}},
+        "facts": {"made": "2026-08-01T12:00:00Z", "cost": 0.06, "groups": [
+            {"name": "The lookup chain", "facts": [
+                {"text": "Root servers only refer resolvers onward.", "kind": "misconception"},
+                {"text": "A resolver caches answers for the record's TTL.", "kind": "mechanism"},
+            ]},
+            {"name": "Nameless facts", "facts": [{"text": "A fact with no kind at all."}]},
+            {"name": "", "facts": [{"text": "dropped: no group name"}]},
+            {"name": "Empty", "facts": []},
+            "not a dict",
+        ]},
+    }
+    kb = KnowledgeTree.from_dict(d)
+    assert kb.to_dict()["facts"] == d["facts"]     # extras survive the CLI untouched
+
+    groups = kb.fact_groups()
+    assert [n for n, _ in groups] == ["The lookup chain", "Nameless facts"]
+
+    md = kb.to_markdown()
+    assert "## The landscape" in md and "### The lookup chain" in md
+    assert "- *(misconception)* Root servers only refer resolvers onward." in md
+    assert "- A fact with no kind at all." in md   # no empty *()* for a bare fact
+    assert "dropped: no group name" not in md
+
+    html = tree_to_html(kb)
+    assert 'id="facts"' in html and "The landscape" in html
+    assert "Root servers only refer resolvers onward." in html
+    assert "dropped: no group name" not in html
+
+    # no facts -> no key, nothing in either export
+    d2 = dict(d); d2.pop("facts")
+    kb2 = KnowledgeTree.from_dict(d2)
+    assert "facts" not in kb2.to_dict()
+    assert "## The landscape" not in kb2.to_markdown()
+    assert 'id="facts"' not in tree_to_html(kb2)
+    print("ok  facts exports (round-trip, markdown, html section)")
+
+
 def test_image_prompt():
     """The rules that stop a generated figure being worse than none: an
     explicit label whitelist, a flat-vector style, and omit-rather-than-invent.
@@ -1168,6 +1308,8 @@ if __name__ == "__main__":
     test_handle_exam()
     test_handle_mark_exam()
     test_exam_exports()
+    test_handle_facts()
+    test_facts_exports()
     test_image_prompt()
     test_gemini_reply_parsing()
     test_handle_illustrate()

@@ -51,11 +51,17 @@ GLOSSARY_MODEL = os.environ.get("LEARN_GLOSSARY_MODEL", "claude-haiku-4-5-202510
 # good one. So the examiner gets the strongest model by default; set
 # LEARN_EXAMINER_MODEL to the tutor's model to bring the cost back down.
 EXAMINER_MODEL = os.environ.get("LEARN_EXAMINER_MODEL", "claude-opus-5")
+# ⚡ fact me out is bounded by what the model KNOWS, not by how well it
+# reasons — and it is one call the reader then treats as reference, so a
+# half-remembered number here is repeated rather than caught. Breadth and
+# recall accuracy are exactly what the strongest model buys, so it gets one.
+FACTS_MODEL = os.environ.get("LEARN_FACTS_MODEL", "claude-opus-5")
 EFFORT = os.environ.get("LEARN_EFFORT", "xhigh")
 MAX_TURNS = int(os.environ.get("LEARN_MAX_TURNS", "20"))
 
 ROLE_MODELS = {"learner": LEARNER_MODEL, "tutor": TUTOR_MODEL,
-               "glossary": GLOSSARY_MODEL, "examiner": EXAMINER_MODEL}
+               "glossary": GLOSSARY_MODEL, "examiner": EXAMINER_MODEL,
+               "facts": FACTS_MODEL}
 
 COOKIE_NAME = "lwc_auth"
 TOKEN_DAYS = 30

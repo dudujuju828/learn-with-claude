@@ -24,6 +24,8 @@ from .knowledge import KnowledgeTree, conversation_digest
 from .personas import (
     EXAM_KINDS,
     EXAM_SYSTEM,
+    FACT_KINDS,
+    FACTS_SYSTEM,
     GLOSSARY_REASONS,
     GLOSSARY_SYSTEM,
     ILLUSTRATE_SYSTEM,
@@ -49,6 +51,7 @@ from .personas import (
     followup_learner_message,
     followup_tutor_context,
     gaps_learner_message,
+    facts_message,
     gaps_tutor_context,
     illustrate_message,
     interview_budget_note,
@@ -852,6 +855,85 @@ def handle_illustrate(body: dict, call_model) -> dict:
     }
 
 
+# --------------------------------------------------------------------------- #
+# ⚡ fact me out — one call, a whole factual landscape (see FACTS_SYSTEM).
+# --------------------------------------------------------------------------- #
+FACTS_MAX_GROUPS = 10
+FACTS_MAX_PER_GROUP = 12
+FACTS_MAX_TOTAL = 90
+FACT_TEXT_MAX = 300
+
+# Deliberately lower than SAME_QUESTION_OVERLAP. That bar is set where it is
+# because two short questions can differ by one content word and mean genuinely
+# different things ("what is a B-tree?" / "what is a B-tree node?" sit at 0.67
+# and must both survive). A fact is a whole sentence carrying 12-20 content
+# words, so that near-miss doesn't arise: at this length, sharing three words
+# in five means it is the same fact reworded, which is exactly the padding
+# this list must not contain.
+SAME_FACT_OVERLAP = 0.6
+
+
+def _same_fact(a: frozenset, b: frozenset) -> bool:
+    if not a or not b:
+        return a == b
+    return len(a & b) / len(a | b) >= SAME_FACT_OVERLAP
+
+
+def handle_facts(body: dict, call_model) -> dict:
+    topic = (body.get("topic") or "").strip()
+    if not topic:
+        raise ApiError("missing 'topic'")
+    message = facts_message(topic[:200], (body.get("angle") or "").strip()[:120])
+    # A knowledge-bound task, not a reasoning-bound one: the model is
+    # recalling and *selecting*, not working anything out, and this is one
+    # call producing a lot of output. Full effort would multiply the wait
+    # without improving which facts get picked.
+    text, cost = call_model(
+        FACTS_SYSTEM, [{"role": "user", "content": message}], "facts",
+        effort="medium",
+    )
+    data = first_json_object(text)
+
+    groups, total, seen = [], 0, set()
+    for g in (data.get("groups") if isinstance(data, dict) else None) or []:
+        if not isinstance(g, dict):
+            continue
+        name = " ".join(str(g.get("name") or "").split())[:80]
+        if not name:
+            continue
+        facts = []
+        for f in (g.get("facts") if isinstance(g.get("facts"), list) else [])[
+                :FACTS_MAX_PER_GROUP]:
+            if isinstance(f, str):
+                f = {"text": f}
+            if not isinstance(f, dict):
+                continue
+            fact = " ".join(str(f.get("text") or "").split())[:FACT_TEXT_MAX]
+            # a "fact" of four words is a heading that lost its way
+            if len(fact) < 12:
+                continue
+            # the prompt forbids repetition; this catches it happening anyway,
+            # since the same fact under two headings reads as padding
+            key = _question_words(fact)
+            if any(_same_fact(key, s) for s in seen):
+                continue
+            seen.add(key)
+            kind = str(f.get("kind") or "").strip().lower()
+            facts.append({"text": fact,
+                          "kind": kind if kind in FACT_KINDS else ""})
+            total += 1
+            if total >= FACTS_MAX_TOTAL:
+                break
+        if facts:
+            groups.append({"name": name, "facts": facts})
+        if len(groups) >= FACTS_MAX_GROUPS or total >= FACTS_MAX_TOTAL:
+            break
+
+    if not groups:
+        raise ApiError("the model returned no usable facts — try again", 502)
+    return {"groups": groups, "count": total, "cost": cost}
+
+
 def _survey_items(raw, depth: int) -> list:
     """Validate/clip a survey breakdown: [{name, why, items?}] at most
     `depth` levels deep, at most 6 items per level."""
@@ -944,6 +1026,7 @@ def model_routes(call_model, tutor_grounding=None, learner_grounding=None) -> di
         "teachback": lambda body: handle_teachback(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
+        "facts": lambda body: handle_facts(body, call_model),
         "illustrate": lambda body: handle_illustrate(body, call_model),
         "exam": lambda body: handle_exam(body, call_model),
         "mark_exam": lambda body: handle_mark_exam(body, call_model),

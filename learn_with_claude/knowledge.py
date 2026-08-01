@@ -183,6 +183,27 @@ class KnowledgeTree:
                 m.setdefault(key, []).append(text)
         return m
 
+    def fact_groups(self) -> list:
+        """The ⚡ fact-me-out landscape as [(group name, [fact, …]), …].
+
+        Lives in extras['facts'] (written by the web app). Unlike a
+        conversation this is reference material, so it heads both exports as
+        its own section rather than being threaded through the turns.
+        """
+        facts = self.extras.get("facts")
+        if not isinstance(facts, dict):
+            return []
+        out = []
+        for group in (facts.get("groups") or []):
+            if not isinstance(group, dict):
+                continue
+            name = str(group.get("name") or "").strip()
+            items = [f for f in (group.get("facts") or [])
+                     if isinstance(f, dict) and str(f.get("text") or "").strip()]
+            if name and items:
+                out.append((name, items))
+        return out
+
     def image_map(self) -> dict:
         """(node_id, turn) -> [figure, …] for every generated figure.
 
@@ -371,6 +392,17 @@ class KnowledgeTree:
         note = (self.note or "").strip()
         if note:
             out += ["## My notes", "", note, "", "---", ""]
+        facts = self.fact_groups()
+        if facts:
+            out += ["## The landscape", ""]
+            for name, items in facts:
+                out += [f"### {name}", ""]
+                for f in items:
+                    kind = str(f.get("kind") or "").strip()
+                    tag = f"*({kind})* " if kind else ""
+                    out.append(f"- {tag}{one_line(str(f['text']), 300)}")
+                out.append("")
+            out += ["---", ""]
         out += [
             "## Map",
             "",

@@ -5,6 +5,81 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 55 — ⚡ fact me out: the breadth mode
+
+*(user-requested, after being asked what the learning loop was missing: "a
+'fact-me-out' mode (where new, full, survey etc. are) — it just takes a topic
+and gives a tonne of 1-sentence facts about the topic (use a good model for
+this maybe opus5?)".)*
+
+Every other entry point ends in a conversation — `new`, `full`, `survey`,
+`gaps` all produce the learner↔tutor loop, which is the right shape for
+understanding one thing and the wrong shape for finding out what is *there*.
+`facts` takes a topic and returns the landscape in one call: 6-8 named groups
+holding 40-60 one-sentence facts, scannable in two minutes.
+
+**The prompt is the feature**, and two rules do most of the work.
+
+*Specificity.* "Hash tables are widely used" is noise; "a lookup stays O(1)
+only while the load factor stays low" is a fact. The system prompt names the
+failure ("that is not a fact, it is a noise") rather than gesturing at
+quality.
+
+*Never invent precision.* A confidently wrong number under a heading that
+says **facts** is the textual version of a confidently wrong diagram — the
+reader cannot tell it from the real ones and will repeat it. So: give the
+qualitative fact you're sure of ("orders of magnitude slower") over a
+specific multiple you're guessing at. Same principle as Feature 54's "omit
+rather than invent", which is becoming the house rule for generated content.
+
+**The mix turned out to matter as much as the facts.** The first live run
+came back 17-of-48 plain definitions and exactly one number — technically
+correct and basically a glossary, which the reader can get anywhere. Adding
+an explicit budget (definitions ≤ a third; weight toward mechanism,
+consequence, edge, misconception; include real numbers) moved it to 13
+definitions and 3 numbers, then to 7-of-36 on a second topic. Misconceptions
+are called out as the most valuable kind, because they change something the
+reader already believes rather than adding to a pile.
+
+That emphasis immediately caused its own regression — the model started
+writing literal `"Misconception: … Correction: …"` prefixes, duplicating the
+badge the UI already draws — so the prompt now forbids the prefix explicitly.
+Worth recording as a pattern: pushing hard on a quality axis in a prompt
+tends to produce a *literal* reading of the push, and needs a matching "don't
+say it, just do it" clause.
+
+**It is a menu, not a destination.** Each fact carries ▶ investigate (a real
+conversation in that tree, rooting it or chaining as a follow-up exactly like
+the survey's) and ❓ bank (to the *global* bank — a fact is about the topic,
+not about a passage in something you were reading). The panel tracks which
+facts you chased, so it doubles as a record.
+
+`role: "facts"` → `claude-opus-5` hosted (`LEARN_FACTS_MODEL`), the tutor's
+model locally, and no tools in either. The role exists because this is
+bounded by what the model *knows*, not how well it reasons — and because the
+reader treats the output as reference, so recall accuracy is what the strong
+model buys. For the same reason it runs at `effort="medium"`: selection, not
+deduction, and full effort would only lengthen a call that already emits
+~3000 tokens.
+
+**Rejected:** dedupe on `SAME_QUESTION_OVERLAP` (0.7). A fact is a whole
+sentence of 12-20 content words, where that bar leaves obvious rewordings in
+— two of the harness fixtures sat at 0.67 and were plainly the same fact. It
+gets `SAME_FACT_OVERLAP` (0.6) of its own, with the question bar left alone,
+since 0.7 is there for a documented reason ("what is a B-tree?" vs "what is a
+B-tree node?"). Also rejected: a substring filter box. At 50 facts a filter
+is essential, but this app promises forgiven spelling everywhere else, and a
+filter that punishes typos would be a strange thing to ship *here* — it
+reuses `fuzzyFind`, so word order is free and one typo still lands.
+
+Verified: 47 Python tests (grouping, dedupe, clamping, the total cap, both
+exports) and a 25-check headless harness (panel, grouping, badges, filter
+including a typo and reversed word order, both exits, the header counter, the
+merge). Live on three topics — DNS, linkers, and one deliberately awkward —
+which is where the mix problem and the prefix regression were both caught.
+
+---
+
 ## Feature 54 — 🖼 illustrate: a picture of the sentence you point at
 
 *(user-requested: "when reading it's nice to sometimes get a visual idea, an

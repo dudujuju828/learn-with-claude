@@ -824,6 +824,53 @@
   .svitem .svkids{margin:.45rem 0 0 .35rem; padding-left:.65rem;
     border-left:1px solid var(--line)}
   .svitem .svkids .svitem{border:none; padding:.3rem 0; margin:.25rem 0}
+  /* ⚡ fact me out — the breadth panel. A wall of forty facts is only
+     useful if it is scannable, so: grouped, one fact per line, and a filter
+     box, because at this length finding beats reading. */
+  #factsbox{
+    display:none; position:fixed; inset:0; z-index:95;
+    background:var(--scrim);
+    -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+    align-items:center; justify-content:center; padding:1rem;
+  }
+  #factsbox.open{display:flex}
+  #factsbox .box{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r-xl);
+    padding:1.1rem 1.3rem 1.3rem; width:min(44rem,94vw); max-height:88dvh;
+    overflow:auto; box-shadow:var(--shadow-lg);
+  }
+  #factsbox .shead{display:flex; align-items:center; gap:.7rem; margin-bottom:.3rem}
+  #factsbox .shead #factstitle{flex:1; font-weight:600; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap}
+  #factsbox .shead #factscount{color:var(--muted); font-size:var(--t-sm); flex:none}
+  #factsfilter{width:100%; margin:.5rem 0 .2rem}
+  .fgroup{margin:.9rem 0 0}
+  .fgroup > h4{
+    margin:0 0 .35rem; font-size:var(--t-sm); text-transform:lowercase;
+    color:var(--ask); letter-spacing:.02em;
+  }
+  .fitem{
+    display:flex; align-items:flex-start; gap:.5rem; padding:.4rem .1rem;
+    border-top:1px solid var(--line); line-height:1.55;
+  }
+  .fitem:first-of-type{border-top:none}
+  .fitem.done .ftext{color:var(--ask)}
+  .fitem .ftext{flex:1; min-width:0}
+  .fitem .fkind{
+    flex:none; font-size:var(--t-xs); color:var(--muted); border:1px solid var(--line);
+    border-radius:var(--r-sm); padding:.02rem .35rem; margin-right:.35rem;
+    vertical-align:.1em; white-space:nowrap;
+  }
+  /* the highest-value kind on the list: a belief the reader probably holds
+     and which is wrong. Worth spotting from across the panel. */
+  .fitem .fkind.misconception{
+    color:var(--term); border-color:var(--term); background:var(--termbg);
+  }
+  .fitem .facts2{display:flex; gap:.25rem; flex:none; opacity:0; transition:opacity .12s}
+  .fitem:hover .facts2, .fitem:focus-within .facts2{opacity:1}
+  @media (hover:none){ .fitem .facts2{opacity:1} }
+  .fitem .facts2 button{font-size:var(--t-xs); padding:.15rem .45rem}
+  #factsbox .fempty{color:var(--muted); padding:1rem 0; text-align:center}
   #quizbox .qnext{margin-top:.9rem; display:flex; gap:.5rem; justify-content:flex-end}
   #quizbox .qsum{text-align:center; padding:1rem 0 .4rem}
   #quizbox .qsum .big{font-size:var(--d-md); margin-bottom:.4rem}
@@ -1751,6 +1798,17 @@
   (tap a mark to lift it). The <b>★ highlights</b> button in the words tab
   collects every marked passage across the profile's trees — tap one to
   jump back to it in context.</p>
+  <p><b>⚡ facts</b> — the breadth mode, next to <b>new</b>/<b>full</b>/<b>survey</b>.
+  Everything else here ends in a conversation: slow, scoped, one idea at a
+  time. This is one call that returns the <i>landscape</i> — a few dozen
+  one-sentence facts, grouped, scannable in a couple of minutes — so what you
+  dig into next is chosen rather than stumbled into. Facts are badged by kind
+  (mechanism, number, edge, and <b>misconception</b>, which flags a common
+  belief that's wrong — the most useful kind on the list). Filter them by
+  typing; spelling is forgiven as everywhere else. Then take an exit:
+  <b>▶</b> turns a fact into a full investigation in that tree, <b>❓</b>
+  banks it as a question for whenever. The list stays on the tree, tracks
+  which facts you chased, syncs, and heads both exports.</p>
   <p><b>🖼 image</b> — select the descriptive sentence you'd like to
   <i>see</i>, and the chip's <b>🖼 image</b> draws a figure of it, right
   under that answer. Nothing is ever illustrated on its own: the sentence
@@ -1931,6 +1989,7 @@
         <button class="primary" id="newbtn" title="one investigation">new</button>
         <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
         <button id="surveybtn" title="map the topic's foundations first — investigate them piece by piece, any time">survey</button>
+        <button id="factsbtn" title="the lay of the land, fast — a few dozen one-sentence facts about the topic, grouped, in one call. Dig into any of them afterwards.">facts</button>
         <button id="gapsbtn" title="say what you already know first — the tutor maps what's solid, what's shaky, and what's missing, then aims the investigation there">gaps</button>
       </div>
       <details id="srcdetails">
@@ -2221,6 +2280,22 @@
     <p class="hint" style="margin:0 0 .5rem">the foundations this topic is built on —
     investigate them in any order, any time. ⤵ breaks one down further.</p>
     <div id="surveybody"></div>
+  </div>
+</div>
+
+<div id="factsbox" role="dialog" aria-modal="true" aria-label="facts about the topic">
+  <div class="box">
+    <div class="shead">
+      <span id="factstitle"></span>
+      <span id="factscount"></span>
+      <button id="factsclose" class="ghost" aria-label="close facts">✕</button>
+    </div>
+    <p class="hint" style="margin:0">the lay of the land — scan it, then dig
+    where it looks interesting. <b>▶</b> turns a fact into a full
+    investigation in this tree; <b>❓</b> banks it as a question for later.</p>
+    <input id="factsfilter" type="text" placeholder="filter these facts…"
+      aria-label="filter facts" autocomplete="off">
+    <div id="factsbody"></div>
   </div>
 </div>
 
@@ -4809,6 +4884,9 @@ function mergeTrees(local, server){
     if (local.quiz) out.quiz = structuredClone(local.quiz);
     if (local.quizzes) out.quizzes = structuredClone(local.quizzes);
     if (local.survey) out.survey = structuredClone(local.survey);
+    // the fact list is written once and then only annotated (which fact you
+    // dug into, which you banked), so the later save carries the annotations
+    if (local.facts) out.facts = structuredClone(local.facts);
     if (local.baseline) out.baseline = structuredClone(local.baseline);
     if (typeof local.note === "string") out.note = local.note;
     if (typeof local.source === "string") out.source = local.source;
@@ -5185,12 +5263,19 @@ function renderConversation(keepScroll){
   const tree = cur();
   const conv = $("conv");
   if (!tree || currentNode == null || !getNode(tree, currentNode)){
-    // a freshly surveyed tree has a map but no conversations yet
+    // a freshly surveyed or fact-listed tree has something to show even
+    // though no conversation has been had on it yet
     conv.innerHTML = (tree && tree.survey && tree.survey.items.length)
       ? `<div class="empty"><div class="seed" aria-hidden="true">🗺</div>` +
         `<h3>${esc(oneLine(tree.root_topic, 60))}</h3>` +
         `<p>the map is drawn — pick a foundation and investigate it.</p>` +
         `<p><button class="primary" onclick="openSurvey()">${ico("🗺")}open the survey</button></p></div>`
+      : (tree && factsOf(tree).length)
+      ? `<div class="empty"><div class="seed" aria-hidden="true">⚡</div>` +
+        `<h3>${esc(oneLine(tree.root_topic, 60))}</h3>` +
+        `<p>${allFacts(tree).length} facts, grouped — scan them, then dig into ` +
+        `whichever one you want to actually understand.</p>` +
+        `<p><button class="primary" onclick="openFacts()">${ico("⚡")}open the facts</button></p></div>`
       : emptyHtml();
     document.body.classList.remove("has-turns");
     $("askrow").style.display = "none";
@@ -5274,6 +5359,12 @@ function renderConversation(keepScroll){
     const total = surveyNames(tree.survey.items).length;
     acts.push(`<button onclick="openSurvey()" title="the map of this topic's foundations">` +
               `${ico("🗺")}survey · ${surveyCovered(tree, tree.survey.items)}/${total}</button>`);
+  }
+  if (factsOf(tree).length){
+    const facts = allFacts(tree);
+    const dug = facts.filter(f => Number.isInteger(f.node) && getNode(tree, f.node)).length;
+    acts.push(`<button onclick="openFacts()" title="the factual landscape of this topic —` +
+              ` dig into any of them">${ico("⚡")}facts · ${dug}/${facts.length}</button>`);
   }
   if (!running && tree.baseline)
     acts.push(`<button onclick="viewBaseline()" title="what you knew going in — solid, shaky, and the gaps">` +
@@ -6829,6 +6920,175 @@ function renderSurvey(){
   $("surveybody").innerHTML =
     tree.survey.items.map((it, i) => row(it, [i])).join("") +
     (surveyBusy ? `<p class="hint">breaking it down…</p>` : "");
+}
+
+/* ------------------------------------------------------------------ */
+/* ⚡ fact me out — the breadth mode.                                   */
+/*                                                                     */
+/* Everything else here ends in a conversation: slow, scoped, one idea  */
+/* at a time. That is the right shape for understanding something and   */
+/* the wrong shape for finding out what is there. This is one call that */
+/* returns the factual landscape — grouped, scannable in two minutes —  */
+/* so the depth you go after next is chosen rather than stumbled into.  */
+/*                                                                     */
+/* Which is why every fact carries ▶ investigate: the list is a menu    */
+/* for the rest of the app, not a destination. A fact you dig into      */
+/* becomes a real conversation in this tree and the fact is marked, so  */
+/* the panel doubles as a record of what you chased.                    */
+/* ------------------------------------------------------------------ */
+function factsOf(tree){
+  return (tree && tree.facts && Array.isArray(tree.facts.groups)) ? tree.facts.groups : [];
+}
+function allFacts(tree){
+  return factsOf(tree).flatMap(g => g.facts || []);
+}
+function factAt(tree, path){
+  const g = factsOf(tree)[path[0]];
+  return g && g.facts ? g.facts[path[1]] : null;
+}
+function factsThunk(topic, angle){
+  let treeId = null;
+  return async () => {
+    runLabel = "";
+    if (!treeId){
+      const tree = newTree(topic);
+      tree.facts = {groups: [], cost: 0, made: new Date().toISOString()};
+      store[tree.id] = tree; currentId = tree.id; treeId = tree.id;
+      currentNode = null;
+      saveStore(); renderAll();
+    }
+    const tree = store[treeId];
+    if (!factsOf(tree).length){
+      activity = null;
+      setStatus(`gathering facts on “${oneLine(topic, 40)}”…`); renderAll();
+      const r = await api("facts", {topic, ...(angle ? {angle} : {})});
+      tree.facts.groups = r.groups;
+      tree.facts.cost = (tree.facts.cost || 0) + (r.cost || 0);
+      saveStore(); renderAll(true);
+    }
+    clearStatus();
+    openFacts();
+  };
+}
+function cmdFacts(topic, angle){ enqueue(factsThunk(topic, angle)); }
+window.cmdFacts = cmdFacts;
+
+/* investigating a fact = a normal conversation node, exactly like the
+   survey's. The first one roots the tree; later ones follow on from the
+   newest node with the usual recap, so digging into a second fact builds on
+   the first instead of starting cold. */
+function factInvestThunk(treeId, path){
+  let node = null, ctx = null;
+  return async () => {
+    runLabel = "";
+    const tree = store[treeId];
+    const fact = factAt(tree, path);
+    if (!fact) return;
+    const label = oneLine(fact.text, 60);
+    if (!node){
+      const order = Object.keys(tree.nodes).map(Number).sort((a, b) => a - b);
+      if (!order.length){
+        node = makeNode(tree, label);
+        ctx = {kind: "root", topic: fact.text};
+      } else {
+        const recap = order.map(id =>
+          `[${getNode(tree, id).label}]\n${conversationDigest(getNode(tree, id).turns)}`).join("\n");
+        const prev = getNode(tree, order[order.length - 1]);
+        node = makeNode(tree, label, prev.id, prev.turns.length || 1, "");
+        ctx = {kind: "followup", topic: tree.root_topic, recap,
+               concept: fact.text, opening_question: ""};
+      }
+      fact.node = node.id;
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    activeRun = {treeId, nodeId: node.id};
+    await runInvestigation(tree, node, ctx);
+  };
+}
+window.factInvestigate = (pathStr) => {
+  const tree = cur(); if (!tree || running) return;
+  closeFacts();
+  enqueue(factInvestThunk(tree.id, JSON.parse(pathStr)));
+};
+/* ❓ bank — the other exit from the list, for a fact you want to come back
+   to without spending a conversation now. Goes to the GLOBAL bank: a fact
+   is about the topic, not about some passage in a conversation you were
+   reading, so it belongs where things get investigated fresh. */
+window.factBank = (pathStr) => {
+  const tree = cur(); if (!tree) return;
+  const fact = factAt(tree, JSON.parse(pathStr));
+  if (!fact || fact.banked) return;
+  if (addGlobalQuestion(fact.text)){
+    fact.banked = true;
+    persistTree(tree);
+    updateGlobalQRow();
+    renderFacts();
+  }
+};
+
+let factsFilter = "";
+function openFacts(){
+  const tree = cur();
+  if (!tree || !factsOf(tree).length) return;
+  $("factstitle").textContent = "⚡ " + oneLine(tree.root_topic, 40);
+  $("factsbox").classList.add("open");
+  factsFilter = "";
+  $("factsfilter").value = "";
+  renderFacts();
+  $("factsfilter").focus();
+}
+function closeFacts(){ $("factsbox").classList.remove("open"); }
+window.openFacts = openFacts; window.closeFacts = closeFacts;
+$("factsclose").onclick = closeFacts;
+$("factsbox").addEventListener("click", (e) => { if (e.target === $("factsbox")) closeFacts(); });
+$("factsfilter").addEventListener("input", (e) => {
+  // lowercased here: fuzzyFind, like searchHits, expects that already done
+  factsFilter = e.target.value.trim().toLowerCase();
+  renderFacts();
+});
+function renderFacts(){
+  const tree = cur();
+  if (!tree || !factsOf(tree).length) return;
+  const groups = factsOf(tree);
+  const total = allFacts(tree).length;
+  let shown = 0, h = "";
+  groups.forEach((g, gi) => {
+    const rows = (g.facts || []).map((f, fi) => {
+      // fuzzyFind, not indexOf: every query word must land (as a substring or
+      // one typo away), in any order. Same forgiveness search, the glossary
+      // filter and ⌘K give — a filter that punishes spelling would be a
+      // strange thing to put in this app of all apps. The group name is in
+      // scope too, so "caching ttl" finds a fact filed under caching.
+      if (factsFilter && !fuzzyFind((f.text + " " + g.name).toLowerCase(), factsFilter))
+        return "";
+      shown++;
+      const path = JSON.stringify([gi, fi]);
+      const investigated = Number.isInteger(f.node) && getNode(tree, f.node);
+      const acts = [];
+      if (investigated){
+        acts.push(`<button class="kid" onclick="closeFacts();selectNode(${f.node})"` +
+                  ` title="open that conversation">${ico("✓")}open</button>`);
+      } else if (!running){
+        acts.push(`<button class="primary" onclick="factInvestigate('${path}')"` +
+                  ` title="a full investigation of this fact, in this tree">▶</button>`);
+        acts.push(`<button onclick="factBank('${path}')"` +
+                  ` title="${f.banked ? "already in the global question bank"
+                                      : "bank it — investigate it whenever"}"` +
+                  `${f.banked ? " disabled" : ""}>${f.banked ? "✓" : "❓"}</button>`);
+      }
+      const kind = f.kind
+        ? `<span class="fkind ${esc(f.kind)}">${esc(f.kind)}</span>` : "";
+      return `<div class="fitem${investigated ? " done" : ""}">` +
+        `<span class="ftext">${kind}${esc(f.text)}</span>` +
+        `<span class="facts2">${acts.join("")}</span></div>`;
+    }).join("");
+    if (rows) h += `<div class="fgroup"><h4>${esc(g.name)}</h4>${rows}</div>`;
+  });
+  $("factscount").textContent = factsFilter
+    ? `${shown} of ${total}` : `${total} facts`;
+  $("factsbody").innerHTML = h ||
+    `<div class="fempty">nothing matches “${esc(factsFilter)}”</div>`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -9758,7 +10018,7 @@ function setRunning(on){
   running = on;
   document.body.classList.toggle("running", on);
   $("newbtn").disabled = $("fullbtn").disabled = $("surveybtn").disabled =
-    $("gapsbtn").disabled = $("topic").disabled = on;
+    $("factsbtn").disabled = $("gapsbtn").disabled = $("topic").disabled = on;
   $("importbtn").disabled = on;
   updateRevRow();   // the review button sits out runs too
 }
@@ -10284,6 +10544,7 @@ function takeKnown(){
 $("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t, takeSource(), takeKnown()); };
 $("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t, takeSource(), takeKnown()); };
 $("surveybtn").onclick = () => { const t = guardTopic(); if (t) cmdSurvey(t); };
+$("factsbtn").onclick = () => { const t = guardTopic(); if (t) cmdFacts(t); };
 $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") $("newbtn").click(); });
 $("stopbtn").onclick = () => { stopRequested = true; setStatus("stopping after this turn…"); };
 

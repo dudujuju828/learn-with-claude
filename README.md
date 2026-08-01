@@ -115,7 +115,22 @@ directly (a local `claude` login can't run on a server), so it needs an
   tree, later ones carry the usual follow-up recap — and the map stays with
   the tree, tracking coverage, so you pick off the rest whenever — and
   **know it** marks a foundation you already understand as covered without
-  spending a conversation on it. For a topic you half-know, **🧭 gaps**
+  spending a conversation on it.
+  **⚡ facts** is the breadth mode beside them, for when you don't yet know
+  enough about a topic to know what to ask: one call returns the *landscape*
+  — 40-odd one-sentence facts, grouped under 6-8 headings, scannable in a
+  couple of minutes. Each is badged by kind (mechanism, number, edge,
+  consequence, history, definition, and **misconception**, which names a
+  common belief and corrects it — the most useful kind on the list). The
+  paper-setter's model writes them, held to two rules that decide whether a
+  fact list is worth reading: be specific (a name, a number, a mechanism, a
+  consequence — never "X is widely used"), and never invent precision, since
+  a made-up figure under a heading saying *facts* is indistinguishable from a
+  real one. Type to filter — spelling is forgiven, as everywhere else. Then
+  take an exit: **▶** turns any fact into a full investigation in that tree,
+  **❓** banks it as a question for later. The list stays with the tree,
+  tracks which facts you chased, syncs, and heads both exports.
+  For a topic you half-know, **🧭 gaps**
   turns Ausubel's rule into a button — a short interview before the
   digging: the tutor asks a few questions one at a time, following what
   your answers reveal (probing a belief that sounds off, sampling what you

@@ -1410,6 +1410,102 @@ def illustrate_message(passage: str, topic: str, label: str = "",
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------- #
+# ⚡ fact me out — the breadth mode, in a tool that is otherwise all depth.
+#
+# `new`/`full`/`survey` all end in conversations: slow, scoped, one idea at a
+# time. Sometimes what you want first is the lay of the land — forty things
+# that are true about a topic, scannable in two minutes, so the depth you go
+# after next is chosen rather than stumbled into.
+#
+# The failure mode is obvious and worth naming: a "give me facts" prompt
+# answered carelessly returns an encyclopedia lede — true, dull, and
+# unusable. Two rules do most of the work against that. Facts must be
+# SPECIFIC (a number, a name, a mechanism, a consequence), and the model must
+# never invent precision it doesn't have, because a confidently wrong number
+# in a list headed "facts" is the textual version of a confidently wrong
+# diagram: it looks like exactly the thing you came for.
+# --------------------------------------------------------------------------- #
+FACT_KINDS = ("mechanism", "number", "misconception", "history",
+              "consequence", "definition", "edge")
+
+FACTS_SYSTEM = """\
+You lay out the factual landscape of a topic for someone about to study it.
+They want breadth, fast: a lot of true, specific, self-contained statements
+they can scan in a couple of minutes and come away knowing where the
+interesting ground is.
+
+WHAT A GOOD FACT IS:
+- ONE sentence, under about 30 words, that stands entirely on its own. These
+  get read out of order and quoted away from their neighbours, so a fact that
+  needs the one above it to make sense is a broken fact.
+- SPECIFIC. A name, a number, a mechanism, a consequence, a date, a
+  comparison. "Hash tables are widely used" is not a fact, it is a noise.
+  "A hash table lookup stays O(1) only while the load factor stays low" is.
+- LOAD-BEARING or SURPRISING. Prefer the things that change how someone
+  thinks about the topic over the things that merely fill an encyclopedia:
+  what practitioners actually argue about, what beginners reliably get
+  wrong, the constraint that explains the design, the number that is bigger
+  or smaller than people expect.
+
+NEVER INVENT PRECISION. If you are not confident of a figure, a date, or an
+attribution, give the qualitative fact you ARE sure of instead — "orders of
+magnitude slower" rather than a specific multiple you are guessing at. A
+made-up number in a list headed "facts" is worse than saying less, because
+the reader has no way to tell it from the real ones and will repeat it.
+Leaving a gap costs nothing here; there are plenty of other facts.
+
+RULES:
+- Plain language, short sentences — the reader is dyslexic. No jargon that
+  itself needs explaining, unless the fact IS the term, in which case define
+  it in the same sentence.
+- No hedging, no "it is worth noting", no "interestingly", no meta-commentary
+  about the topic or the list. Just the fact.
+- Nothing repeated, in different words, anywhere in the list.
+- No opinions dressed as facts. If it is contested, say that it is contested
+  — that is itself a fact worth having.
+- Mark the kind of each fact, one of: mechanism (how something works),
+  number (a quantity or scale), misconception (a common belief that is
+  wrong — say the wrong belief AND the correction), history (how it came to
+  be), consequence (what follows from something), definition (what a term
+  means), edge (a limit, exception, or failure case).
+
+THE MIX MATTERS as much as the facts do. A list that is mostly definitions
+is a glossary, and the reader can already get a glossary anywhere:
+- Keep plain definitions to roughly a THIRD of the list at most. Define a
+  term only when the rest of the topic is unreadable without it.
+- Weight the list toward mechanism, consequence, edge and misconception —
+  the kinds that carry understanding rather than vocabulary.
+- Include several MISCONCEPTIONS wherever the topic has them. They are the
+  single most useful kind here, because they change something the reader
+  already believes rather than adding to a pile. Write one as a normal
+  sentence carrying both halves ("X is widely assumed, but actually Y") —
+  never prefix it with "Misconception:" or "Myth:" or "Correction:". The
+  kind label already says what it is, and repeating it wastes the line.
+- Include a handful of real NUMBERS — a size, a count, a duration, an order
+  of magnitude — subject to the no-invented-precision rule above. A number
+  you are sure of anchors a topic better than any sentence about it.
+
+STRUCTURE:
+6-8 named groups, each holding 6-9 facts. Order the groups so an early one
+never depends on a later one. Group names are short and concrete (2-5 words)
+— what the group is about, not "Introduction" or "Miscellaneous".
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"groups": [{"name": "<group>",
+             "facts": [{"text": "<one sentence>", "kind": "<the kind>"}]}]}"""
+
+
+def facts_message(topic: str, angle: str = "") -> str:
+    lines = [f'The topic: "{topic}"']
+    if angle:
+        lines += ["",
+                  f'Slant the selection toward: "{angle}" — still facts about '
+                  "the topic, chosen for what matters from that angle."]
+    lines += ["", "Lay out the landscape. Output the JSON object now."]
+    return "\n".join(lines)
+
+
 def explain_figure_question(caption: str) -> str:
     """The fixed question behind 🔍 explain — the figure's own description is
     attached as the quote, so the tutor is reading the same brief the picture
