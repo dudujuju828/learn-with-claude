@@ -6946,6 +6946,24 @@ function factAt(tree, path){
   const g = factsOf(tree)[path[0]];
   return g && g.facts ? g.facts[path[1]] : null;
 }
+/* A node label from a fact. oneLine() alone won't do: it cuts at exactly N
+   characters, and a fact is a 100-175 character sentence, so every label
+   would end mid-word ("...until it has an ans…") — and the child-branch
+   buttons re-truncate to 22, making it worse. A fact's first clause is
+   almost always the thing itself, so take that where there is one, and fall
+   back to the last whole word. The FULL fact is what gets investigated; this
+   is only what the tree, the breadcrumbs and the exports show. */
+const FACT_LABEL_MAX = 60;
+function factLabel(text){
+  const s = String(text || "").replace(/\s+/g, " ").trim();
+  if (s.length <= FACT_LABEL_MAX) return s.replace(/[.;,:]+$/, "");
+  // a clause break that lands in a sensible window makes the cleanest label
+  const m = s.slice(0, FACT_LABEL_MAX + 1).match(/^(.{24,})(?:[;:,]| — | – )/);
+  if (m) return m[1].trim();
+  const cut = s.slice(0, FACT_LABEL_MAX);
+  const sp = cut.lastIndexOf(" ");
+  return (sp > 24 ? cut.slice(0, sp) : cut).replace(/[.;,:]+$/, "") + "…";
+}
 function factsThunk(topic, angle){
   let treeId = null;
   return async () => {
@@ -6984,12 +7002,16 @@ function factInvestThunk(treeId, path){
     const tree = store[treeId];
     const fact = factAt(tree, path);
     if (!fact) return;
-    const label = oneLine(fact.text, 60);
+    const label = factLabel(fact.text);
     if (!node){
       const order = Object.keys(tree.nodes).map(Number).sort((a, b) => a - b);
       if (!order.length){
         node = makeNode(tree, label);
-        ctx = {kind: "root", topic: fact.text};
+        // the whole fact is the topic — never the shortened label — with the
+        // parent topic named the way the survey names it, so the learner has
+        // the domain even when the fact reads fine on its own
+        ctx = {kind: "root",
+               topic: `${fact.text} (a fact about ${tree.root_topic})`};
       } else {
         const recap = order.map(id =>
           `[${getNode(tree, id).label}]\n${conversationDigest(getNode(tree, id).turns)}`).join("\n");
