@@ -19,12 +19,14 @@ from __future__ import annotations
 import json
 import re
 
+from . import gemini_images
 from .knowledge import KnowledgeTree, conversation_digest
 from .personas import (
     EXAM_KINDS,
     EXAM_SYSTEM,
     GLOSSARY_REASONS,
     GLOSSARY_SYSTEM,
+    ILLUSTRATE_SYSTEM,
     INTERVIEW_FINISH,
     INTERVIEW_SYSTEM,
     LEARNER_LEVELS,
@@ -48,6 +50,7 @@ from .personas import (
     followup_tutor_context,
     gaps_learner_message,
     gaps_tutor_context,
+    illustrate_message,
     interview_budget_note,
     interview_opening,
     learner_system,
@@ -721,6 +724,134 @@ def handle_mark_exam(body: dict, call_model) -> dict:
     }
 
 
+# --------------------------------------------------------------------------- #
+# 🖼 illustrate — a picture of one highlighted passage, in two stages.
+#
+# Stage one is a text model writing the brief (see ILLUSTRATE_SYSTEM: what has
+# a shape here, and what would drawing it teach). Stage two is Gemini drawing
+# it. The split is the whole design: it is what lets the app decline to draw
+# an idea that has no shape, and what produces the alt text and caption — a
+# picture with no alt text would be a step backwards for a reader who needs
+# this app's screen-reader path.
+#
+# The bytes come straight back to the browser rather than being filed here.
+# This handler stays stateless like every other route; the client re-encodes
+# the image small and PUTs it to the byte store (api/images.js hosted,
+# localweb's ImageStore locally), because a knowledge tree caps at 2 MB and a
+# PNG would eat it whole.
+# --------------------------------------------------------------------------- #
+ILLUSTRATE_PASSAGE_MAX = 600
+ILLUSTRATE_LABELS_MAX = 6
+ILLUSTRATE_ELEMENTS_MAX = 6
+
+
+def _unique(items: list, limit: int) -> list:
+    """Order-preserving, case-insensitive dedupe."""
+    seen, out = set(), []
+    for item in items:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _illustrate_brief(data) -> dict:
+    """Stage one's reply, clamped to what build_prompt() will actually use.
+
+    Every cap here is a quality guard rather than a safety one: a brief with
+    twelve labels produces a figure with twelve chances to render a misspelt
+    word, and a 400-character "layout" produces a model that ignores all of it.
+    """
+    if not isinstance(data, dict):
+        raise ApiError("the art director returned nothing usable — try again", 502)
+    if data.get("drawable") is False:
+        why = " ".join(str(data.get("why") or "").split())[:300]
+        return {"drawable": False,
+                "why": why or "there isn't a shape in this passage worth drawing"}
+
+    subject = " ".join(str(data.get("subject") or "").split())[:400]
+    if not subject:
+        raise ApiError("the art director returned nothing usable — try again", 502)
+    kind = str(data.get("kind") or "").strip().lower()
+    if kind not in gemini_images.KINDS:
+        kind = gemini_images.DEFAULT_KIND
+    caption = " ".join(str(data.get("caption") or "").split())[:80] or subject[:80]
+    alt = " ".join(str(data.get("alt") or "").split())[:400] or caption
+    return {
+        "drawable": True,
+        "subject": subject,
+        "kind": kind,
+        "elements": _str_list(data.get("elements"), ILLUSTRATE_ELEMENTS_MAX, 200),
+        "layout": " ".join(str(data.get("layout") or "").split())[:300],
+        # 1-3 words each: the whitelist is only protective while it is short.
+        # Deduped because a repeat is an instruction to write the same word
+        # twice on the figure, which is exactly the clutter it exists to stop.
+        "labels": _unique(_str_list(data.get("labels"), ILLUSTRATE_LABELS_MAX * 2, 40),
+                          ILLUSTRATE_LABELS_MAX),
+        "avoid": " ".join(str(data.get("avoid") or "").split())[:200],
+        "caption": caption,
+        "alt": alt,
+    }
+
+
+def handle_illustrate(body: dict, call_model) -> dict:
+    passage = " ".join(str(body.get("passage") or "").split())[:ILLUSTRATE_PASSAGE_MAX]
+    if len(passage) < 2:
+        raise ApiError("missing 'passage'")
+    if not gemini_images.available():
+        raise ApiError(
+            "image generation is off — GEMINI_API_KEY is not set on the server",
+            503,
+        )
+
+    message = illustrate_message(
+        passage,
+        (body.get("topic") or "").strip()[:200],
+        (body.get("label") or "").strip()[:120],
+        (body.get("context") or "").strip()[:4000],
+        " ".join(str(body.get("hint") or "").split())[:300],
+    )
+    # a short, structured answer: xhigh effort would only make it slower and
+    # dearer, and the judgement it needs is "does this have a shape", not depth
+    text, brief_cost = call_model(
+        ILLUSTRATE_SYSTEM, [{"role": "user", "content": message}], "tutor",
+        effort="low", max_tokens=1200,
+    )
+    brief = _illustrate_brief(first_json_object(text))
+    if not brief["drawable"]:
+        # not an error: declining to draw an idea with no shape is the feature
+        # working. 200 so the client can say it gently instead of going red.
+        return {"drawable": False, "why": brief["why"], "cost": brief_cost}
+
+    prompt = gemini_images.build_prompt(brief)
+    aspect = gemini_images.clean_aspect(body.get("aspect"), brief["kind"])
+    try:
+        b64, mime, image_cost = gemini_images.generate(prompt, aspect)
+    except gemini_images.ImageError as exc:
+        raise ApiError(str(exc), exc.status) from exc
+
+    return {
+        "drawable": True,
+        "data": b64,
+        "mime": mime,
+        "alt": brief["alt"],
+        "caption": brief["caption"],
+        "kind": brief["kind"],
+        "labels": brief["labels"],
+        "aspect": aspect,
+        # what the tutor is shown when you ask a question about the figure:
+        # the brief it was drawn from, which is a truer account of the picture
+        # than any caption, and costs nothing to carry
+        "brief": brief["subject"],
+        "cost": brief_cost + image_cost,
+        "image_cost": image_cost,
+    }
+
+
 def _survey_items(raw, depth: int) -> list:
     """Validate/clip a survey breakdown: [{name, why, items?}] at most
     `depth` levels deep, at most 6 items per level."""
@@ -813,6 +944,7 @@ def model_routes(call_model, tutor_grounding=None, learner_grounding=None) -> di
         "teachback": lambda body: handle_teachback(body, call_model),
         "define": lambda body: handle_define(body, call_model),
         "quiz": lambda body: handle_quiz(body, call_model),
+        "illustrate": lambda body: handle_illustrate(body, call_model),
         "exam": lambda body: handle_exam(body, call_model),
         "mark_exam": lambda body: handle_mark_exam(body, call_model),
         "order_questions": lambda body: handle_order_questions(body, call_model),

@@ -129,6 +129,16 @@ a{{color:var(--ans);}}
   padding:.1rem 0 .1rem .6rem; margin:0 0 .5rem;}}
 .block.hlt{{border-color:var(--term);}} .block.hlt .label{{color:var(--term);}}
 .block.hlt mark{{background:var(--term-bg); color:inherit; border-radius:.25rem; padding:.05rem .2rem;}}
+/* generated figures. White behind the picture on every theme on purpose:
+   the figure was drawn on an off-white ground, and a dark card around it
+   reads as a hole in the page rather than a diagram. */
+figure.fig{{margin:.4rem 0 1.2rem; padding:0;}}
+figure.fig img{{display:block; width:100%; max-width:34rem; height:auto;
+  background:#fff; border:1px solid var(--line); border-radius:.7rem;}}
+figure.fig figcaption{{color:var(--muted); font-size:.9em; margin-top:.4rem;
+  max-width:34rem;}}
+figure.fig .nofig{{border:1px dashed var(--line); border-radius:.7rem;
+  padding:.9rem 1rem; color:var(--muted); max-width:34rem;}}
 details.part{{border:1px solid var(--line); border-radius:.6rem; background:var(--bg);
   margin:.7rem 0; padding:0 .8rem;}}
 details.part summary{{cursor:pointer; padding:.45rem 0; color:var(--muted); font-size:.9em;}}
@@ -618,7 +628,46 @@ def toolbar_html() -> str:
     )
 
 
-def _turn_html(t: dict, highlights=None) -> str:
+# A data: URI the browser will actually load, or "". The exported page is
+# self-contained by design (it is mailed around, opened offline, kept), so a
+# figure either travels inside it or doesn't travel at all — an <img> pointing
+# back at the server would be a broken box on every machine but one. The
+# client inlines `data` into the tree it POSTs to /api/export_html; a tree
+# exported by the CLI has the description but no bytes, and falls back to it.
+_DATA_URI_OK = ("image/webp", "image/png", "image/jpeg")
+
+
+def _figure_src(fig: dict) -> str:
+    data = str(fig.get("data") or "")
+    if not data:
+        return ""
+    if data.startswith("data:"):
+        return data if data[5:].split(";", 1)[0] in _DATA_URI_OK else ""
+    mime = str(fig.get("mime") or "image/webp")
+    if mime not in _DATA_URI_OK:
+        return ""
+    # base64 only — anything else is not something we wrote
+    if any(c not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n\r"
+           for c in data[:200]):
+        return ""
+    return f"data:{mime};base64,{data}"
+
+
+def _figures_html(figures) -> str:
+    out = []
+    for fig in figures or []:
+        caption = _esc(str(fig.get("caption") or "a figure"))
+        alt = _esc(str(fig.get("alt") or fig.get("caption") or "generated figure"))
+        src = _figure_src(fig)
+        inner = (f'<img src="{src}" alt="{alt}" loading="lazy" decoding="async">'
+                 if src else
+                 f'<div class="nofig">🖼 {alt}</div>')
+        out.append(f'<figure class="fig">{inner}'
+                   f'<figcaption>🖼 {caption}</figcaption></figure>')
+    return "".join(out)
+
+
+def _turn_html(t: dict, highlights=None, figures=None) -> str:
     parts = ['<div class="turn">']
     conf = (f' <span class="conf">· confidence {t["confidence"]}%</span>'
             if t.get("confidence") is not None else "")
@@ -668,6 +717,8 @@ def _turn_html(t: dict, highlights=None) -> str:
         parts.append(
             f'<div class="block hlt"><div class="label">★ I highlighted</div>{marks}</div>'
         )
+    if figures:
+        parts.append(_figures_html(figures))
     parts.append("</div>")
     return "".join(parts)
 
@@ -691,6 +742,7 @@ def tree_to_html(tree) -> str:
     # node sections (depth-first)
     sections = []
     hl_map = tree.highlight_map() if hasattr(tree, "highlight_map") else {}
+    img_map = tree.image_map() if hasattr(tree, "image_map") else {}
 
     def emit(nid: int) -> None:
         node = tree.nodes[nid]
@@ -703,7 +755,9 @@ def tree_to_html(tree) -> str:
                 f'<div class="crumb">{crumb}</div>']
         if node.focus:
             body.append(f'<div class="muted">Re-investigating: {_esc(node.focus)}</div>')
-        body.extend(_turn_html(t, hl_map.get((node.id, t.get("turn")))) for t in node.turns)
+        body.extend(_turn_html(t, hl_map.get((node.id, t.get("turn"))),
+                               img_map.get((node.id, t.get("turn"))))
+                    for t in node.turns)
         body.append("</section>")
         sections.append("".join(body))
         for c in node.children:

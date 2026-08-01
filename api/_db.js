@@ -10,6 +10,7 @@ const { neon } = require("@neondatabase/serverless");
 
 let client = null;
 let schemaReady = null;
+let imagesReady = null;
 
 function db() {
   if (!client) {
@@ -37,10 +38,27 @@ function ensureSchema() {
   return schemaReady;
 }
 
+// Generated figures (api/images.js). Its own table, not a docs row: these are
+// binary and large, and keeping them out of `docs` means the tree listing
+// never has to read past them. Bootstrapped separately so the endpoints that
+// never touch images don't pay for the DDL check.
+function ensureImages() {
+  if (!imagesReady) {
+    imagesReady = db()`
+      CREATE TABLE IF NOT EXISTS images (
+        id         text PRIMARY KEY,
+        mime       text NOT NULL DEFAULT 'image/webp',
+        bytes      bytea NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now()
+      )`.catch((err) => { imagesReady = null; throw err; });
+  }
+  return imagesReady;
+}
+
 // tagged-template query that lazily bootstraps the schema on a cold start
 async function sql(strings, ...values) {
   await ensureSchema();
   return db()(strings, ...values);
 }
 
-module.exports = { sql };
+module.exports = { sql, ensureImages };

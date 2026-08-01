@@ -33,7 +33,7 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import copilot_backend, copilot_sessions, local_settings
+from . import copilot_backend, copilot_sessions, gemini_images, local_settings
 from .knowledge import FORMAT, slug
 from .personas import LEARNER_LEVELS, TUTOR_MODES
 from .webapi import ApiError, model_routes
@@ -54,6 +54,7 @@ STATIC_TYPES = {
 _TREE_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _TUTOR_ID = re.compile(r"^[a-z0-9-]{1,32}$")
 _GQ_ID = re.compile(r"^[a-f0-9]{8,32}$")
+_IMAGE_ID = re.compile(r"^img_[a-z0-9]{6,32}$")
 _PROFILE_BAD = re.compile(r"""['"\\<>&]""")
 
 ROUTES = model_routes(copilot_backend.call_model,
@@ -71,6 +72,11 @@ def handle_config() -> dict:
         "levels": list(LEARNER_LEVELS),
         "local": True,
         "provider": "copilot",
+        # the one thing local mode can't get from the Copilot login: drawing a
+        # figure needs a Gemini key of its own, so the button appears only if
+        # GEMINI_API_KEY was in the environment `learn --web` started from
+        "images": gemini_images.available(),
+        "image_model": gemini_images.model_name() if gemini_images.available() else "",
     }
 
 
@@ -294,6 +300,59 @@ def _iso(ts: float) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# generated figures (🖼 illustrate) — one file each, in images/ beside the
+# trees. Deliberately NOT inside the .know.json: a tree is a text document
+# people read, diff, and copy between machines, and a base64 PNG in the middle
+# of it would end all three. The tree keeps the caption and which turn the
+# figure hangs from; the pixels live here, named by the same id.
+# --------------------------------------------------------------------------- #
+class ImageStore:
+    MAX_BYTES = 4_000_000
+    EXTS = {"image/webp": ".webp", "image/png": ".png", "image/jpeg": ".jpg"}
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.lock = threading.Lock()
+
+    def _find(self, image_id: str) -> "Path | None":
+        for ext in self.EXTS.values():
+            path = self.root / f"{image_id}{ext}"
+            if path.is_file():
+                return path
+        return None
+
+    def get(self, image_id: str) -> "tuple[bytes, str] | None":
+        with self.lock:
+            path = self._find(image_id)
+            if path is None:
+                return None
+            mime = next((m for m, e in self.EXTS.items() if e == path.suffix), "image/webp")
+            try:
+                return path.read_bytes(), mime
+            except OSError:
+                return None
+
+    def put(self, image_id: str, mime: str, data: bytes) -> int:
+        ext = self.EXTS.get(mime)
+        if ext is None:
+            raise ApiError("unsupported image type")
+        if not data:
+            raise ApiError("unreadable image data")
+        if len(data) > self.MAX_BYTES:
+            raise ApiError("image too large", 413)
+        with self.lock:
+            self.root.mkdir(parents=True, exist_ok=True)
+            (self.root / f"{image_id}{ext}").write_bytes(data)
+        return len(data)
+
+    def delete(self, image_id: str) -> None:
+        with self.lock:
+            path = self._find(image_id)
+            if path is not None:
+                path.unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------- #
 # custom tutors — one small JSON doc beside the knowledge dir
 # --------------------------------------------------------------------------- #
 class TutorStore:
@@ -450,11 +509,20 @@ class ProfileStore:
 # http
 # --------------------------------------------------------------------------- #
 def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEndpoint,
-                 global_questions: GlobalQuestionStore, profiles: ProfileStore):
+                 global_questions: GlobalQuestionStore, profiles: ProfileStore,
+                 images: ImageStore):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
         # -- plumbing ----------------------------------------------------- #
+        def _send_bytes(self, data: bytes, ctype: str, cache: str) -> None:
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Cache-Control", cache)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
         def _send_json(self, status: int, payload) -> None:
             data = json.dumps(payload).encode("utf-8")
             self.send_response(status)
@@ -524,6 +592,16 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                     self._send_json(200, {"doc": global_questions.get()})
                 elif path == "/api/profiles":
                     self._send_json(200, {"doc": profiles.get()})
+                elif path == "/api/images":
+                    iid = params.get("id", "")
+                    hit = images.get(iid) if _IMAGE_ID.match(iid) else None
+                    if hit is None:
+                        self._send_json(404, {"error": "no such image"})
+                    else:
+                        # an id is never reused, so the bytes behind it can
+                        # never change — cache them for good
+                        self._send_bytes(hit[0], hit[1],
+                                         "private, max-age=31536000, immutable")
                 elif path == "/api/local_settings":
                     self._send_json(200, settings.get())
                 elif path.startswith("/api/"):
@@ -557,6 +635,19 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                 elif path == "/api/profiles":
                     profiles.put(body.get("doc"))
                     self._send_json(200, {"ok": True})
+                elif path == "/api/images":
+                    import base64
+                    import binascii
+
+                    iid = str(body.get("id") or "")
+                    if not _IMAGE_ID.match(iid):
+                        raise ApiError("bad id")
+                    try:
+                        raw = base64.b64decode(str(body.get("data") or ""), validate=True)
+                    except (binascii.Error, ValueError):
+                        raise ApiError("unreadable image data")
+                    size = images.put(iid, str(body.get("mime") or "image/webp"), raw)
+                    self._send_json(200, {"ok": True, "id": iid, "size": size})
                 elif path == "/api/local_settings":
                     self._send_json(200, settings.put(body))
                 elif path == "/api/mcp_register":
@@ -585,6 +676,9 @@ def make_handler(trees: TreeStore, tutors: TutorStore, settings: LocalSettingsEn
                 if path == "/api/trees" and _TREE_ID.match(params.get("id", "")):
                     trees.delete(params["id"])
                     self._send_json(200, {"ok": True})
+                elif path == "/api/images" and _IMAGE_ID.match(params.get("id", "")):
+                    images.delete(params["id"])
+                    self._send_json(200, {"ok": True})
                 else:
                     self._send_json(400, {"error": "bad id"})
             except Exception as exc:  # pragma: no cover
@@ -612,15 +706,18 @@ def serve(port: int = 8577, knowledge_dir: "str | None" = None,
     tutors = TutorStore(root.parent / "tutors.json")
     global_questions = GlobalQuestionStore(root.parent / "global_questions.json")
     profiles = ProfileStore(root.parent / "profiles.json")
+    images = ImageStore(root / "images")
     settings_store = local_settings.LocalSettingsStore(root.parent / "local_settings.json")
     copilot_backend.configure(settings_store.load())
     settings = LocalSettingsEndpoint(settings_store)
     httpd = ThreadingHTTPServer(("127.0.0.1", port),
                                 make_handler(trees, tutors, settings, global_questions,
-                                             profiles))
+                                             profiles, images))
     url = f"http://localhost:{port}/"
     print(f"learn-with-claude local web · {version}")
     print(f"  trees: {root}")
+    if gemini_images.available():
+        print(f"  images: {images.root}  ({gemini_images.model_name()})")
     print(f"  open:  {url}   (Ctrl+C stops the server)")
     if open_browser:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()

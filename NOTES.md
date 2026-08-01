@@ -5,6 +5,105 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 54 — 🖼 illustrate: a picture of the sentence you point at
+
+*(user-requested: "when reading it's nice to sometimes get a visual idea, an
+image to pin something down. We don't want this to be automatically
+generated, because there is a large chance that the image would be
+irrelevant. Therefore — you highlight roughly what you want an image of, and
+click a generate image button… Be very careful with the image generation
+prompt, images are known to be tricky with AI.")*
+
+Select a descriptive passage in an answer; the selection chip's **🖼 image**
+draws a figure and files it under that turn. Nothing is ever illustrated
+automatically — the same rule the glossary has (`➕ add` and nothing else),
+for the same reason: an unrequested picture is decoration at best, and at
+worst a confident picture of the wrong thing, which costs a reader more than
+no picture.
+
+**Two stages, because one stage does not work.** The obvious build — send the
+selected prose to the image model — is the one that produces the handsome,
+irrelevant diagram with invented labels the user was worried about. Image
+models draw the *vibe* of a paragraph. So a text model reads the passage
+first (`ILLUSTRATE_SYSTEM`) and answers a narrower question: what here has a
+**shape**, and what would drawing it teach? Its output is a brief — subject,
+kind, layout, elements, and an explicit **label whitelist** — which
+`gemini_images.build_prompt()` turns into the image prompt.
+
+Three things fell out of that split which justify it on their own:
+
+- **It can decline.** `{"drawable": false}` is a first-class answer, returned
+  as a 200 with a plain reason ("this is an opinion, not a structure") and no
+  image bill. Refusing to illustrate an idea with no shape is the difference
+  between a feature readers trust and one they learn to scroll past.
+- **Alt text exists.** A picture with no alt text would be a step backwards
+  for this app specifically. The brief produces it, so a screen reader, the
+  markdown export, and a figure whose bytes are missing all still carry
+  meaning.
+- **"Ask about this image" needs no vision model.** The brief *is* a faithful
+  description of the picture, because the picture was drawn from it — so
+  🔍 explain and 💬 ask ride the existing `askThunk` path with the brief as
+  the quote. Works identically on both backends; no core prompt changed.
+
+**The prompt rules that matter** (each is a specific failure mode): an
+explicit, deduped, ≤6-item label whitelist spelled out verbatim — unrequested
+text is the commonest way a generated diagram becomes worse than nothing,
+since gibberish labels look authoritative; "flat vector textbook figure",
+which is the one phrase that reliably keeps the model off photoreal 3-D
+renders that impress and explain nothing; a decisive layout, because an
+unarranged process diagram is a wrong one; and "leave it out rather than
+inventing a plausible-looking stand-in".
+
+**Where the bytes live — the constraint that shaped everything.**
+`api/trees.js` caps a tree at 2 MB and the browser keeps *every* tree in one
+localStorage key, so a single PNG would crowd out the conversations it was
+meant to explain. Rejected: inlining base64 on the turn (≈15 figures per tree,
+≈40 per browser, and a `.know.json` no one could read); Vercel Blob (a second
+store to provision, and the repo had deliberately migrated off it). Chosen: an
+`images` table (bytea) hosted, `knowledge/images/` locally, and the browser
+re-encodes to WebP ≤1280px before upload — ~1.5 MB PNG becomes ~150 KB, and
+the Python package stays stdlib-only because the *canvas* does the work.
+Measured in the harness: localStorage after a figure, 1454 bytes.
+
+The tree carries only the description (`images: [{id, node, turn, anchor,
+caption, alt, …}]`) — which is what lets a CLI reader, the markdown export,
+and an imported tree from another deployment all still say what the figure
+was. `export html` is the exception: it is mailed around and read offline, so
+the client inlines the bytes as data URIs and the page stays self-contained.
+Markdown deliberately does **not** — several hundred KB of base64 per figure
+would make the export unreadable in the editors people open `.md` files in.
+
+All four tree invariants honoured: `mergeTrees` unions figures by id with
+`imgGone` tombstones (without them a deleted figure returns from another
+device as a permanently broken box, since its bytes are gone); `extras`
+carries `images` through the CLI; both exports handle it; and figures are
+per-tree so they inherit the tree's profile.
+
+One transport oddity worth recording: `/api/images` is the sole `/api/*` path
+the service worker caches. An id is minted per figure and never reused — a
+redraw mints a new one — so the bytes behind a URL can never change, which
+makes cache-first correct rather than merely convenient, and means figures
+survive an offline read.
+
+**Rejected:** a confirmation step showing the brief before drawing (the user
+asked for select → click → image; the fix path is `↻ redraw`, which takes an
+optional steer or just tries again, since these models are stochastic);
+passing the image to Claude's vision (hosted-only, and it would fork
+`call_model`'s contract, which local mode could not follow); a figures
+gallery (nothing asked for it, and every new cross-tree view is another place
+to get profile scoping wrong).
+
+Verified with the repo's headless-Edge stub harness — 38 checks, from "the
+chip offers the button" through re-encode, upload, tombstoned redraw, the
+merge, and a refusal not reading as an error. Live against the real Gemini
+API: the endpoint, `x-goog-api-key`, `generationConfig.responseModalities`,
+and all six image model ids are confirmed accepted; generation itself needs a
+billed project, which is why a `limit: 0` quota now reports "enable billing"
+rather than the "wait and retry" a 429 would otherwise get — that message was
+a real defect the live run caught.
+
+---
+
 ## Feature 53 — profiles become real records, owned by the server
 
 *(user-requested: "consistently getting an issue with the lifecycle of

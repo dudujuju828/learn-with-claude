@@ -41,6 +41,13 @@ Adding a route means three things, and the third is easy to forget:
 `copilot_backend.effective_model()`, where an unknown role means "auto" and no
 tools. Adding a role means touching both.
 
+`illustrate` is the one route that isn't purely `call_model`: stage one is a
+normal `tutor` call, stage two goes to Gemini through `gemini_images.py`
+(stdlib `urllib`, so the *same* module serves both backends — there is no
+per-backend image wiring, and there must not be). It is off unless
+`GEMINI_API_KEY` is set, which `/api/me` reports as `images` so the client can
+hide the button rather than offer an action that can only fail.
+
 ## Three deployment targets, one frontend
 
 - **CLI** (`learn`) — `repl.py`/`cli.py`, model calls via `claude -p`.
@@ -92,6 +99,20 @@ Breaking one of these is a regression even if nothing errors.
   arriving from the CLI or another device becomes a real record.
 - **Nothing enters the glossary automatically.** Terms join only by an
   explicit `➕ add` / flashcard. `✎ define` is a *lookup* that stores nothing.
+- **Nothing is illustrated automatically either**, and for the same reason.
+  A figure is drawn only from a passage the reader selected, and the
+  art-director stage is allowed to answer `{"drawable": false}` — an idea
+  with no shape gets no picture. Never "helpfully" widen this: an
+  unrequested diagram is a confident picture of the wrong thing.
+- **Image bytes never touch a tree.** `api/trees.js` caps a tree at 2 MB and
+  the browser holds every tree in one localStorage key, so figures live in
+  their own store (`api/images.js` hosted, `knowledge/images/` locally) and
+  the tree carries only `{id, node, turn, anchor, caption, alt, …}`. The one
+  place bytes are inlined is `export html`, whose page must stay
+  self-contained; the client does that on the way out
+  (`treeWithFigureBytes`), never in the stored document. A figure id is
+  minted per picture and never reused, which is what makes the service
+  worker's cache-first rule for `/api/images` correct.
 - **The simulated learner stays ignorant.** It never sees the human's own
   turns, and in local mode it gets a generated *orientation brief* (names and
   what kind of thing each is), never the anchored session's transcript. Its
@@ -106,7 +127,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 34 tests
+python -m pytest -q                     # 45 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

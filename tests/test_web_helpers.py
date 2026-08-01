@@ -601,6 +601,249 @@ def test_handle_survey():
     print("ok  handle_survey (validation, clipping, depth cap, focus)")
 
 
+def test_image_prompt():
+    """The rules that stop a generated figure being worse than none: an
+    explicit label whitelist, a flat-vector style, and omit-rather-than-invent.
+    """
+    from learn_with_claude import gemini_images as gi
+
+    prompt = gi.build_prompt({
+        "kind": "process", "subject": "how a key becomes a bucket index",
+        "elements": ["a key on the left", "a hash function box in the middle"],
+        "layout": "left to right, one arrow between each pair",
+        "labels": ["key", "hash function", "bucket"],
+        "avoid": "the culinary sense of hash",
+    })
+    # the whitelist is what suppresses invented gibberish text
+    assert '"key", "hash function", "bucket"' in prompt
+    assert "Write these 3 labels and no others" in prompt
+    assert "no title, no caption, no legend" in prompt
+    assert "is an error" in prompt
+    # style + honesty rules
+    assert "Flat vector illustration" in prompt and "no photorealism" in prompt
+    assert "leave it out rather than inventing" in prompt
+    assert "Specifically avoid: the culinary sense of hash" in prompt
+    assert "left-to-right process diagram" in prompt      # the kind's own noun
+    assert "a hash function box in the middle" in prompt
+
+    # no labels at all is a legitimate brief — and then NO text is wanted
+    bare = gi.build_prompt({"kind": "concrete", "subject": "a B-tree node",
+                            "elements": [], "labels": []})
+    assert "Write no text at all anywhere in the image." in bare
+    assert "a B-tree node" in bare
+
+    # an unknown kind still produces a usable prompt rather than blowing up
+    odd = gi.build_prompt({"kind": "interpretive dance", "subject": "x"})
+    assert gi.KINDS[gi.DEFAULT_KIND][0] in odd
+
+    # each kind picks the shape that kind of idea wants, and junk is coerced
+    assert gi.clean_aspect("16:9", "structure") == "16:9"
+    assert gi.clean_aspect("banana", "process") == "16:9"
+    assert gi.clean_aspect(None, "layers") == "3:4"
+    assert gi.clean_aspect(None, "nonsense") == gi.DEFAULT_ASPECT
+
+    # pricing is matched longest-prefix-first: the lite model must not be read
+    # as the flash model it shares a prefix with
+    assert gi.price_of("gemini-3.1-flash-lite-image") == 0.0336
+    assert gi.price_of("gemini-3.1-flash-image") == 0.067
+    assert gi.price_of("gemini-3-pro-image") == 0.134
+    assert gi.price_of("something-new") == gi.FALLBACK_PRICE
+    print("ok  image prompt (label whitelist, style, aspect, pricing)")
+
+
+def test_gemini_reply_parsing():
+    """Both spellings of the inline-image block, and a refusal that explains
+    itself instead of a bare 'no image'."""
+    from learn_with_claude import gemini_images as gi
+
+    camel = {"candidates": [{"content": {"parts": [
+        {"text": "Here you go:"},
+        {"inlineData": {"mimeType": "image/png", "data": "QUJD"}}]}}]}
+    assert gi._first_inline_image(camel) == ("QUJD", "image/png")
+
+    snake = {"candidates": [{"content": {"parts": [
+        {"inline_data": {"mime_type": "image/webp", "data": "REVG"}}]}}]}
+    assert gi._first_inline_image(snake) == ("REVG", "image/webp")
+
+    assert gi._first_inline_image({"candidates": []}) is None
+
+    blocked = {"promptFeedback": {"blockReason": "SAFETY"}}
+    assert "SAFETY" in gi._refusal(blocked)
+    talked = {"candidates": [{"content": {"parts": [
+        {"text": "I can't draw that."}]}, "finishReason": "STOP"}]}
+    assert "words instead of a picture" in gi._refusal(talked)
+    stopped = {"candidates": [{"finishReason": "RECITATION"}]}
+    assert "RECITATION" in gi._refusal(stopped)
+    assert gi._refusal({}).strip()          # never an empty explanation
+    print("ok  gemini reply parsing (both spellings, refusal messages)")
+
+
+def test_handle_illustrate():
+    """Stage one decides what to draw — including deciding not to."""
+    import json
+
+    from learn_with_claude import gemini_images
+    from learn_with_claude.webapi import ApiError, handle_illustrate
+
+    drawn = {}
+
+    def fake_generate(prompt, aspect=gemini_images.DEFAULT_ASPECT):
+        drawn["prompt"], drawn["aspect"] = prompt, aspect
+        return "QUJD", "image/png", 0.134
+
+    real_generate, real_key = gemini_images.generate, gemini_images.api_key
+    gemini_images.generate = fake_generate
+    gemini_images.api_key = lambda: "test-key"
+    try:
+        brief = {"drawable": True, "subject": "a bucket array with one chain",
+                 "kind": "structure", "elements": ["eight boxes in a row"] * 9,
+                 "layout": "a row of boxes", "labels": ["bucket"] * 9,
+                 "avoid": "", "alt": "Eight boxes in a row, one holding a chain",
+                 "caption": "buckets and a chain"}
+        seen = {}
+
+        def stub(system, messages, role, **kw):
+            seen.update(role=role, msg=messages[0]["content"], kw=kw)
+            return "here you go " + json.dumps(brief), 0.004
+
+        r = handle_illustrate(
+            {"passage": "Chaining keeps a linked list in each bucket.",
+             "topic": "hash tables", "label": "collisions", "context": "Q: …\nA: …"},
+            stub)
+
+        # the passage — not the whole conversation — is what gets illustrated
+        assert "Chaining keeps a linked list" in seen["msg"]
+        assert "hash tables" in seen["msg"] and "collisions" in seen["msg"]
+        # a short structured judgement: xhigh would only be slower and dearer
+        assert seen["role"] == "tutor" and seen["kw"]["effort"] == "low"
+
+        assert r["drawable"] and r["data"] == "QUJD" and r["mime"] == "image/png"
+        assert r["caption"] == "buckets and a chain"
+        assert r["alt"].startswith("Eight boxes")
+        assert r["kind"] == "structure" and r["aspect"] == "4:3"
+        assert r["cost"] == 0.004 + 0.134 and r["image_cost"] == 0.134
+        # every label is another chance to render a misspelt word, so the
+        # whitelist is deduped — nine "bucket"s would be an instruction to
+        # write the word nine times on one figure
+        assert r["labels"] == ["bucket"]
+        assert drawn["prompt"].count('"bucket"') == 1
+        assert drawn["aspect"] == "4:3"
+
+        # a genuinely varied list keeps its order and stops at the cap
+        varied = dict(brief, labels=["Key", "key", "hash", "bucket", "chain",
+                                     "load", "resize", "probe", "slot"])
+        handle_illustrate({"passage": "a drawable passage"},
+                          lambda *a, **k: (json.dumps(varied), 0.0))
+        assert drawn["prompt"].count("Write these 6 labels") == 1
+        assert '"Key", "hash", "bucket", "chain", "load", "resize"' in drawn["prompt"]
+
+        # "there is no shape here" is an answer, not an error: 200, no picture,
+        # no image bill — only the brief was paid for
+        drawn.clear()
+        no = handle_illustrate(
+            {"passage": "Elegance is largely a matter of taste."},
+            lambda *a, **k: (json.dumps(
+                {"drawable": False, "why": "this is an opinion, not a structure"}), 0.004))
+        assert no["drawable"] is False and no["cost"] == 0.004
+        assert "opinion" in no["why"] and "data" not in no
+        assert not drawn, "a refusal must not reach the image model"
+
+        # a reply with nothing usable in it is a real failure
+        try:
+            handle_illustrate({"passage": "something drawable"},
+                              lambda *a, **k: ("no json at all", 0.0))
+            assert False, "an unusable brief must raise"
+        except ApiError:
+            pass
+        for bad in ({"passage": ""}, {"passage": "x"}):
+            try:
+                handle_illustrate(bad, stub)
+                assert False, "a passage too short to describe anything must raise"
+            except ApiError:
+                pass
+
+        # a redraw's steer reaches the art director verbatim
+        handle_illustrate({"passage": "Chaining keeps a list.", "hint": "show three buckets"},
+                          stub)
+        assert "show three buckets" in seen["msg"]
+
+        # with no key the route refuses before spending anything
+        gemini_images.api_key = lambda: ""
+        try:
+            handle_illustrate({"passage": "something drawable"}, stub)
+            assert False, "no key must raise"
+        except ApiError as exc:
+            assert exc.status == 503 and "GEMINI_API_KEY" in str(exc)
+    finally:
+        gemini_images.generate, gemini_images.api_key = real_generate, real_key
+    print("ok  handle_illustrate (brief, clamping, refusal, missing key)")
+
+
+def test_image_exports():
+    """Figures survive the .know.json round-trip as descriptions, reach both
+    exports, and only the HTML one carries the actual picture."""
+    d = {
+        "format": "learn-with-claude/knowledge-tree", "version": 1, "id": "t3",
+        "root_topic": "hash tables", "created": "2026-08-01", "root_id": 1, "next": 2,
+        "nodes": {"1": {"id": 1, "label": "collisions", "children": [],
+                        "turns": [{"turn": 1, "action": "q", "tutor": "a"},
+                                  {"turn": 2, "action": "q2", "tutor": "a2"}]}},
+        "images": [
+            {"id": "img_a1", "node": 1, "turn": 2, "when": "2026-08-01T10:00:00Z",
+             "caption": "buckets and a collision chain",
+             "alt": "Eight boxes in a row; the third holds a chain of two entries.",
+             "mime": "image/webp", "data": "UklGRg=="},
+            {"id": "img_a0", "node": 1, "turn": 2, "when": "2026-08-01T09:00:00Z",
+             "caption": "an empty bucket array", "alt": "Eight empty boxes in a row."},
+            {"id": "img_b1", "node": 99, "turn": 1, "caption": "orphaned"},
+            {"id": "", "node": 1, "turn": 1, "caption": "no id"},
+            "not a dict",
+        ],
+    }
+    kb = KnowledgeTree.from_dict(d)
+    assert kb.to_dict()["images"] == d["images"]      # extras survive the CLI untouched
+
+    figs = kb.image_map()
+    assert list(figs) == [(1, 2)] and len(figs[(1, 2)]) == 2   # orphan + junk dropped
+    assert [f["caption"] for f in figs[(1, 2)]] == \
+        ["an empty bucket array", "buckets and a collision chain"]   # oldest first
+
+    # markdown deliberately carries the description, not a data URI per figure:
+    # a .md with several hundred KB of base64 in it is unreadable in the
+    # editors people actually open .md files in
+    md = kb.to_markdown()
+    assert "> 🖼 **Figure — buckets and a collision chain**" in md
+    assert "Eight boxes in a row; the third holds a chain" in md
+    assert "orphaned" not in md
+    assert "UklGRg==" not in md
+
+    # the reading page is self-contained, so there the picture does travel
+    html = tree_to_html(kb)
+    assert 'src="data:image/webp;base64,UklGRg=="' in html
+    assert 'alt="Eight boxes in a row; the third holds a chain of two entries."' in html
+    assert "buckets and a collision chain" in html
+    # a figure whose bytes never came along says what it was instead of
+    # rendering a broken-image box
+    assert "Eight empty boxes in a row." in html and 'class="nofig"' in html
+    assert "orphaned" not in html
+
+    # a data URI already assembled by the client is passed through; anything
+    # that isn't an image we wrote is refused rather than injected into the page
+    from learn_with_claude.export_html import _figure_src
+    assert _figure_src({"data": "data:image/png;base64,AAA="}) == "data:image/png;base64,AAA="
+    assert _figure_src({"data": "data:text/html;base64,AAA="}) == ""
+    assert _figure_src({"data": 'x" onerror="alert(1)', "mime": "image/webp"}) == ""
+    assert _figure_src({"data": "AAA=", "mime": "text/html"}) == ""
+    assert _figure_src({}) == ""
+
+    # no figures at all -> no key in the file, nothing in either export
+    d2 = dict(d); d2.pop("images")
+    kb2 = KnowledgeTree.from_dict(d2)
+    assert "images" not in kb2.to_dict()
+    assert "🖼" not in kb2.to_markdown() and "tfig" not in tree_to_html(kb2)
+    print("ok  image exports (round-trip, markdown description, html data URI)")
+
+
 def test_source_threading():
     """A sourced tree grounds both personas; an unsourced body is untouched."""
     from learn_with_claude.webapi import (
@@ -925,6 +1168,10 @@ if __name__ == "__main__":
     test_handle_exam()
     test_handle_mark_exam()
     test_exam_exports()
+    test_image_prompt()
+    test_gemini_reply_parsing()
+    test_handle_illustrate()
+    test_image_exports()
     test_handle_survey()
     test_source_threading()
     test_learner_brief_threading()

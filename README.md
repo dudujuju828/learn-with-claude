@@ -196,6 +196,25 @@ directly (a local `claude` login can't run on a server), so it needs an
   grounding passage), precisely as if you'd typed that text into the topic
   box and pressed *new*. It inherits only what a new tree always inherits:
   the active profile, the tutor style, and the learner level.
+  Or **🖼 image**, when a
+  sentence would land better as a picture: select the descriptive passage you
+  want to *see* and a figure is drawn and filed under that answer. Nothing is
+  ever illustrated on its own — the sentence you point at is the whole brief,
+  which is what keeps the picture about the thing you were reading. It runs in
+  two steps: the tutor reads the passage and works out what actually has a
+  shape worth drawing (parts in space, steps in an order, layers, two things
+  side by side) and writes the figure's brief — a layout and a short list of
+  labels, spelled out, so the drawing comes back clear rather than covered in
+  invented text — and only then is it drawn, as a flat, high-contrast
+  textbook-style diagram. Sometimes the answer is that there's nothing here
+  with a shape (a definition, an opinion), and it says so plainly instead of
+  drawing decoration. Under each figure: **🔍 explain** has the tutor walk
+  through it part by part, **💬 ask** puts your own question about it (both
+  land in the conversation as your turn, 🧑), **↻ redraw** tries again — say
+  what it should show instead, or leave the box blank — and **✕** removes it.
+  Figures sync, travel in `.know.json`, and go into the HTML reading page;
+  the markdown export carries their descriptions. Needs a `GEMINI_API_KEY` on
+  the server (see below); without one the button simply isn't offered.
   The same chip also offers
   **★ highlight** — a highlighter over the tutor's words
   that stays put across reloads and devices (tap a mark to lift it), travels
@@ -366,10 +385,25 @@ directly (a local `claude` login can't run on a server), so it needs an
   bottom sheets, with the ask box sticky above it and everything sized for
   fingers.
 
+- `api/images.js` — the bytes behind 🖼 figures, one row each in an `images`
+  table. Deliberately not on the tree: a knowledge tree caps at 2 MB and the
+  browser keeps every tree in one localStorage key, so a single PNG would
+  crowd out the conversations it was drawn to explain. The tree carries the
+  caption, the alt text and which turn the figure hangs from; the browser
+  re-encodes each picture to WebP before uploading it, and the ids are
+  immutable (a redraw mints a new one), so figures cache forever and work
+  offline.
+
 Deploy your own: `vercel deploy --prod`, then `vercel env add APP_PASSWORD
 production`, `vercel env add ANTHROPIC_API_KEY production`, and `vercel blob
-store add <name>` (linked to the project) for history. Not in the web app:
-`many`, `seeplusplus`.
+store add <name>` (linked to the project) for history. For **🖼 image** add
+`vercel env add GEMINI_API_KEY production` — image generation is a paid
+Gemini feature, so that key's Google Cloud project needs billing enabled
+(without the key the button is simply never offered, and nothing else
+changes). `LEARN_IMAGE_MODEL` picks the model (default `gemini-3-pro-image`,
+~$0.13 a figure; `gemini-3.1-flash-image` is ~half that and
+`gemini-3.1-flash-lite-image` ~a quarter), and `LEARN_IMAGE_SIZE` the
+resolution (`1K` by default). Not in the web app: `many`, `seeplusplus`.
 
 ## Local web app (no keys — GitHub Copilot)
 
@@ -392,7 +426,13 @@ How it differs from the Vercel deployment:
 - **Trees are files** — they persist straight into the CLI's knowledge dir
   (`$LEARN_DIR` or `~/.learn-with-claude/knowledge`), so the `learn` shell and
   the web app grow one collection and your existing trees appear immediately.
-  Custom tutors live beside them in `tutors.json`.
+  Custom tutors live beside them in `tutors.json`, and any 🖼 figures you draw
+  in `images/` inside the knowledge dir — one file each, never inside the
+  `.know.json`, so a tree stays a text document you can read and diff.
+- **🖼 image needs its own key.** It is the one thing the Copilot login can't
+  provide: export `GEMINI_API_KEY` before `learn --web` and the button
+  appears (the server prints where figures are being written). Without it
+  everything else works exactly as before.
 - **Costs are premium requests, not dollars** — the header counts `req`
   as reported by the CLI per call; trees grown against the API keep their `$`.
 - **The tutor can ground itself locally.** Its Copilot session gets
@@ -595,6 +635,7 @@ learn_with_claude/
   render.py                   # dyslexia-friendly terminal formatting / colour / Windows UTF-8
   cli.py                      # argument parsing & dispatch
   webapi.py                   # the /api route handlers, shared by both web backends
+  gemini_images.py            # 🖼 figures: the Gemini image transport + prompt builder
   copilot_backend.py          # GitHub Copilot CLI as a model transport (local web app)
   local_settings.py           # ⚙ local settings: models/effort/project dir/MCP servers
   copilot_sessions.py         # reads past Copilot CLI sessions (tutor memory)

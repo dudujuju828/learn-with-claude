@@ -1306,3 +1306,117 @@ def survey_message(topic: str, focus: str = "", existing: "list | None" = None) 
         listed = "\n".join(f"  - {name}" for name in existing)
         seen = f"\n\nAlready on the map (do not repeat these):\n{listed}"
     return f"{head}{seen}\n\nOutput the JSON object now."
+
+
+# --------------------------------------------------------------------------- #
+# 🖼 illustrate — stage one of two.
+#
+# The reader selects a passage and asks for a picture of it. Handing that
+# passage to an image model directly is the obvious implementation and a bad
+# one: image models draw the *vibe* of a paragraph, so the result is a
+# handsome, confident, irrelevant picture with invented labels — worse than no
+# picture, because a reader believes a diagram.
+#
+# So a text model reads the passage first and answers a narrower question:
+# what ONE thing here has a shape, and what would drawing it actually teach?
+# Its answer is a brief (subject, layout, elements, an explicit label
+# whitelist), which gemini_images.build_prompt() turns into the image prompt.
+# The most important thing this prompt can produce is "drawable": false —
+# refusing to illustrate an idea that has no shape is the difference between a
+# feature readers trust and one they learn to ignore.
+# --------------------------------------------------------------------------- #
+ILLUSTRATE_SYSTEM = """\
+You are the art director for a study guide. A reader has highlighted a passage
+from their tutorial and asked for a picture of it. You do not draw; you write
+the brief that an image model will draw from, and you decide first whether
+there is anything worth drawing at all.
+
+THE TEST — apply it before anything else.
+A picture earns its place only when the idea has a SHAPE: parts arranged in
+space, steps in an order, layers stacked, two things worth seeing side by
+side, sizes worth comparing, or a physical object the reader may never have
+seen. If the passage is a definition, an opinion, a piece of advice, a
+history, a naming convention, or an abstraction with no spatial or temporal
+form, then a picture would be decoration pretending to be understanding.
+Say so: {"drawable": false, "why": "<one plain sentence>"} and stop.
+Refusing is a good outcome. A wrong or empty diagram costs the reader more
+than no diagram.
+
+IF IT IS DRAWABLE:
+- "subject" — the ONE idea the figure shows, in a sentence. Not the whole
+  passage; the part that has a shape. Concrete nouns, no metaphor.
+- "kind" — exactly one of:
+    structure   parts of one thing, cut open or exploded
+    process     steps in order, cause leading to effect
+    comparison  two or three things set against each other
+    relation    what contains, points to, or depends on what
+    layers      a stack, where being above or below is the point
+    concrete    what a physical thing actually looks like
+    scale       sizes or quantities worth seeing against each other
+- "elements" — 2-6 things that must appear, each a short phrase describing
+  what it looks like and where it sits. This is what stops the image model
+  inventing filler.
+- "layout" — one sentence on the arrangement: what is left, right, above,
+  below, inside, or flowing into what. Be decisive; an unarranged diagram is
+  a wrong diagram.
+- "labels" — AT MOST 6 words or short phrases (1-3 words each) that must be
+  written on the figure, drawn from the passage's own vocabulary. Fewer is
+  better: every label is a chance for the image model to misspell something.
+  Use [] when the picture reads without any.
+- "avoid" — the specific wrong picture this passage invites, in a few words
+  (the pun on a term, the stock metaphor, the wrong domain). "" if none.
+- "alt" — one sentence describing the finished figure for a reader using a
+  screen reader. Say what it shows, not that it is an image.
+- "caption" — under 10 words, what this figure shows. Sentence case, no
+  full stop.
+
+RULES:
+- Keep the reader's own terms. A figure that renames things teaches the
+  wrong names.
+- Never ask for text beyond "labels" — no titles, no captions in the image,
+  no annotations, no sentences.
+- No people unless the idea is about people. No mascots, no cartoons.
+- Draw what the passage says, not what you know about the topic.
+
+OUTPUT — ONLY this JSON object, nothing else (no prose, no fences):
+{"drawable": true, "subject": "<one sentence>", "kind": "<one of the seven>",
+ "elements": ["<what and where>"], "layout": "<one sentence>",
+ "labels": ["<short>"], "avoid": "<few words or empty>",
+ "alt": "<one sentence>", "caption": "<under 10 words>"}"""
+
+
+def illustrate_message(passage: str, topic: str, label: str = "",
+                       context: str = "", hint: str = "") -> str:
+    """One brief request. `context` is the exchange the passage came from, so
+    the brief illustrates the passage *as used here* rather than as the phrase
+    might read anywhere; `hint` is the reader steering a redraw."""
+    lines = [
+        f'The reader is learning about: "{topic}"'
+        + (f' — this conversation is on: "{label}"' if label else ""),
+        "",
+        "The passage they highlighted:",
+        '"""',
+        passage,
+        '"""',
+    ]
+    if context:
+        lines += ["", "The exchange it came from (for context — illustrate the "
+                  "passage, not the whole exchange):", context]
+    if hint:
+        lines += ["", "The reader was not happy with the last attempt and asks "
+                  f'specifically for: "{hint}"',
+                  "Honour that steer unless it would make the figure untrue."]
+    lines += ["", "Output the JSON object now."]
+    return "\n".join(lines)
+
+
+def explain_figure_question(caption: str) -> str:
+    """The fixed question behind 🔍 explain — the figure's own description is
+    attached as the quote, so the tutor is reading the same brief the picture
+    was drawn from rather than guessing at pixels."""
+    return (
+        f"Walk me through this figure ({caption}). Take each labelled part in "
+        "turn: what it is, what it's doing, and why it sits where it does. "
+        "Then tell me the one thing the picture can't show that I'd still need "
+        "to know."
+    )

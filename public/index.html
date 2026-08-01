@@ -1376,6 +1376,44 @@
     #qcap{bottom:calc(3.8rem + env(safe-area-inset-bottom))}
   }
 
+  /* generated figures (🖼 image on the selection chip).
+     The picture sits on white in every theme: it was drawn on an off-white
+     ground, so a dark card behind it reads as a hole punched in the page.
+     Width is capped at the text measure — a figure wider than the prose it
+     explains pulls the eye out of the reading line. */
+  .tfig{margin:.2rem 0 1.1rem; padding:0; max-width:32rem}
+  .tfig img{
+    display:block; width:100%; height:auto; background:#fff;
+    border:1px solid var(--line); border-radius:var(--r-md);
+  }
+  .tfig figcaption{
+    display:flex; align-items:baseline; gap:.5rem; flex-wrap:wrap;
+    margin-top:.35rem; font-size:var(--t-sm); color:var(--muted);
+  }
+  .tfig figcaption .cap{flex:1 1 8rem; min-width:0}
+  .tfig .figacts{display:flex; gap:.15rem; flex-wrap:wrap}
+  .tfig .figacts button{
+    border:1px solid transparent; background:none; color:var(--muted);
+    border-radius:var(--r-sm); padding:.12rem .4rem;
+    font-size:var(--t-xs); line-height:1.3; cursor:pointer;
+  }
+  .tfig .figacts button:hover{background:var(--termbg); color:var(--term); border-color:var(--term)}
+  .tfig .figacts button:disabled{opacity:.45; cursor:default}
+  /* while it's being drawn: the caption slot holds the status, so the figure
+     never jumps position once the picture lands in it */
+  .tfig.drawing .figbox, .tfig.broken .figbox{
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    min-height:9rem; padding:1rem; border:1px dashed var(--line);
+    border-radius:var(--r-md); color:var(--muted); font-size:var(--t-sm);
+  }
+  .tfig.drawing .figbox{background:var(--termbg)}
+  .tfig.drawing .figbox .dots::after{
+    content:"…"; display:inline-block; width:1.1em; text-align:left;
+    animation:figdots 1.4s steps(4,end) infinite;
+  }
+  @keyframes figdots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"…"}}
+  @media (prefers-reduced-motion:reduce){ .tfig.drawing .figbox .dots::after{animation:none} }
+
   /* glossary popover */
   #gpop{
     position:fixed; z-index:85; background:var(--card); border:1px solid var(--term);
@@ -1713,6 +1751,19 @@
   (tap a mark to lift it). The <b>★ highlights</b> button in the words tab
   collects every marked passage across the profile's trees — tap one to
   jump back to it in context.</p>
+  <p><b>🖼 image</b> — select the descriptive sentence you'd like to
+  <i>see</i>, and the chip's <b>🖼 image</b> draws a figure of it, right
+  under that answer. Nothing is ever illustrated on its own: the sentence
+  you point at is the whole brief, which is what keeps the picture about
+  the thing you were reading. A tutor reads the passage first and decides
+  what actually has a shape worth drawing — and sometimes answers that
+  nothing here does, which is a real answer, not a failure. Under each
+  figure: <b>🔍 explain</b> has the tutor walk through it part by part,
+  <b>💬 ask</b> puts your own question about it (both land in the
+  conversation as your turn), <b>↻ redraw</b> tries again — say what it
+  should show instead, or leave the box blank — and <b>✕</b> removes it.
+  Figures travel in the tree, sync, and go into <i>export html</i>; the
+  markdown export carries their descriptions.</p>
   <p><b>📅 today</b> — one place for everything waiting across the active
   profile: cards due, conversations due another explanation, loose
   threads from <i>every</i> tree (not just the open one — chase one, or ✕
@@ -2366,6 +2417,7 @@
   <button id="seldef"></button>
   <button id="seldig"></button>
   <button id="selask"></button>
+  <button id="selimg"></button>
   <button id="selinv"></button>
   <button id="selhi"></button>
   <button id="selfc"></button>
@@ -4683,6 +4735,24 @@ function mergeTrees(local, server){
     if (!hlSeen.has(k)){ hlSeen.add(k); outHl.push(h); }
   }
   if (outHl.length) out.highlights = outHl; else delete out.highlights;
+  // generated figures: union by id (minted per figure, never reused), then
+  // the tombstones win. A removed figure has had its bytes deleted, so
+  // letting another device's copy resurrect the record would put a
+  // permanently broken box in the conversation — hence imgGone, and hence
+  // the tombstone beating the union rather than the other way round.
+  const localImg = Array.isArray(local.images) ? local.images : [];
+  const outImg = Array.isArray(out.images) ? out.images.slice() : [];
+  const imgById = new Map(outImg.map(f => [f.id, f]));
+  for (const lf of localImg) if (!imgById.has(lf.id)){
+    const c = structuredClone(lf); outImg.push(c); imgById.set(lf.id, c);
+  }
+  const figGone = new Map();
+  for (const g of [...(server.imgGone || []), ...(local.imgGone || [])])
+    if (g && g.id && (!figGone.has(g.id) || (g.when || "") > figGone.get(g.id).when))
+      figGone.set(g.id, {id: g.id, when: g.when || ""});
+  const keptImg = outImg.filter(f => !figGone.has(f.id));
+  if (keptImg.length) out.images = keptImg; else delete out.images;
+  if (figGone.size) out.imgGone = [...figGone.values()]; else delete out.imgGone;
   // banked questions: union by id (a device-local id, so no collisions);
   // "answered" is a one-way flip — once either side has answered a
   // question, that sticks, so a device that hasn't caught up to the
@@ -4886,6 +4956,7 @@ async function syncFromServer(){
   syncProfilesFromServer();
   syncTutorsFromServer();
   syncGlobalQFromServer();
+  retryUnsavedFigures();
 }
 
 /* ------------------------------------------------------------------ */
@@ -5063,6 +5134,9 @@ function turnHtml(node, t, prevConf, allowBranch){
            `</div>`;
     }
   }
+  // figures hang under the answer they were drawn from, outside .block so
+  // read-aloud and the selection chip both leave them alone
+  h += turnFiguresHtml(node.id, t.turn);
   h += `</article>`;
   return h;
 }
@@ -7782,7 +7856,7 @@ function applyHighlights(){
     let re;
     try { re = new RegExp(words.join("\\s+")); } catch { continue; }
     const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => n.parentElement.closest("code,pre,.who,.hl,button,.nodeinfo")
+      acceptNode: (n) => n.parentElement.closest("code,pre,.who,.hl,button,.nodeinfo,figcaption")
         ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
     const nodes = [];
     while (walker.nextNode()) nodes.push(walker.currentNode);
@@ -8151,20 +8225,27 @@ let qcapPrevFocus = null, qcapTimer = null;
 function qcapFormHtml(mode, turn, quote){
   const head = mode === "global" ? "your question — global bank"
     : mode === "ask" ? "ask about this passage"
+    : mode === "redraw" ? "draw it again"
     : `your question — turn ${turn}`;
   const placeholder = mode === "global"
     ? "what are you curious about? (investigated fresh, later)"
     : mode === "ask" ? "what do you want to know about it?"
+    // an empty box is a real answer here: image models are stochastic, so
+    // "just try again" is often all a disappointing figure needs
+    : mode === "redraw" ? "what should it show instead? (blank = just try again)"
     : "what are you wondering?";
   // the passage sits above the box so it's plain what the answer will be about
-  const quoted = mode === "ask" && quote
-    ? `<div class="qcapquote">${ico("❝")}${esc(oneLine(quote, 240))}</div>` : "";
+  const quoted = (mode === "ask" || mode === "redraw") && quote
+    ? `<div class="qcapquote">${ico(mode === "redraw" ? "🖼" : "❝")}${esc(oneLine(quote, 240))}</div>` : "";
+  const send = mode === "ask" ? "ask" : mode === "redraw" ? "draw" : "save";
   return `<div class="qcaphead">${esc(head)}</div>` + quoted +
     `<div class="qcaprow">` +
     `<input id="qcapinput" type="text" maxlength="500" placeholder="${esc(placeholder)}"` +
-    ` aria-label="your question" enterkeyhint="${mode === "ask" ? "send" : "done"}" autocomplete="off">` +
+    ` aria-label="${mode === "redraw" ? "what the figure should show" : "your question"}"` +
+    ` enterkeyhint="${mode === "ask" || mode === "redraw" ? "send" : "done"}" autocomplete="off">` +
     `<button id="qcapsave" class="primary" aria-label="${mode === "ask"
-       ? "ask the tutor" : "save to question bank"}">${mode === "ask" ? "ask" : "save"}</button>` +
+       ? "ask the tutor" : mode === "redraw" ? "draw the figure again"
+       : "save to question bank"}">${send}</button>` +
     `<button id="qcapcancel" class="ghost" aria-label="cancel">✕</button></div>`;
 }
 function wireQcapForm(){
@@ -8179,8 +8260,9 @@ function wireQcapForm(){
 }
 /* mode "global" (q, from anywhere — no tree needed) or "local" (Shift+Q,
    tied to the node/turn you're reading; requires one with a tutor reply) */
-function openQCap(mode, quote){
-  mode = mode === "global" ? "global" : mode === "ask" ? "ask" : "local";
+function openQCap(mode, quote, extra){
+  mode = mode === "global" ? "global" : mode === "ask" ? "ask"
+       : mode === "redraw" ? "redraw" : "local";
   let turn = null;
   if (mode !== "global"){
     const tree = cur(); if (!tree || currentNode == null) return;
@@ -8191,7 +8273,10 @@ function openQCap(mode, quote){
   clearTimeout(qcapTimer);
   $("qcap").dataset.mode = mode;
   $("qcap").dataset.turn = turn ?? "";
-  $("qcap").dataset.quote = mode === "ask" ? (quote || "") : "";
+  $("qcap").dataset.quote = (mode === "ask" || mode === "redraw") ? (quote || "") : "";
+  // redraw carries the figure it is replacing, so the old one is retired at
+  // the same moment the new one lands rather than both sitting there
+  $("qcap").dataset.fig = mode === "redraw" ? (extra || "") : "";
   $("qcap").innerHTML = qcapFormHtml(mode, turn, quote);
   qcapPrevFocus = document.activeElement;
   $("qcap").hidden = false;
@@ -8208,6 +8293,15 @@ window.closeQCap = closeQCap;
 function saveQCap(){
   const mode = $("qcap").dataset.mode;
   const text = $("qcapinput") ? $("qcapinput").value : "";
+  // "redraw" banks nothing either — it re-runs the figure that button
+  // belongs to, optionally steered by what you typed
+  if (mode === "redraw"){
+    const figId = $("qcap").dataset.fig || "";
+    const hint = String(text || "").trim();
+    closeQCap();
+    redrawFigure(figId, hint);
+    return;
+  }
   // "ask" doesn't bank anything — it goes straight to the tutor, carrying
   // the passage, and the answer lands in the conversation as your turn
   if (mode === "ask"){
@@ -8602,6 +8696,22 @@ document.addEventListener("selectionchange", () => {
     $("selask").innerHTML = `${ico("💬")}ask`;
     $("selask").title = "ask your own question about this passage";
     $("selask").setAttribute("aria-label", `ask the tutor about “${oneLine(info.text, 40)}”`);
+    /* 🖼 image — off entirely unless the server has a Gemini key, so the chip
+       never offers a button that can only fail. A bare word rarely describes
+       anything drawable ("what would a picture of 'latency' even be?"), so
+       it takes a phrase: the descriptive sentence you'd point at. */
+    const canDraw = !!CONFIG.images && info.text.length >= 12;
+    $("selimg").style.display = canDraw ? "" : "none";
+    if (canDraw){
+      $("selimg").innerHTML = `${ico("🖼")}image`;
+      $("selimg").disabled = running || drawing;
+      $("selimg").title = running
+        ? "finish the investigation that's running first"
+        : drawing ? "one picture at a time — this one's still drawing"
+        : "draw a figure of this passage — it lands under this answer";
+      $("selimg").setAttribute("aria-label",
+        `draw a figure of “${oneLine(info.text, 40)}”`);
+    }
     // investigate takes a passage as happily as a term — a highlighted
     // sentence makes a perfectly good topic for its own tree
     $("selinv").innerHTML = `${ico("▶")}investigate`;
@@ -8742,6 +8852,328 @@ $("selhi").onclick = (ev) => {
   document.getSelection()?.removeAllRanges();   // let the new mark show
   addHighlight(turn, text);
 };
+
+/* ------------------------------------------------------------------ */
+/* 🖼 figures — a picture of one passage, drawn only when you ask.      */
+/*                                                                     */
+/* Nothing is ever illustrated automatically, for the same reason      */
+/* nothing enters the glossary automatically: an image the reader      */
+/* didn't ask for is at best decoration and at worst a confident       */
+/* picture of the wrong thing, which is harder to unlearn than no      */
+/* picture at all. You point at the sentence; that sentence is the     */
+/* whole brief.                                                        */
+/*                                                                     */
+/* The server does it in two stages (see webapi.handle_illustrate) and */
+/* hands back the bytes. They do NOT go on the tree: /api/trees caps a */
+/* tree at 2 MB and every tree in this browser shares one localStorage */
+/* key, so one PNG would crowd out the conversations it explains. The  */
+/* tree carries the description (caption, alt, which turn it hangs     */
+/* from) and the pixels go to /api/images under the same id — which is */
+/* also what lets the CLI, the markdown export, and a screen reader    */
+/* still get something meaningful out of a figure they can't display.  */
+/* ------------------------------------------------------------------ */
+const MAX_FIGURES = 40;          // per tree — a sane ceiling, like highlights
+const FIG_MAX_PX = 1280;         // plenty for a 32rem column on a 3x screen
+const FIG_QUALITY = 0.92;        // high: lossy artefacts on label text read as blur
+let drawing = false;             // one at a time — they cost real money
+let pendingFig = null;           // {node, turn, anchor} while one is in flight
+/* the bytes of everything drawn this session, by id. Renders instantly (no
+   round trip through the store we just uploaded to) and, more importantly,
+   means a failed upload never loses a picture that was already paid for. */
+const figBytes = new Map();
+
+function imagesOf(tree){ return Array.isArray(tree.images) ? tree.images : []; }
+function figGoneOf(tree){ return Array.isArray(tree.imgGone) ? tree.imgGone : []; }
+function figuresFor(nodeId, turn){
+  const tree = cur();
+  if (!tree) return [];
+  return imagesOf(tree).filter(f => f && f.node === nodeId && f.turn === turn);
+}
+function findFigure(tree, id){ return imagesOf(tree).find(f => f && f.id === id) || null; }
+function newFigureId(){
+  return "img_" + Math.random().toString(36).slice(2, 10) +
+         Date.now().toString(36).slice(-4);
+}
+/* figures are billed in dollars by Google whatever the tutor is billed in,
+   so this never borrows fmtCost — in local mode that would print a Gemini
+   bill as though it were Copilot premium requests */
+function fmtUsd(v){
+  const n = +v || 0;
+  return n >= 1 ? "$" + n.toFixed(2) : "$" + n.toFixed(3).replace(/0$/, "");
+}
+
+/* Re-encode before upload. Gemini answers with a ~1.5 MB PNG; the same
+   figure as WebP at 1280px is well under 200 KB, which is the difference
+   between a page that loads on a phone and one that doesn't. Quality stays
+   high because the lossy artefacts that matter here land on label text. */
+function shrinkFigure(dataUrl){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const big = Math.max(img.naturalWidth, img.naturalHeight) || 1;
+      const scale = Math.min(1, FIG_MAX_PX / big);
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      const ctx = c.getContext("2d");
+      if (!ctx){ reject(new Error("this browser can't process the image")); return; }
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, w, h);
+      // toDataURL silently falls back to PNG for a type it can't write, so
+      // the prefix — not a feature test — is what says whether WebP happened
+      let url = c.toDataURL("image/webp", FIG_QUALITY), mime = "image/webp";
+      if (!url.startsWith("data:image/webp")){
+        url = c.toDataURL("image/jpeg", FIG_QUALITY); mime = "image/jpeg";
+      }
+      resolve({url, mime, w, h, data: url.slice(url.indexOf(",") + 1)});
+    };
+    img.onerror = () => reject(new Error("the generated image wouldn't decode"));
+    img.src = dataUrl;
+  });
+}
+
+async function putFigureBytes(id, mime, data){
+  const res = await fetch("/api/images", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({id, mime, data}),
+  });
+  if (res.status === 401){ showLogin(); throw new Error("logged out"); }
+  if (!res.ok){
+    let d = {};
+    try { d = await res.json(); } catch {}
+    throw new Error(d.error || ("HTTP " + res.status));
+  }
+}
+/* an upload that failed leaves the figure readable here (figBytes) but
+   invisible on every other device, so it is retried whenever the app next
+   syncs — the picture was paid for, losing it to one flaky request would be
+   the worst outcome of the whole feature */
+async function retryUnsavedFigures(){
+  for (const tree of Object.values(store)){
+    for (const fig of imagesOf(tree)){
+      if (!fig.unsaved || !figBytes.has(fig.id)) continue;
+      const url = figBytes.get(fig.id);
+      try {
+        await putFigureBytes(fig.id, fig.mime || "image/webp",
+                             url.slice(url.indexOf(",") + 1));
+        delete fig.unsaved;
+        persistTree(tree);
+      } catch { return; }   // still offline; try again next sync
+    }
+  }
+}
+
+/* the whole flow: brief → picture → shrink → upload → onto the tree */
+async function drawFigure(anchor, turn, opts){
+  opts = opts || {};
+  const tree = cur();
+  const passage = String(anchor || "").replace(/\s+/g, " ").trim().slice(0, 600);
+  if (!tree || currentNode == null || drawing || running || !passage) return;
+  const nodeId = currentNode, node = getNode(tree, nodeId);
+  if (!node) return;
+  if (imagesOf(tree).length >= MAX_FIGURES){
+    setError(`this tree already has ${MAX_FIGURES} figures — remove one first`);
+    return;
+  }
+  const at = Number.isInteger(turn) ? turn : (node.turns[node.turns.length - 1]?.turn || 1);
+  drawing = true;
+  pendingFig = {node: nodeId, turn: at, anchor: passage};
+  renderConversation(true);
+  document.querySelector("#conv .tfig.drawing")
+    ?.scrollIntoView?.({behavior: reducedMotion() ? "auto" : "smooth", block: "center"});
+  try {
+    setStatus("drawing a figure…");
+    const r = await api("illustrate", {
+      passage,
+      topic: tree.root_topic,
+      label: node.label,
+      context: termContext(tree, nodeId, at),
+      hint: opts.hint || "",
+    });
+    // the brief was a real model call whether or not it decided to draw
+    if (CONFIG.provider !== "copilot") node.cost += r.cost || 0;
+
+    if (!r.drawable){
+      // declining is the feature working, not an error — say so plainly and
+      // don't paint the status bar red over it
+      pendingFig = null; drawing = false;
+      saveStore(); renderAll(true);
+      setStatus(`no figure for that — ${r.why || "there's no shape in it to draw"}`);
+      setTimeout(() => { if (!running && !drawing) clearStatus(); }, 6000);
+      return;
+    }
+
+    const shrunk = await shrinkFigure(`data:${r.mime || "image/png"};base64,${r.data}`);
+    const id = newFigureId();
+    figBytes.set(id, shrunk.url);
+    let unsaved = false;
+    try { await putFigureBytes(id, shrunk.mime, shrunk.data); }
+    catch (e){
+      if (e.message === "logged out") throw e;
+      unsaved = true;
+    }
+
+    const fig = {
+      id, node: nodeId, turn: at, anchor: passage,
+      caption: r.caption || "", alt: r.alt || r.caption || "",
+      kind: r.kind || "", brief: r.brief || "", labels: r.labels || [],
+      mime: shrunk.mime, w: shrunk.w, h: shrunk.h,
+      cost: r.image_cost || 0, when: new Date().toISOString(),
+      ...(unsaved ? {unsaved: true} : {}),
+    };
+    const list = imagesOf(tree).slice();
+    if (opts.replaces){
+      // a redraw takes the old one's place rather than piling up beside it
+      const i = list.findIndex(f => f.id === opts.replaces);
+      if (i >= 0){ retireFigure(tree, list[i]); list.splice(i, 1, fig); }
+      else list.push(fig);
+    } else list.push(fig);
+    tree.images = list;
+    pendingFig = null; drawing = false;
+    persistTree(tree);
+    renderAll(true);
+    clearStatus();
+    if (unsaved){
+      setError("the figure is drawn and safe in this browser, but couldn't be " +
+               "saved to the server yet — it'll go up on the next sync");
+    }
+  } catch (e){
+    pendingFig = null; drawing = false;
+    renderConversation(true);
+    if (e.message !== "logged out") setError(e.message);
+    else clearStatus();
+  }
+}
+
+/* removing a figure leaves a tombstone. Without one the sync's union would
+   hand it straight back from another device's copy — and since the bytes are
+   deleted too, it would come back as a broken box. */
+function retireFigure(tree, fig){
+  const gone = figGoneOf(tree).filter(g => g && g.id !== fig.id);
+  gone.push({id: fig.id, when: new Date().toISOString()});
+  tree.imgGone = gone.slice(-200);
+  figBytes.delete(fig.id);
+  fetch("/api/images?id=" + encodeURIComponent(fig.id), {method: "DELETE"})
+    .catch(() => {});   // the tombstone is what matters; the bytes can linger
+}
+function removeFigure(id){
+  const tree = cur(); if (!tree) return;
+  const list = imagesOf(tree);
+  const fig = list.find(f => f.id === id);
+  if (!fig) return;
+  retireFigure(tree, fig);
+  const left = list.filter(f => f.id !== id);
+  if (left.length) tree.images = left; else delete tree.images;
+  persistTree(tree);
+  renderAll(true);
+}
+function redrawFigure(id, hint){
+  const tree = cur(); if (!tree) return;
+  const fig = findFigure(tree, id);
+  if (!fig) return;
+  selectNode(fig.node);
+  drawFigure(fig.anchor, fig.turn, {hint: hint || "", replaces: id});
+}
+
+/* what the tutor is told about a figure when you ask about it. The brief is
+   a truer account of the picture than the caption is — it is what the
+   picture was drawn from — and it costs nothing to carry. */
+function figureQuote(fig){
+  const bits = [`the figure “${fig.caption || "untitled"}”`];
+  if (fig.alt) bits.push(fig.alt);
+  else if (fig.brief) bits.push(fig.brief);
+  if (fig.labels && fig.labels.length) bits.push(`labelled: ${fig.labels.join(", ")}`);
+  return oneLine(bits.join(" — "), 300);
+}
+
+function figureSrc(fig){
+  return figBytes.get(fig.id) || ("/api/images?id=" + encodeURIComponent(fig.id));
+}
+function figActsHtml(fig){
+  const busy = running || drawing;
+  const b = (act, icon, label, title) =>
+    `<button data-fa="${act}" data-fid="${esc(fig.id)}"${busy && act !== "rm" ? " disabled" : ""}` +
+    ` title="${esc(title)}" aria-label="${esc(title)}">${ico(icon)}${label}</button>`;
+  return `<span class="figacts">` +
+    b("explain", "🔍", "explain", "have the tutor walk through this figure, part by part") +
+    b("ask", "💬", "ask", "ask your own question about this figure") +
+    b("redraw", "↻", "redraw", "draw it again — optionally saying what it should show") +
+    b("rm", "✕", "", "remove this figure") +
+    `</span>`;
+}
+function figureHtml(fig){
+  const alt = esc(fig.alt || fig.caption || "a generated figure");
+  const cap = esc(fig.caption || "figure");
+  const spent = fig.cost ? ` · ${fmtUsd(fig.cost)}` : "";
+  return `<figure class="tfig" data-fid="${esc(fig.id)}">` +
+    `<img src="${esc(figureSrc(fig))}" alt="${alt}" width="${fig.w || 1024}"` +
+    ` height="${fig.h || 768}" loading="lazy" decoding="async" onerror="figBroken(this)">` +
+    `<figcaption><span class="cap" title="${alt}${esc(spent)}">${ico("🖼")}${cap}</span>` +
+    figActsHtml(fig) + `</figcaption></figure>`;
+}
+/* a figure whose bytes aren't here: a tree imported from another deployment,
+   or an upload that never landed. The description still says what it was, and
+   redraw is one tap — better than a broken-image icon and no explanation. */
+window.figBroken = (img) => {
+  const fig = img.closest(".tfig");
+  if (!fig) return;
+  fig.classList.add("broken");
+  const alt = img.getAttribute("alt") || "a figure";
+  img.replaceWith(Object.assign(document.createElement("div"), {
+    className: "figbox", textContent: "🖼 " + alt + " — the picture isn't on this server",
+  }));
+};
+function pendingFigHtml(){
+  return `<figure class="tfig drawing" aria-busy="true">` +
+    `<div class="figbox"><span>working out what to draw, then drawing it` +
+    `<span class="dots" aria-hidden="true"></span></span></div>` +
+    `<figcaption><span class="cap">${ico("🖼")}${esc(oneLine(pendingFig.anchor, 70))}</span>` +
+    `</figcaption></figure>`;
+}
+function turnFiguresHtml(nodeId, turn){
+  let h = figuresFor(nodeId, turn).map(figureHtml).join("");
+  if (pendingFig && pendingFig.node === nodeId && pendingFig.turn === turn)
+    h += pendingFigHtml();
+  return h;
+}
+
+/* 🖼 image on the selection chip */
+$("selimg").onclick = (ev) => {
+  ev.stopPropagation();
+  const text = selchip.dataset.term || "";
+  const turn = selchip.dataset.turn ? +selchip.dataset.turn : null;
+  hideSelchip();
+  document.getSelection()?.removeAllRanges();
+  drawFigure(text, turn);
+};
+
+$("conv").addEventListener("click", (e) => {
+  const btn = e.target.closest(".tfig .figacts button[data-fa]");
+  if (!btn) return;
+  e.stopPropagation();          // don't also start reading the block aloud
+  const tree = cur(); if (!tree) return;
+  const fig = findFigure(tree, btn.dataset.fid || "");
+  if (!fig) return;
+  const act = btn.dataset.fa;
+  if (act === "rm"){ removeFigure(fig.id); return; }
+  if (running || drawing) return;
+  if (act === "redraw"){ openQCap("redraw", fig.caption || fig.anchor, fig.id); return; }
+  if (act === "ask"){ openQCap("ask", figureQuote(fig)); return; }
+  if (act === "explain"){
+    const q = explainFigureQuestion(fig.caption || "the figure above");
+    enqueue(askThunk(tree.id, fig.node, q, figureQuote(fig)));
+    const t = getNode(tree, fig.node)?.turns.at(-1);
+    if (t && t.user && t.action === q) jumpToTerm(fig.node, t.turn);
+  }
+});
+/* mirrors personas.explain_figure_question — kept in step deliberately, so
+   the same request reads the same way whichever side composed it */
+function explainFigureQuestion(caption){
+  return `Walk me through this figure (${caption}). Take each labelled part ` +
+    `in turn: what it is, what it's doing, and why it sits where it does. ` +
+    `Then tell me the one thing the picture can't show that I'd still need to know.`;
+}
 
 /* + flashcard — the deliberate path: pick a reason (definition / purpose /
    example / how it works), read what the model drafted for that angle,
@@ -9939,11 +10371,38 @@ $("sheetbtn").onclick = () => {
   if (!md) return;
   download(slug(activeProfile() || "all-trees") + "-study-sheet.md", md, "text/markdown");
 };
+/* The reading page is self-contained — it gets mailed around and opened
+   offline — so a figure has to travel inside it or not at all; an <img>
+   pointing back at this server would be a broken box on every machine but
+   this one. So the bytes are fetched and inlined into the copy of the tree
+   that goes to the exporter. Only for this export: the tree itself, the
+   sync, and the .know.json stay text. */
+async function treeWithFigureBytes(tree){
+  const figs = imagesOf(tree);
+  if (!figs.length) return tree;
+  const out = structuredClone(tree);
+  await Promise.all(imagesOf(out).map(async (fig) => {
+    const cached = figBytes.get(fig.id);
+    if (cached){ fig.data = cached; return; }
+    try {
+      const r = await fetch("/api/images?id=" + encodeURIComponent(fig.id));
+      if (!r.ok) return;                       // export it as its description
+      const blob = await r.blob();
+      fig.data = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = () => rej(new Error("unreadable"));
+        fr.readAsDataURL(blob);
+      });
+    } catch {}
+  }));
+  return out;
+}
 $("exporthtml").onclick = async () => {
   const tree = cur(); if (!tree) return;
   try {
     setStatus("building the reading page…");
-    const r = await api("export_html", {tree});
+    const r = await api("export_html", {tree: await treeWithFigureBytes(tree)});
     download(r.filename || "tree.html", r.html, "text/html");
     clearStatus();
   } catch (e){ setError(e.message); }

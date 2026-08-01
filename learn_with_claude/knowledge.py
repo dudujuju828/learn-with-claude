@@ -183,6 +183,30 @@ class KnowledgeTree:
                 m.setdefault(key, []).append(text)
         return m
 
+    def image_map(self) -> dict:
+        """(node_id, turn) -> [figure, …] for every generated figure.
+
+        Figures live in extras['images'] (written by the web app's 🖼
+        illustrate). Only the *description* travels in the .know.json — the
+        pixels are held out of band, since a tree is a text document people
+        read and copy between machines. So a CLI reader gets the caption and
+        the alt text, which is the part that carries meaning anyway; the web
+        app and the HTML export put the picture back.
+        """
+        m: dict = {}
+        for img in (self.extras.get("images") or []):
+            if not isinstance(img, dict) or not str(img.get("id") or "").strip():
+                continue
+            try:
+                key = (int(img.get("node")), int(img.get("turn")))
+            except (TypeError, ValueError):
+                continue
+            if key[0] in self.nodes:
+                m.setdefault(key, []).append(img)
+        for lst in m.values():
+            lst.sort(key=lambda i: str(i.get("when") or ""))
+        return m
+
     TEACH_TAGS = {"clean": "✓ clean", "close": "≈ close", "gappy": "△ gappy"}
 
     def teach_map(self) -> dict:
@@ -359,6 +383,7 @@ class KnowledgeTree:
         ]
 
         hl_map = self.highlight_map()
+        img_map = self.image_map()
 
         def walk(nid: int, depth: int) -> None:
             node = self.nodes[nid]
@@ -395,6 +420,19 @@ class KnowledgeTree:
                     out.append("")
                 for passage in hl_map.get((node.id, t.get("turn")), []):
                     out.append(f"> ★ I highlighted: {passage}")
+                    out.append("")
+                # The picture itself can't come along — markdown would have to
+                # carry it as a multi-hundred-KB data URI per figure, which
+                # would make the export unreadable in the editors people
+                # actually open .md files in. The description does travel, and
+                # `export html` embeds the real thing.
+                for fig in img_map.get((node.id, t.get("turn")), []):
+                    caption = one_line(str(fig.get("caption") or "a figure"), 120)
+                    out.append(f"> 🖼 **Figure — {caption}**")
+                    alt = one_line(str(fig.get("alt") or ""), 400)
+                    if alt:
+                        out.append(">")
+                        out.append(f"> {alt}")
                     out.append("")
             out.append("---")
             out.append("")

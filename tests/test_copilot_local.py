@@ -411,6 +411,185 @@ def test_global_question_store():
     print("ok  global question store (round-trip, answered fields, validation)")
 
 
+def test_image_store():
+    """Figures on disk, beside the trees but never inside them."""
+    from learn_with_claude.localweb import ImageStore
+
+    with tempfile.TemporaryDirectory() as d:
+        store = ImageStore(Path(d) / "images")
+        assert store.get("img_missing") is None
+
+        png = b"\x89PNG\r\n\x1a\n" + b"payload"
+        assert store.put("img_abc123", "image/png", png) == len(png)
+        assert store.get("img_abc123") == (png, "image/png")
+        assert (Path(d) / "images" / "img_abc123.png").is_file()
+
+        webp = b"RIFF....WEBP"
+        store.put("img_def456", "image/webp", webp)
+        assert store.get("img_def456") == (webp, "image/webp")
+
+        # a redraw mints a new id, so the old file is removed outright — no
+        # tombstone needed on disk, the tree carries that
+        store.delete("img_abc123")
+        assert store.get("img_abc123") is None
+        store.delete("img_abc123")          # deleting twice is not an error
+
+        for mime, data in [("image/gif", b"GIF89a"),        # not a type we write
+                           ("image/webp", b""),             # nothing to store
+                           ("image/webp", b"x" * (ImageStore.MAX_BYTES + 1))]:
+            try:
+                store.put("img_bad999", mime, data)
+                assert False, f"must reject {mime} / {len(data)} bytes"
+            except ApiError:
+                pass
+    print("ok  image store (round-trip per type, delete, validation)")
+
+
+def test_image_config_flag():
+    """The 🖼 button is only offered when the server can actually draw."""
+    import os
+
+    from learn_with_claude import gemini_images
+    from learn_with_claude.localweb import handle_config
+
+    saved = {k: os.environ.pop(k, None) for k in ("GEMINI_API_KEY", "GOOGLE_API_KEY")}
+    try:
+        assert gemini_images.available() is False
+        assert handle_config()["images"] is False
+        assert handle_config()["image_model"] == ""
+
+        os.environ["GEMINI_API_KEY"] = "test-key"
+        assert gemini_images.available() is True
+        cfg = handle_config()
+        assert cfg["images"] is True and cfg["image_model"] == gemini_images.DEFAULT_MODEL
+        # local mode keeps everything else it already reported
+        assert cfg["local"] is True and cfg["provider"] == "copilot"
+
+        os.environ["LEARN_IMAGE_MODEL"] = "gemini-3.1-flash-image"
+        assert handle_config()["image_model"] == "gemini-3.1-flash-image"
+        os.environ.pop("LEARN_IMAGE_MODEL")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    print("ok  image config flag (off without a key, model name reported)")
+
+
+def test_gemini_request_shape():
+    """The exact request the image model is sent. Nothing else in the suite
+    can catch a wrong endpoint or a renamed config field, because the only
+    other thing that would is a live call."""
+    import json
+    import urllib.error
+    import urllib.request
+
+    from learn_with_claude import gemini_images as gi
+
+    seen = {}
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = json.dumps(payload).encode()
+
+        def read(self):
+            return self._payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        seen["headers"] = {k.lower(): v for k, v in req.headers.items()}
+        seen["body"] = json.loads(req.data.decode())
+        seen["method"] = req.get_method()
+        seen["timeout"] = timeout
+        return FakeResponse({"candidates": [{"content": {"parts": [
+            {"inlineData": {"mimeType": "image/png", "data": "QUJD"}}]}}]})
+
+    real_open, real_key = urllib.request.urlopen, gi.api_key
+    urllib.request.urlopen = fake_urlopen
+    gi.api_key = lambda: "test-key"
+    try:
+        b64, mime, cost = gi.generate("draw a bucket array", "16:9")
+        assert (b64, mime) == ("QUJD", "image/png")
+        assert cost == gi.price_of(gi.DEFAULT_MODEL)
+
+        assert seen["method"] == "POST"
+        assert seen["url"] == (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{gi.DEFAULT_MODEL}:generateContent")
+        assert seen["headers"]["x-goog-api-key"] == "test-key"
+        assert seen["headers"]["content-type"] == "application/json"
+
+        body = seen["body"]
+        assert body["contents"][0]["parts"][0]["text"] == "draw a bucket array"
+        cfg = body["generationConfig"]
+        assert cfg["responseModalities"] == ["IMAGE"]
+        assert cfg["imageConfig"] == {"aspectRatio": "16:9", "imageSize": "1K"}
+
+        # an aspect Gemini doesn't take never reaches it
+        gi.generate("x", "banana")
+        assert seen["body"]["generationConfig"]["imageConfig"]["aspectRatio"] == \
+            gi.DEFAULT_ASPECT
+
+        # Two very different things arrive as 429. A project with no billing
+        # reports "limit: 0" and will never succeed, so telling the reader to
+        # wait and retry would send them round a loop forever — this is the
+        # first thing anyone hits on a fresh key, so it has to read right.
+        class FakeHTTPError(urllib.error.HTTPError):
+            def __init__(self, code, payload):
+                self._payload = json.dumps(payload).encode()
+                super().__init__("u", code, "err", {}, None)
+
+            def read(self):
+                return self._payload
+
+        def raiser(payload, code=429):
+            def go(req, timeout=None):
+                raise FakeHTTPError(code, payload)
+            return go
+
+        quota = {"error": {"message": "Quota exceeded for metric: "
+                                      "generate_content_free_tier_requests, limit: 0"}}
+        urllib.request.urlopen = raiser(quota)
+        try:
+            gi.generate("x")
+            assert False, "a quota wall must raise"
+        except gi.ImageError as exc:
+            assert "billing" in str(exc) and "wait" not in str(exc)
+            assert gi.DEFAULT_MODEL in str(exc)
+
+        urllib.request.urlopen = raiser({"error": {"message": "too many requests"}})
+        try:
+            gi.generate("x")
+            assert False, "a real rate limit must raise"
+        except gi.ImageError as exc:
+            assert "wait a moment" in str(exc)
+
+        urllib.request.urlopen = raiser({"error": {"message": "bad key"}}, 403)
+        try:
+            gi.generate("x")
+            assert False, "a rejected key must raise"
+        except gi.ImageError as exc:
+            assert "GEMINI_API_KEY" in str(exc)
+
+        # no key: refused here, before any request goes out
+        gi.api_key = lambda: ""
+        try:
+            gi.generate("x")
+            assert False, "no key must raise"
+        except gi.ImageError as exc:
+            assert exc.status == 500 and "GEMINI_API_KEY" in str(exc)
+    finally:
+        urllib.request.urlopen, gi.api_key = real_open, real_key
+    print("ok  gemini request shape (endpoint, auth header, quota vs rate limit)")
+
+
 def _fake_session(root: Path, session_id: str, exchanges, *, noise=True,
                   name=None, cwd=r"C:\work\thing"):
     """Write a session-state dir the way the Copilot CLI lays one out.
@@ -758,6 +937,9 @@ if __name__ == "__main__":
     test_tree_store_revs()
     test_tutor_store()
     test_global_question_store()
+    test_image_store()
+    test_image_config_flag()
+    test_gemini_request_shape()
     test_profile_store()
     test_session_reading()
     test_session_names()

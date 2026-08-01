@@ -31,6 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from learn_with_claude import gemini_images  # noqa: E402
 from learn_with_claude.personas import LEARNER_LEVELS, TUTOR_MODES  # noqa: E402
 from learn_with_claude.webapi import (  # noqa: E402
     ApiError,
@@ -181,6 +182,11 @@ def handle_config() -> dict:
         "max_turns": MAX_TURNS,
         "modes": list(TUTOR_MODES),
         "levels": list(LEARNER_LEVELS),
+        # 🖼 illustrate needs a Gemini key the deployment may not have — the
+        # client hides the button rather than offering an action that can only
+        # fail, so this has to travel with the config
+        "images": gemini_images.available(),
+        "image_model": gemini_images.model_name() if gemini_images.available() else "",
     }
 
 
