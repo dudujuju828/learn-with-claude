@@ -4850,7 +4850,7 @@ function mergeTrees(local, server){
   // same passage, the later `when` wins rather than the server copy
   const localAs = Array.isArray(local.asides) ? local.asides : [];
   const outAs = Array.isArray(out.asides) ? out.asides.slice() : [];
-  const asKey = (a) => `${a.node}|${a.turn}|${a.text}`;
+  const asKey = asideKey;   // node|turn|text|occurrence — the same word twice
   const asBy = new Map(outAs.map(a => [asKey(a), a]));
   for (const la of localAs){
     const se = asBy.get(asKey(la));
@@ -8229,23 +8229,69 @@ const ASIDE_MAX = 120;   // a parenthetical; longer belongs in 📝 notes
 function asidesOf(tree){
   return Array.isArray(tree.asides) ? tree.asides : [];
 }
-/* one aside per passage per turn — glossing the same word twice in the same
-   breath is not a thing anyone wants, and it keeps the merge key simple */
-function asideFor(turn, text){
+/* The turn's matchable text as one string, plus where each text node starts
+   in it. Shared by the placer and the occurrence counter so both agree
+   exactly on what "position N" means. */
+function turnTextNodes(turnEl){
+  const nodes = [];
+  let full = "";
+  const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => n.parentElement.closest("pre,.who,button,.nodeinfo,figcaption,.aside")
+      ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+  while (walker.nextNode()){
+    nodes.push({node: walker.currentNode, start: full.length});
+    full += walker.currentNode.textContent;
+  }
+  return {nodes, full};
+}
+function anchorRe(text, flags){
+  const words = String(text || "").trim().split(/\s+/).map(escRe);
+  if (!words.length || !words[0]) return null;
+  try { return new RegExp(words.join("\\s+"), flags); } catch { return null; }
+}
+/* WHICH occurrence of the anchor the reader pointed at. A word repeats within
+   one sentence far more often than not ("...is private, ...declaring it
+   private virtual?"), and a gloss that silently jumps to the first one looks
+   for all the world like it never saved. */
+function occurrenceOf(turnEl, range, text){
+  const re = anchorRe(text, "g");
+  if (!re || !turnEl) return 0;
+  const {nodes, full} = turnTextNodes(turnEl);
+  let abs = -1;
+  for (const n of nodes){
+    if (n.node === range.startContainer){ abs = n.start + range.startOffset; break; }
+  }
+  if (abs < 0) return 0;          // selection began outside the matchable text
+  let m, i = 0;
+  while ((m = re.exec(full))){
+    if (m.index >= abs) return i;
+    i++;
+    if (re.lastIndex === m.index) re.lastIndex++;
+  }
+  return 0;
+}
+/* An aside is identified by its passage AND which occurrence of it, so the
+   same word can carry different notes in different places in one answer. */
+function asideKey(a){ return `${a.node}|${a.turn}|${a.text}|${a.nth || 0}`; }
+function asideFor(turn, text, nth){
   const tree = cur();
   if (!tree || currentNode == null || turn == null) return null;
   const t = String(text || "").replace(/\s+/g, " ").trim();
+  const want = nth || 0;
   return asidesOf(tree).find(a =>
-    a.node === currentNode && a.turn === turn && a.text === t) || null;
+    a.node === currentNode && a.turn === turn && a.text === t &&
+    (a.nth || 0) === want) || null;
 }
-function saveAside(turn, text, words){
+function saveAside(turn, text, words, nth){
   const tree = cur();
   if (!tree || currentNode == null || turn == null || Number.isNaN(turn)) return;
   const t = String(text || "").replace(/\s+/g, " ").trim().slice(0, 300);
   const w = String(words || "").replace(/\s+/g, " ").trim().slice(0, ASIDE_MAX);
+  const at = Number.isInteger(nth) && nth > 0 ? nth : 0;
   if (t.length < 2) return;
   const list = asidesOf(tree).slice();
-  const i = list.findIndex(a => a.node === currentNode && a.turn === turn && a.text === t);
+  const i = list.findIndex(a => a.node === currentNode && a.turn === turn &&
+                                a.text === t && (a.nth || 0) === at);
   // an empty box on an existing aside is how you take it back out
   if (!w){
     if (i < 0) return;
@@ -8255,6 +8301,7 @@ function saveAside(turn, text, words){
   } else {
     if (list.length >= 300) return;
     list.push({node: currentNode, turn, text: t, words: w,
+               ...(at ? {nth: at} : {}),   // 0 is the default; don't store it
                when: new Date().toISOString()});
   }
   if (list.length) tree.asides = list; else delete tree.asides;
@@ -8276,6 +8323,7 @@ function asideSpan(a){
   span.dataset.turn = a.turn;
   span.dataset.anchor = a.text;
   span.dataset.words = a.words;   // without the brackets, for editing
+  span.dataset.nth = a.nth || 0;
   return span;
 }
 function applyAsides(){
@@ -8287,10 +8335,8 @@ function applyAsides(){
   for (const a of mine){
     const turnEl = document.querySelector(`#conv .turn[data-turn="${a.turn}"]`);
     if (!turnEl) continue;
-    const words = String(a.text || "").trim().split(/\s+/).map(escRe);
-    if (!words.length || !words[0]) continue;
-    let re;
-    try { re = new RegExp(words.join("\\s+")); } catch { continue; }
+    const re = anchorRe(a.text, "g");
+    if (!re) continue;
     /* Match over the turn's text as ONE string rather than per text node.
        The DOM splits text at every inline <code>, every highlight mark, and
        every aside already inserted — but to the reader who selected it the
@@ -8298,18 +8344,20 @@ function applyAsides(){
        that happen to straddle one of those. Positions map back to the node
        they landed in. `.aside` is skipped so a gloss can never be matched
        inside another gloss, and <pre> because a code listing is not prose. */
-    const nodes = [];
-    let full = "";
-    const walker = document.createTreeWalker(turnEl, NodeFilter.SHOW_TEXT, {
-      acceptNode: (n) => n.parentElement.closest("pre,.who,button,.nodeinfo,figcaption,.aside")
-        ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
-    while (walker.nextNode()){
-      nodes.push({node: walker.currentNode, start: full.length});
-      full += walker.currentNode.textContent;
+    const {nodes, full} = turnTextNodes(turnEl);
+    /* the occurrence the reader actually pointed at, not merely the first —
+       falling back to the first if the answer has since changed under it */
+    const want = a.nth || 0;
+    let m, hitM = null, firstM = null, seen = 0;
+    while ((m = re.exec(full))){
+      if (!firstM) firstM = m;
+      if (seen === want){ hitM = m; break; }
+      seen++;
+      if (re.lastIndex === m.index) re.lastIndex++;
     }
-    const m = re.exec(full);           // first occurrence, like highlights
-    if (!m){ stranded.push(a); continue; }
-    const end = m.index + m[0].length;
+    const use = hitM || firstM;
+    if (!use){ stranded.push(a); continue; }
+    const end = use.index + use[0].length;
     const hit = nodes.find(n => end > n.start &&
                                 end <= n.start + n.node.textContent.length);
     if (!hit){ stranded.push(a); continue; }
@@ -8346,6 +8394,7 @@ $("conv").addEventListener("click", (e) => {
   if (sel && !sel.isCollapsed) return;   // a tap that is really a selection
   e.stopPropagation();                   // don't also read the block aloud
   openQCap("aside", span.dataset.anchor, {turn: +span.dataset.turn,
+                                          nth: +(span.dataset.nth || 0) || 0,
                                           words: span.dataset.words || ""});
 });
 
@@ -8753,6 +8802,7 @@ function openQCap(mode, quote, extra){
   clearTimeout(qcapTimer);
   $("qcap").dataset.mode = mode;
   $("qcap").dataset.turn = turn ?? "";
+  $("qcap").dataset.nth = mode === "aside" ? ((extra && extra.nth) || 0) : "";
   $("qcap").dataset.quote =
     (mode === "ask" || mode === "redraw" || mode === "aside") ? (quote || "") : "";
   // redraw carries the figure it is replacing, so the old one is retired at
@@ -8784,8 +8834,9 @@ function saveQCap(){
   if (mode === "aside"){
     const anchor = $("qcap").dataset.quote || "";
     const turn = +($("qcap").dataset.turn || 0) || null;
+    const nth = +($("qcap").dataset.nth || 0) || 0;
     closeQCap();
-    if (anchor && turn != null) saveAside(turn, anchor, text);
+    if (anchor && turn != null) saveAside(turn, anchor, text, nth);
     return;
   }
   // "redraw" banks nothing either — it re-runs the figure that button
@@ -9160,7 +9211,8 @@ function selInfo(){
   const turnEl = block.closest(".turn");
   const rect = range.getBoundingClientRect();
   if (!rect.width && !rect.height) return null;
-  return {text, rect, turn: turnEl ? +turnEl.dataset.turn : null, long};
+  return {text, rect, turn: turnEl ? +turnEl.dataset.turn : null, long,
+          nth: turnEl ? occurrenceOf(turnEl, range, text) : 0};
 }
 document.addEventListener("selectionchange", () => {
   clearTimeout(selTimer);
@@ -9193,7 +9245,7 @@ document.addEventListener("selectionchange", () => {
        doesn't take a parenthetical. */
     $("selmy").style.display = short ? "" : "none";
     if (short){
-      const mine = asideFor(info.turn, info.text);
+      const mine = asideFor(info.turn, info.text, info.nth);
       $("selmy").innerHTML = `${ico("🏷")}${mine ? "edit my words" : "my words"}`;
       $("selmy").title = mine
         ? "change what you wrote here"
@@ -9237,6 +9289,7 @@ document.addEventListener("selectionchange", () => {
     $("selfc").setAttribute("aria-label", `make a flashcard from “${oneLine(info.text, 40)}”`);
     selchip.dataset.term = info.text;
     selchip.dataset.turn = info.turn ?? "";
+    selchip.dataset.nth = info.nth || 0;
     selRect = info.rect;
     selchip.hidden = false;
     const w = selchip.offsetWidth, h = selchip.offsetHeight;
@@ -9368,11 +9421,12 @@ $("selmy").onclick = (ev) => {
   ev.stopPropagation();
   const text = selchip.dataset.term || "";
   const turn = selchip.dataset.turn ? +selchip.dataset.turn : null;
+  const nth = +(selchip.dataset.nth || 0) || 0;
   hideSelchip();
   document.getSelection()?.removeAllRanges();
   if (!text || turn == null) return;
-  const mine = asideFor(turn, text);
-  openQCap("aside", text, {turn, words: mine ? mine.words : ""});
+  const mine = asideFor(turn, text, nth);
+  openQCap("aside", text, {turn, nth, words: mine ? mine.words : ""});
 };
 
 /* ------------------------------------------------------------------ */
@@ -11220,10 +11274,10 @@ document.addEventListener("keydown", (e) => {
     const info = cur() ? selInfo() : null;
     if (info && !info.long && info.turn != null){
       hideSelchip();
-      const mine = asideFor(info.turn, info.text);
-      const text = info.text, turn = info.turn;
+      const mine = asideFor(info.turn, info.text, info.nth);
+      const text = info.text, turn = info.turn, nth = info.nth || 0;
       document.getSelection()?.removeAllRanges();
-      openQCap("aside", text, {turn, words: mine ? mine.words : ""});
+      openQCap("aside", text, {turn, nth, words: mine ? mine.words : ""});
     } else {
       setStatus(info
         ? "🏷 my words takes a word or a short phrase — that selection is too long"

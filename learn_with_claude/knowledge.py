@@ -71,11 +71,19 @@ def apply_asides(text: str, asides: list, wrap=None) -> str:
             continue
         pattern = r"\s+".join(f"`?{re.escape(w)}`?" for w in anchor.split())
         try:
-            match = re.search(pattern, text)
+            matches = list(re.finditer(pattern, text))
         except re.error:
             continue
-        if not match:
+        if not matches:
             continue
+        # `nth` is WHICH occurrence the reader pointed at. A word repeats
+        # within a sentence often enough that placing every gloss on the first
+        # one would put it somewhere they never selected — and the export must
+        # land it where the app does. Out of range (the answer changed since)
+        # falls back to the first, same as the browser.
+        nth = a.get("nth")
+        index = nth if isinstance(nth, int) and 0 <= nth < len(matches) else 0
+        match = matches[index]
         insert = wrap(words) if wrap else f" ({words})"
         text = text[: match.end()] + insert + text[match.end():]
     return text

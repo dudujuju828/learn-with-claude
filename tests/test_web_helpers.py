@@ -616,10 +616,25 @@ def test_aside_exports():
     assert apply_asides("a hash\ntable stores pairs",
                         [{"text": "hash table", "words": "a lookup array"}]) \
         == "a hash\ntable (a lookup array) stores pairs"
-    # first occurrence only, like the browser
+    # a repeated word: the gloss goes where the reader pointed, not merely on
+    # the first match — "private" appears twice in one sentence more often
+    # than not, and landing on the wrong one reads as not having saved at all
     assert apply_asides("bucket then bucket",
                         [{"text": "bucket", "words": "a slot"}]) \
+        == "bucket (a slot) then bucket"          # no nth -> the first
+    assert apply_asides("bucket then bucket",
+                        [{"text": "bucket", "words": "a slot", "nth": 1}]) \
+        == "bucket then bucket (a slot)"
+    # out of range (the answer changed under it) falls back to the first
+    assert apply_asides("bucket then bucket",
+                        [{"text": "bucket", "words": "a slot", "nth": 9}]) \
         == "bucket (a slot) then bucket"
+    # the same word can carry a different note in each place
+    assert apply_asides(
+        "private, then private virtual",
+        [{"text": "private", "words": "class-only", "nth": 0},
+         {"text": "private", "words": "still class-only", "nth": 1}],
+    ) == "private (class-only), then private (still class-only) virtual"
     # anything that doesn't match, or has no words, changes nothing
     for junk in ([{"text": "absent", "words": "x"}], [{"text": "a", "words": ""}], []):
         assert apply_asides("plain text", junk) == "plain text"
