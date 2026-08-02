@@ -1473,11 +1473,17 @@ def test_review_result():
 def test_handle_tutor_double_check():
     from learn_with_claude.webapi import ApiError, handle_tutor
 
-    answer = "Water boils at 90C at sea level.\n\n[why]\nBecause pressure.\n"
+    # long enough to satisfy the smallest answer-length floor there is —
+    # otherwise the length top-up fires and this test is about two features
+    SHORT = {"target_words": 40}
+    answer = ("Water boils at 90C at sea level, which is the figure most people "
+              "remember from school and then repeat for years without ever "
+              "checking it against a thermometer, a kettle, or anything else in "
+              "an ordinary kitchen.\n\n[why]\nBecause pressure.\n")
     fixed = json.dumps({
         "verdict": "revise",
         "issues": [{"kind": "error", "note": "said 90C; it is 100C at sea level"}],
-        "answer": "Water boils at 100C at sea level.\n\n[why]\nBecause pressure.",
+        "answer": answer.replace("90C", "100C").strip(),
     })
     seen = []
 
@@ -1486,12 +1492,12 @@ def test_handle_tutor_double_check():
         return (fixed if role == "reviewer" else answer), 0.02
 
     # off by default: one call, no second bill, nothing stored on the turn
-    r = handle_tutor({"action": "does water boil at 90?"}, stub)
+    r = handle_tutor({"action": "does water boil at 90?", **SHORT}, stub)
     assert [s["role"] for s in seen] == ["tutor"]
     assert "checked" not in r and r["cost"] == 0.02
 
     seen.clear()
-    body = {"action": "does water boil at 90?", "double_check": True,
+    body = {"action": "does water boil at 90?", "double_check": True, **SHORT,
             "source": "At sea level water boils at 100C.",
             "turns": [{"action": "what is pressure?", "tutor": "Force per area."}]}
     r = handle_tutor(body, stub)
@@ -1543,34 +1549,51 @@ def test_answer_length():
     """
     from learn_with_claude.personas import (
         TUTOR_SEGMENTS, TUTOR_WORDS_DEFAULT, TUTOR_WORDS_MAX, TUTOR_WORDS_MIN,
-        clean_max_words, concise_style, length_rule, review_system,
-        segment_budget, tutor_segments, tutor_system,
+        clean_target_words, concise_style, effective_words, length_rule,
+        review_system, segment_budget, tutor_segments, tutor_system,
     )
     from learn_with_claude.webapi import _answer_tokens, handle_tutor
 
     assert TUTOR_WORDS_DEFAULT == 150
     assert TUTOR_WORDS_MAX == 1600
 
-    # the default clause, word for word as it always read
-    d = length_rule()
-    assert "3-6 sentences (roughly 60-120 words), and 150 words is a hard ceiling" in d
-    assert length_rule(TUTOR_WORDS_DEFAULT) == d
-    assert tutor_system() == tutor_system(max_words=TUTOR_WORDS_DEFAULT)
+    # THE NUMBER IS A FLOOR. A ceiling is a limit a model stays comfortably
+    # clear of, which is why asking for 1600 words used to produce 700.
+    for n in (80, 150, 400, 1600):
+        r = length_rule(n)
+        upper = round(n * 1.5)
+        # given as a BAND: measured, a one-sided floor overshoots badly at the
+        # small end (150 → 367 words) while still undershooting at the large
+        assert f"write between {n} and {upper} words" in r
+        assert f"{n} is a FLOOR, not a number to approach" in r
+        assert f"Past {upper} you have" in r
+        assert "hard ceiling" not in r
+        # in paragraphs too — a paragraph count is something a writer can
+        # steer by, a word count is one they discover they have missed
+        assert f"{max(2, round(n / 20))}-" in r and "short paragraphs" in r
+        # a floor with nothing else said is an instruction to pad, so the
+        # clause spends most of itself on how to reach it honestly…
+        assert "Go further into the SAME question" in r
+        assert "padding is not available to you" in r
+        assert "Restating" in r and "in other words" in r
+        # …and prefers a short answer to an invented one
+        assert "NEVER invent material to reach the length" in r
+        assert "stop short of\n  the number" in r
+        # the last word is the self-check, where recency does the most good
+        assert r.rstrip().endswith("write the rest of the answer.")
 
-    # every figure moves together — a brief saying "3-6 sentences" under a
-    # 400-word cap is a brief arguing with itself
-    assert "2-3 sentences (roughly 32-64 words), and 80 words is a hard ceiling" in length_rule(80)
-    assert "120-240 words, and 300 words is a hard ceiling" in length_rule(300)
-    assert "3-6 sentences" not in length_rule(300)
-    # past a handful, the sentence count stops being the useful unit
-    assert "sentences" in length_rule(200) and "sentences" not in length_rule(400)
+    # the rules that assumed a ceiling are gone from the brief
+    base = tutor_system()
+    assert "stop at three" not in base and "hard ceiling" not in base
+    assert "Going DEEPER into the" in base and "going WIDER than it never is" in base
+    assert tutor_system() == tutor_system(target_words=TUTOR_WORDS_DEFAULT)
 
     # clamped, never trusted — it arrives from a browser preference
-    assert clean_max_words(None) == clean_max_words("junk") == TUTOR_WORDS_DEFAULT
-    assert clean_max_words(1) == TUTOR_WORDS_MIN
-    assert clean_max_words(99999) == TUTOR_WORDS_MAX
-    assert clean_max_words(1600) == 1600      # the top preset is reachable
-    assert clean_max_words("300") == clean_max_words(300.4) == 300
+    assert clean_target_words(None) == clean_target_words("junk") == TUTOR_WORDS_DEFAULT
+    assert clean_target_words(1) == TUTOR_WORDS_MIN
+    assert clean_target_words(99999) == TUTOR_WORDS_MAX
+    assert clean_target_words(1600) == 1600      # the top preset is reachable
+    assert clean_target_words("300") == clean_target_words(300.4) == 300
 
     # the reading UI's part budget scales too — capping a 1600-word answer at
     # three parts hands the reader three walls instead of one, which is the
@@ -1580,30 +1603,40 @@ def test_answer_length():
     assert tutor_segments() == TUTOR_SEGMENTS          # default untouched
     assert "At most 3 tagged parts per reply, usually 1-2" in TUTOR_SEGMENTS
     assert "At most 6 tagged parts per reply, usually 2-5" in tutor_segments(1600)
-    assert "At most 6" in tutor_system(segments=True, max_words=1600)
+    assert "At most 6" in tutor_system(segments=True, target_words=1600)
     assert "At most 3" in tutor_system(segments=True)
 
     # a long answer has to fit in the call that writes it — and in the
-    # reviewer's, since a repair is the WHOLE reply rather than a diff
+    # reviewer's, since a repair is the WHOLE reply rather than a diff. Now
+    # that answers really do land near the number, the slack has to be real.
     assert _answer_tokens(TUTOR_WORDS_DEFAULT, 8000) == 8000     # unchanged
     assert _answer_tokens(TUTOR_WORDS_DEFAULT, 16000) == 16000   # unchanged
-    assert _answer_tokens(TUTOR_WORDS_MAX, 8000) > 8000 * 1.4
+    assert _answer_tokens(TUTOR_WORDS_MAX, 16000) > 16000
+    assert _answer_tokens(TUTOR_WORDS_MAX, 8000) > TUTOR_WORDS_MAX * 4
 
-    # concise is a deliberate choice of brevity: it does NOT grow with the
-    # ceiling, but it may not exceed one tighter than itself
+    # concise is the one style that MOVES the target, and only downwards:
+    # "at most 35 words" beside "at least 1600" is unsatisfiable, and a model
+    # resolves that by guessing which half you meant
+    assert effective_words("concise", 1600) == 35
+    assert effective_words("balanced", 1600) == 1600
     assert concise_style(600) == concise_style()
     assert "35 words" in concise_style(600)
-    assert "roughly 40 words" not in concise_style(40)
-    assert tutor_system(mode="concise", max_words=600) != tutor_system(max_words=600)
+    long_concise = tutor_system(mode="concise", target_words=1600)
+    assert "35 is a FLOOR" in long_concise
+    assert "1600" not in long_concise
+    assert "at most 2 sentences" in long_concise
 
-    # the ceiling binds a custom tutor too — it lives in the hard rules
-    custom = tutor_system(custom_style="speak only in haiku", max_words=400)
-    assert "400 words is a hard ceiling" in custom and "haiku" in custom
+    # the length binds a custom tutor too — it lives in the hard rules
+    custom = tutor_system(custom_style="speak only in haiku", target_words=400)
+    assert "400 is a FLOOR" in custom and "haiku" in custom
 
-    # …and the reviewer is handed the very same brief
+    # …and the reviewer is handed the very same brief — plus the one thing it
+    # must NOT do with it: writing the missing words would make the checker
+    # the tutor, and nobody would be left to check what it invented
     for n in (80, 400):
-        assert f"{n} words is a hard ceiling" in review_system(max_words=n)
-    assert "150 words is a hard ceiling" in review_system()
+        assert f"{n} is a FLOOR" in review_system(target_words=n)
+    assert "150 is a FLOOR" in review_system()
+    assert "NOT yours to extend" in review_system()
 
     # end to end through the route both web backends serve
     seen = {}
@@ -1614,19 +1647,118 @@ def test_answer_length():
             return '{"verdict": "clean"}', 0.01
         return "Short answer.", 0.02
 
+    long_enough = " ".join(["word"] * 400)
     body = {"kind": "root", "topic": "x", "turns": [], "action": "q",
-            "max_words": 400, "double_check": True}
-    handle_tutor(dict(body), spy)
-    assert "400 words is a hard ceiling" in seen["tutor"]
-    assert "400 words is a hard ceiling" in seen["reviewer"]
+            "target_words": 400, "double_check": True}
+
+    def spy_long(system, messages, role, effort=None, max_tokens=16000):
+        seen[role] = system
+        return ('{"verdict": "clean"}' if role == "reviewer" else long_enough), 0.01
+
+    handle_tutor(dict(body), spy_long)
+    assert "400 is a FLOOR" in seen["tutor"]
+    assert "400 is a FLOOR" in seen["reviewer"]
 
     seen.clear()
-    handle_tutor({**body, "max_words": "nonsense"}, spy)
-    assert "150 words is a hard ceiling" in seen["tutor"]
+    handle_tutor({**body, "target_words": "nonsense"}, spy_long)
+    assert "150 is a FLOOR" in seen["tutor"]
     seen.clear()
-    handle_tutor({k: v for k, v in body.items() if k != "max_words"}, spy)
-    assert "150 words is a hard ceiling" in seen["tutor"]   # absent → the old default
-    print("ok  answer length (default unchanged, derived clause, clamps, reviewer agrees)")
+    handle_tutor({k: v for k, v in body.items() if k != "target_words"}, spy_long)
+    assert "150 is a FLOOR" in seen["tutor"]   # absent → default
+    # a page served from the service worker's cache still sends the old field
+    seen.clear()
+    handle_tutor({k: v for k, v in body.items() if k != "target_words"}
+                 | {"max_words": 600}, spy_long)
+    assert "600 is a FLOOR" in seen["tutor"]
+    print("ok  answer length (a floor, honestly reached, clamps, reviewer agrees)")
+
+
+def test_length_topup():
+    """The floor, actually enforced.
+
+    Wording alone does not get there — measured, a 1600-word floor produced
+    about 1000 words and stopped. So the server counts the prose it got back
+    and, when the answer is materially short, sends it once more with the
+    shortfall named. Everything here is about that pass costing the reader
+    nothing when it can't help.
+    """
+    from learn_with_claude.webapi import (
+        ApiError, LENGTH_SHORTFALL, handle_tutor, prose_words,
+    )
+
+    def words(n):
+        return " ".join(["word"] * n)
+
+    # fenced code is outside the length rule, so it can't satisfy the floor:
+    # three lines of Python must not stand in for 600 words of explanation
+    assert prose_words("one two three") == 3
+    assert prose_words("one two\n```py\na b c d e f g\n```\nthree four") == 4
+
+    calls = []
+
+    def stub(reply_words):
+        def go(system, messages, role, effort=None, max_tokens=16000):
+            calls.append({"role": role, "msg": messages[-1]["content"],
+                          "n": len(messages)})
+            return words(reply_words[min(len(calls) - 1, len(reply_words) - 1)]), 0.02
+        return go
+
+    # comfortably short → one extra call, and the longer text is what ships
+    calls.clear()
+    r = handle_tutor({"action": "q", "target_words": 400}, stub([100, 420]))
+    assert len(calls) == 2 and [c["role"] for c in calls] == ["tutor", "tutor"]
+    assert "floor of 400" in calls[1]["msg"] and "100 words of prose" in calls[1]["msg"]
+    # the draft goes back as the assistant turn it was, so the retry rewrites
+    # rather than starting over
+    assert calls[1]["n"] == calls[0]["n"] + 2
+    assert len(r["tutor"].split()) == 420
+    assert r["cost"] == 0.04            # one turn, one bill
+
+    # already long enough → never fires, and nothing is charged for it
+    calls.clear()
+    r = handle_tutor({"action": "q", "target_words": 400}, stub([400]))
+    assert len(calls) == 1 and r["cost"] == 0.02
+
+    # just under, but not materially — an answer at 92% of the number is
+    # finished by any reading, and another whole call is a poor trade
+    calls.clear()
+    handle_tutor({"action": "q", "target_words": 400}, stub([int(400 * 0.92)]))
+    assert len(calls) == 1
+    assert LENGTH_SHORTFALL < 0.92
+
+    # a retry that comes back NO LONGER is discarded — the reader keeps the
+    # complete first answer rather than a worse one
+    calls.clear()
+    r = handle_tutor({"action": "q", "target_words": 400}, stub([100, 60]))
+    assert len(calls) == 2 and len(r["tutor"].split()) == 100
+
+    # a retry that FAILS leaves the first answer untouched and unbilled, the
+    # same way a failed double-check does
+    calls.clear()
+
+    def flaky(system, messages, role, effort=None, max_tokens=16000):
+        calls.append(role)
+        if len(calls) > 1:
+            raise ApiError("rate limited", 429)
+        return words(100), 0.02
+
+    r = handle_tutor({"action": "q", "target_words": 400}, flaky)
+    assert len(r["tutor"].split()) == 100 and r["cost"] == 0.02
+
+    # …and the top-up runs BEFORE the review, so 🔍 double-check reads the
+    # answer the reader will actually see rather than a draft about to go
+    calls.clear()
+
+    def both(system, messages, role, effort=None, max_tokens=16000):
+        calls.append(role)
+        if role == "reviewer":
+            return '{"verdict": "clean"}', 0.01
+        return words(420 if len(calls) > 1 else 100), 0.02
+
+    r = handle_tutor({"action": "q", "target_words": 400, "double_check": True}, both)
+    assert calls == ["tutor", "tutor", "reviewer"]
+    assert len(r["tutor"].split()) == 420 and r["checked"] == {"issues": []}
+    print("ok  length top-up (fires on a real shortfall, degrades safely, bills once)")
 
 
 def test_code_examples():
@@ -1836,5 +1968,6 @@ if __name__ == "__main__":
     test_checked_exports()
     test_free_conversation()
     test_answer_length()
+    test_length_topup()
     test_code_examples()
     print("\nall green")

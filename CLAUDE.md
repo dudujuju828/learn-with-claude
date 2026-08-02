@@ -53,16 +53,33 @@ a failure or an untrustworthy verdict leaves the original answer and puts no
 kind is enforced against the same text — which means a new argument to
 `tutor_system()` that isn't also passed to `review_system()` turns
 double-check into a machine for undoing that setting. `mode`, `custom_style`,
-`segments`, `max_words` and `code`/`code_language` all thread through;
+`segments`, `target_words` and `code`/`code_language` all thread through;
 `grounding` deliberately does not (which tools the tutor had is none of the
 reviewer's business).
 
-The tutor's answer-length ceiling is `personas.TUTOR_WORDS_DEFAULT` (150),
-overridden per request by `max_words` on the body (web: *answer length*, per
-profile) or `--answer-words` (CLI). Only the ceiling is stored — the rest of
-the length clause is derived in `length_rule()`, because a brief saying
-"3-6 sentences" under a 400-word cap is one the model resolves by obeying the
-tighter half. Never hardcode another length figure into the tutor's prompt.
+**Answer length is a FLOOR, not a ceiling.** `personas.TUTOR_WORDS_DEFAULT`
+(150), overridden per request by `target_words` on the body (web: *answer
+length*, per profile) or `--answer-words` (CLI); `max_words` is read as a
+legacy alias for cached pages. Only the number is stored — everything built
+around it lives in `length_rule()`, and two thirds of that clause is about
+reaching the number *without padding or inventing*, which is the whole risk a
+floor creates. Never add a length figure to the tutor's prompt anywhere else,
+and never write a rule that assumes a cap ("stop at three sentences" had to be
+removed for exactly this reason). `concise` is the one style that moves the
+target, downwards, via `effective_words()` — leaving it beside a 1600-word
+floor makes the brief unsatisfiable.
+
+The reviewer may **cut** padding but must never **extend** a short answer:
+writing the missing material makes the checker the tutor, and `REVIEW_GROWTH`
+would refuse the result anyway, costing the turn its badge for nothing.
+
+Wording alone doesn't make a floor bind — measured, a 1600-word floor got 992
+words. So `handle_tutor` counts `prose_words()` (fenced code excluded) and,
+under `LENGTH_SHORTFALL`, runs `extend_answer()` once: one extra tutor call
+that re-sends the draft with the shortfall named. It degrades to the draft on
+failure or a no-longer retry, and runs **before** the review so double-check
+never reads a draft that is about to be replaced. `tutor` is therefore the
+route that can make **three** calls in a turn.
 
 💻 `code` / `code_language` is a **switch on top of a style, not one of
 them** — it lands after the style addendum so it composes with `simple`,
@@ -187,7 +204,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 55 tests
+python -m pytest -q                     # 56 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

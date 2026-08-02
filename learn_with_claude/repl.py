@@ -14,7 +14,7 @@ from .personas import (
     TUTOR_WORDS_DEFAULT,
     branch_learner_message,
     branch_tutor_context,
-    clean_max_words,
+    clean_target_words,
     followup_learner_message,
     followup_tutor_context,
 )
@@ -71,9 +71,9 @@ class Shell:
         self.level = level
         self.timeout = timeout
         self.double_check = double_check
-        # the hard ceiling on one tutor answer (--answer-words); the rest of
-        # the length brief is derived from it in personas.length_rule()
-        self.answer_words = clean_max_words(answer_words)
+        # the length one tutor answer must REACH (--answer-words); the rest
+        # of the length brief is built around it in personas.length_rule()
+        self.answer_words = clean_target_words(answer_words)
         # 💻 --code: ground answers in real snippets, optionally in one language
         self.code = bool(code)
         self.code_language = " ".join(str(code_language or "").split())[:40]
@@ -146,7 +146,7 @@ class Shell:
             topic, max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
             timeout=self.timeout, double_check=self.double_check,
-            max_words=self.answer_words, code=self.code,
+            target_words=self.answer_words, code=self.code,
             code_language=self.code_language, renderer=self.r,
         )
         kb.add_root(topic, result, learner_model=self.learner_model, tutor_model=self.tutor_model,
@@ -179,7 +179,7 @@ class Shell:
                 topic, max_turns=self.max_turns, learner_model=self.learner_model,
                 tutor_model=self.tutor_model, effort=self.effort, level=self.level,
                 timeout=self.timeout, double_check=self.double_check,
-                max_words=self.answer_words, code=self.code,
+                target_words=self.answer_words, code=self.code,
                 code_language=self.code_language, renderer=silent,
             )
 
@@ -269,7 +269,7 @@ class Shell:
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
             timeout=self.timeout, double_check=self.double_check,
-            max_words=self.answer_words, code=self.code,
+            target_words=self.answer_words, code=self.code,
             code_language=self.code_language, renderer=self.r,
         )
         result.cost += pick_cost  # the picker call belongs to this node
@@ -329,7 +329,7 @@ class Shell:
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
             timeout=self.timeout, double_check=self.double_check,
-            max_words=self.answer_words, code=self.code,
+            target_words=self.answer_words, code=self.code,
             code_language=self.code_language, renderer=self.r,
         )
 

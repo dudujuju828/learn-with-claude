@@ -215,33 +215,40 @@ CONTRACT_REMINDER = (
 
 
 # --------------------------------------------------------------------------- #
-# How long an answer may be. 150 words is the ceiling this project ran on for
-# its whole life and stays the default; the reader can move it (the web app's
-# "answer length", the CLI's --answer-words).
+# How long an answer is. The number set in the web app's "answer length" (or
+# the CLI's --answer-words) is a FLOOR: an answer that comes in under it is
+# unfinished. It was a ceiling until people noticed the obvious problem with
+# that — a ceiling is a limit a model stays comfortably clear of, so asking
+# for 1600 words reliably produced 700 and the setting read as broken.
 #
-# The number is not dropped into the prompt on its own. Every other figure in
-# the length clause is DERIVED from it, because a brief that says "3-6
-# sentences" under a 400-word cap is a brief arguing with itself, and a model
-# handed two contradictory limits obeys the more specific one — which would be
-# the sentence count, i.e. the setting would appear to do nothing.
+# A floor is the more dangerous instrument of the two and the prompt is built
+# around that fact. Told to write 1600 words about something it knows 300
+# words about, a model pads, restates, hedges, and — the failure that actually
+# costs the reader — invents. So the clause spends most of its length on HOW
+# to reach the number honestly (further into the same question, never sideways
+# and never twice) and ends by explicitly permitting a short answer over an
+# invented one. That is not an escape hatch for laziness; it is the same rule
+# that stops ⚡ facts making up numbers and 🖼 illustrate drawing decoration.
 #
 # Clamped rather than trusted: the value arrives from a browser preference.
 # --------------------------------------------------------------------------- #
 TUTOR_WORDS_DEFAULT = 150
 TUTOR_WORDS_MIN = 40
-# The top of the range is a genuine essay — the mechanism, the why, an
-# example and the caveats in one answer, for a topic that only makes sense
-# whole. The tutor's other hard rules still bind at that length (one question
-# answered, no menu ending, one sentence per paragraph), so it buys a fuller
-# explanation of the SAME question rather than licence to lecture.
+# The top of the range is a genuine essay. The tutor's other hard rules still
+# bind at that length (one question answered, no menu ending, one sentence per
+# paragraph), so it buys a fuller explanation of the SAME question rather than
+# licence to lecture.
 TUTOR_WORDS_MAX = 1600
+# how far past the floor an answer may run before it has started answering a
+# second question
+TUTOR_WORDS_OVERRUN = 1.5
 # roughly how many words this tutor writes per sentence — it is held to short
 # ones, so the divisor is deliberately low
 _WORDS_PER_SENTENCE = 20
 
 
-def clean_max_words(value) -> int:
-    """Any caller's answer-length setting, as a usable ceiling."""
+def clean_target_words(value) -> int:
+    """Any caller's answer-length setting, as a usable target."""
     try:
         n = int(float(value))
     except (TypeError, ValueError):
@@ -249,29 +256,90 @@ def clean_max_words(value) -> int:
     return max(TUTOR_WORDS_MIN, min(TUTOR_WORDS_MAX, n))
 
 
-def length_rule(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
-    """The one bullet in the tutor's brief that says how long an answer is.
+def length_rule(target: int = TUTOR_WORDS_DEFAULT) -> str:
+    """The part of the tutor's brief that says how long an answer must be.
 
-    The usual band sits at 40-80% of the ceiling and the sentence counts come
-    from that. At the default 150 this reproduces the original wording exactly
-    — 3-6 sentences, roughly 60-120 words — which is the point: raising the
-    ceiling raises the whole clause with it rather than leaving three numbers
-    describing three different answers.
+    Three bullets, and the proportions are the point: one states the floor,
+    one is entirely about reaching it without padding, and one permits coming
+    up short rather than inventing. A single "write at least N words" bullet
+    is what produces the padded answer everyone has read.
     """
-    max_words = clean_max_words(max_words)
-    lo, hi = round(max_words * 0.4), round(max_words * 0.8)
-    s_lo = max(1, round(lo / _WORDS_PER_SENTENCE))
-    s_hi = max(s_lo + 1, round(hi / _WORDS_PER_SENTENCE))
-    # past a handful of sentences the count stops being the useful unit and
-    # starts reading like an instruction to write twenty-four of them
-    band = (f"{s_lo}-{s_hi} sentences (roughly {lo}-{hi} words)" if s_hi <= 8
-            else f"{lo}-{hi} words")
+    try:
+        target = max(1, int(target))
+    except (TypeError, ValueError):
+        target = TUTOR_WORDS_DEFAULT
+    upper = round(target * TUTOR_WORDS_OVERRUN)
+    # Stated in paragraphs as well as words, because the layout rule below
+    # puts one sentence in each: a countable number of paragraphs is a target
+    # a writer can actually steer by, where a word count is one they discover
+    # they have missed. This is the difference between asking for 1600 and
+    # getting 1600 rather than 800.
+    p_lo = max(2, round(target / _WORDS_PER_SENTENCE))
+    p_hi = max(p_lo + 1, round(upper / _WORDS_PER_SENTENCE))
+    return f"""\
+- LENGTH — write between {target} and {upper} words. Because you put one
+  sentence in each paragraph (see the layout rule below), that is about
+  {p_lo}-{p_hi} short paragraphs: count them as you go, since a paragraph
+  count is something you can steer by and a word count is something you
+  discover you have missed.
+  {target} is a FLOOR, not a number to approach. A reply that lands under it
+  is unfinished, however complete it felt while you were writing it, and it
+  overrides your instinct to be economical — economy here means every
+  sentence earning its place, never fewer sentences. Past {upper} you have
+  started answering a second question, so stop.
+- HOW YOU REACH IT, given that padding is not available to you. If you feel
+  finished early, you have stopped at the surface of your own explanation
+  rather than at the end of it. Go further into the SAME question:
+    · the mechanism underneath the one you just named, and the one under that;
+    · a concrete worked example carried all the way through, with real values;
+    · what happens at the edges of the idea, and why it happens there;
+    · the obvious alternative, and exactly where it loses;
+    · what people reliably get wrong here, and what makes it wrong.
+  Every sentence must carry something the sentence before it didn't. Restating,
+  hedging, summarising what you just said, "in other words", and announcing
+  what you are about to explain all spend the length without buying anything
+  with it, and are failures however long the answer ends up.
+- NEVER invent material to reach the length. If you genuinely do not have
+  enough that is TRUE to say about this, say what is true and stop short of
+  the number. A thin answer costs this learner a little; a padded-out invented
+  one costs them far more, and they have no way to tell it from the real thing.
+- BEFORE YOU SEND IT, count your paragraphs. Fewer than about {p_lo} means you
+  are not finished — go back to the list above, pick the direction you have
+  not taken yet, and take it. Do not announce that you are doing this; just
+  write the rest of the answer."""
+
+
+# --------------------------------------------------------------------------- #
+# The length floor, enforced rather than asked for.
+#
+# Wording alone does not get there. Measured against the clause above, a model
+# handed a 1600-word floor writes about 1000 and stops: it regresses toward
+# whatever it considers this question's natural length, and no amount of
+# "AT LEAST" moves it more than a little. So the server counts the prose it
+# got back and, when the answer is materially short, sends it once more with
+# the shortfall named. One extra call, only when it fires, and the original
+# stands if the second attempt comes back no longer.
+#
+# It asks for the WHOLE answer again rather than a continuation on purpose: an
+# appended block re-introduces itself, repeats the opening, and breaks the
+# [tag] markup down the middle. A rewrite keeps what was already right —
+# models given their own draft overwhelmingly do — and reads as one answer.
+# --------------------------------------------------------------------------- #
+def extend_message(target: int, got: int) -> str:
     return (
-        "- Give the answer real substance: the fact itself, the why or how behind it,\n"
-        "  and a concrete example or consequence when it makes the idea click. Usually\n"
-        f"  {band}, and {max_words} words is a hard ceiling. Going\n"
-        "  over it is not thoroughness — it means you have answered more than the one\n"
-        "  question you were asked, so cut back to that one. Never pad."
+        f"That reply is {got} words of prose. The brief you are writing to "
+        f"sets a floor of {target}, so it is not finished — you stopped at "
+        "the surface of your own explanation rather than at the end of it.\n\n"
+        "Send the WHOLE answer again, complete this time. Keep what you have "
+        "already written — it is right — and take it further with the "
+        "directions your brief gives you: the mechanism underneath the one "
+        "you named, a worked example carried all the way through with real "
+        "values, what happens at the edges, the obvious alternative and "
+        "exactly where it loses, what people reliably get wrong.\n\n"
+        "Same question, same scope, same format, same [tag] markup — deeper, "
+        "not wider. Do not mention this instruction, do not apologise for the "
+        "first attempt, and do not add one word you are not sure is true: "
+        "coming up short is better than filling the gap with invention."
     )
 
 
@@ -286,18 +354,18 @@ HARD RULES:
 {length}
 - If you're reaching for a bulleted list of considerations, or writing "two
   things made this work", stop: that's several answers at once. Pick the one
-  the learner asked for and let them ask for the next.
+  the learner asked for, take it all the way down, and let them ask for the
+  next.
 - Depth on ONE topic per reply, not breadth across many. If your answer
   naturally uses a new term, leave it for the learner to ask about — do NOT
   pre-emptively define every term you mention.
-- Stay inside the question's scope, in BOTH directions. Don't reach past a
-  complete answer for the bigger, more famous idea it connects to — that hands
-  the learner a tangent to chase instead of the thing they asked about. And
-  don't pre-empt their next three questions either: answer what was asked at
-  the grain it was asked, and leave the obvious follow-ups for them to actually
-  ask. Front-loading everything reads as thorough and lands as a wall the
-  learner can only nod at. If the honest answer is finished in three sentences,
-  stop at three.
+- Stay inside the question's scope. Don't reach past a complete answer for the
+  bigger, more famous idea it connects to — that hands the learner a tangent to
+  chase instead of the thing they asked about. And don't pre-empt their next
+  three questions either: answer what was asked, at the grain it was asked, and
+  leave the obvious follow-ups for them to actually ask. Going DEEPER into the
+  question you were given is always right; going WIDER than it never is. Every
+  word of the length above belongs to the first and none to the second.
 - NEVER end by offering a menu ("want me to cover X next?", "should we talk
   about...?"). Just answer the question and stop.
 - Plain, friendly, direct. No filler openers like "Great question!".
@@ -306,25 +374,37 @@ HARD RULES:
   together in one block. Prefer short sentences."""
 
 
-def tutor_base(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
-    """The tutor's hard rules, with the length clause rendered for `max_words`."""
-    return _TUTOR_SYSTEM_TMPL.format(length=length_rule(max_words))
+def tutor_base(target_words: int = TUTOR_WORDS_DEFAULT) -> str:
+    """The tutor's hard rules, with the length clause rendered for `target_words`."""
+    return _TUTOR_SYSTEM_TMPL.format(length=length_rule(target_words))
 
 
 # The base rules at the default ceiling, kept as a name for older callers.
 TUTOR_SYSTEM = tutor_base()
 
 
-# The concise style's own limit. It is a deliberate choice of brevity, so it
-# does NOT grow with the ceiling — picking "concise" and then asking for 600
-# words is asking for two different things, and the more specific instrument
-# wins. It does shrink under a ceiling tighter than itself, because a style
-# addendum permitting more than the hard rules allow is a contradiction.
+# The concise style's own limit. It is a deliberate choice of brevity — a
+# style whose entire content is "be short" — so picking it PINS the length
+# target down to this rather than leaving the hard rules demanding 1600 words
+# while the style demands 35. The more specific instrument wins; see
+# effective_words(), which is what actually makes the brief self-consistent.
 CONCISE_WORDS = 35
 
 
-def concise_style(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
-    words = min(CONCISE_WORDS, clean_max_words(max_words))
+def effective_words(mode: str, target_words: int) -> int:
+    """The length the whole brief is written to.
+
+    Only `concise` moves it, and only downwards. Without this, "concise" plus
+    any ordinary target is a prompt containing both "at most 35 words" and "at
+    least 150 words" — unsatisfiable, and a model resolves it by guessing
+    which one you meant.
+    """
+    return (min(CONCISE_WORDS, target_words) if mode == "concise"
+            else target_words)
+
+
+def concise_style(target_words: int = TUTOR_WORDS_DEFAULT) -> str:
+    words = effective_words("concise", clean_target_words(target_words))
     sentences = max(1, round(words / _WORDS_PER_SENTENCE))
     return (
         f"STYLE — CONCISE: at most {sentences} sentence"
@@ -425,12 +505,12 @@ This is a pure text conversation: do not use any tools or the filesystem."""
 # so capping a very long answer at three parts hands the reader three walls
 # instead of one. It stays 3 at the default (and up to 300 words), which is
 # what keeps the ordinary reply exactly as it was.
-def segment_budget(max_words: int = TUTOR_WORDS_DEFAULT) -> int:
-    return min(6, max(3, round(clean_max_words(max_words) / 150)))
+def segment_budget(target_words: int = TUTOR_WORDS_DEFAULT) -> int:
+    return min(6, max(3, round(clean_target_words(target_words) / 150)))
 
 
-def tutor_segments(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
-    cap = segment_budget(max_words)
+def tutor_segments(target_words: int = TUTOR_WORDS_DEFAULT) -> str:
+    cap = segment_budget(target_words)
     usual_lo = 1 if cap <= 3 else 2
     return f"""\
 MARKUP — the learner's reading app shows your reply in small pieces:
@@ -530,7 +610,7 @@ def session_memory_system(transcript: str) -> str:
 
 def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
                  segments: bool = False, grounding: "str | None" = None,
-                 max_words: int = TUTOR_WORDS_DEFAULT,
+                 target_words: int = TUTOR_WORDS_DEFAULT,
                  code: bool = False, code_language: str = "") -> str:
     """The tutor's full system prompt: base rules, a style addendum (a built-in
     TUTOR_MODES entry, or the caller's own custom style text, which wins), and
@@ -539,24 +619,29 @@ def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
     UI's part-markup contract (the CLI renders plain text, so it stays off).
     `grounding` (local Copilot mode only) replaces the no-tools clause with
     local_grounding_system()'s text; omitted, the tutor is pure text with no
-    tools at all. `max_words` is the hard ceiling on one answer — it binds a
-    custom style exactly as it binds a built-in one, since it lives in the
-    hard rules rather than in the style. `code` (💻) is orthogonal to the
+    tools at all. `target_words` is the length one answer must REACH — it
+    binds a custom style exactly as it binds a built-in one, since it lives in
+    the hard rules rather than in the style. `code` (💻) is orthogonal to the
     style and lands after it: someone learning a mutex wants the three lines
     that show the lock being taken whichever voice the answer is in."""
+    target_words = clean_target_words(target_words)
     if custom_style and custom_style.strip():
         style = "STYLE — CUSTOM (defined by the learner's operator):\n" + custom_style.strip()
+        words = target_words
     elif mode == "concise":
-        style = concise_style(max_words)
+        style = concise_style(target_words)
+        # the one style that moves the length target, and only downwards
+        words = effective_words("concise", target_words)
     else:
         style = TUTOR_MODES.get(mode) or ""
-    parts = [tutor_base(max_words)]
+        words = target_words
+    parts = [tutor_base(words)]
     if style:
         parts.append(style)
     if code:
         parts.append(code_examples_system(code_language))
     if segments:
-        parts.append(tutor_segments(max_words))
+        parts.append(tutor_segments(target_words))
     parts.append(grounding or TUTOR_NO_TOOLS)
     return "\n\n".join(parts)
 
@@ -595,7 +680,14 @@ Read it for four kinds of defect, most serious first:
   hides which one causes the other.
 - contract — it broke the brief it was written to (quoted below): more than
   the one question answered, a menu ending, sentences run together instead of
-  one per paragraph, well past the length ceiling.
+  one per paragraph, a length well outside what the brief asks for.
+
+LENGTH IS THE ONE DEFECT YOU DO NOT REPAIR BY WRITING. Cutting a genuinely
+padded answer back to what it actually says is fair game. An answer that falls
+SHORT of the length its brief demands is NOT yours to extend — supplying the
+missing material would make you the tutor rather than its last reader, and
+what you invented to fill the gap is exactly what nobody would be left to
+check. Leave a short answer as it stands.
 
 MOST REPLIES HAVE NOTHING WRONG WITH THEM. Saying so is the expected answer,
 not a failure to find something. Do NOT rewrite for taste, for your own
@@ -630,7 +722,7 @@ not just the part you changed."""
 
 def review_system(*, mode: str = "balanced", custom_style: "str | None" = None,
                   segments: bool = False,
-                  max_words: int = TUTOR_WORDS_DEFAULT,
+                  target_words: int = TUTOR_WORDS_DEFAULT,
                   code: bool = False, code_language: str = "") -> str:
     """The reviewer's system prompt: its own job, then the tutor's brief
     verbatim.
@@ -641,7 +733,7 @@ def review_system(*, mode: str = "balanced", custom_style: "str | None" = None,
     reader picked, the answer length they set, whether 💻 code examples were
     asked for, and the [tag] markup the reading UI needs back. Restating it
     would drift the moment either prompt changed, and a reviewer holding a
-    400-word answer to a 150-word ceiling — or reading a snippet it was never
+    1600-word answer to a 150-word brief — or reading a snippet it was never
     told to expect — would "correct" replies that were exactly what was asked
     for. The grounding clause is left off: which tools the tutor had is none
     of the reviewer's business, and it has none of its own.
@@ -652,7 +744,8 @@ def review_system(*, mode: str = "balanced", custom_style: "str | None" = None,
         "rewrite too — you are enforcing this, not replacing it:",
         "<<<",
         tutor_system(mode=mode, custom_style=custom_style, segments=segments,
-                     max_words=max_words, code=code, code_language=code_language),
+                     target_words=target_words, code=code,
+                     code_language=code_language),
         ">>>",
     ])
 

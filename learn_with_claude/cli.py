@@ -52,11 +52,14 @@ def build_parser() -> argparse.ArgumentParser:
                         "Costs a third model call per turn.")
     p.add_argument("--answer-words", type=int, default=TUTOR_WORDS_DEFAULT,
                    metavar="N",
-                   help=f"Hard ceiling on one tutor answer, in words "
-                        f"(default: {TUTOR_WORDS_DEFAULT}, "
-                        f"clamped to {TUTOR_WORDS_MIN}-{TUTOR_WORDS_MAX}). The "
-                        "rest of the length brief scales with it. The web app "
-                        "sets this under 'answer length'.")
+                   help=f"How long one tutor answer must be, in words — a "
+                        f"floor, not a cap: an answer that lands under it is "
+                        f"unfinished (default: {TUTOR_WORDS_DEFAULT}, clamped "
+                        f"to {TUTOR_WORDS_MIN}-{TUTOR_WORDS_MAX}). The tutor is "
+                        "told to reach it by going deeper into the same "
+                        "question, never by padding, and to come up short "
+                        "rather than invent. The web app sets this under "
+                        "'answer length'.")
     p.add_argument("--code", nargs="?", const="", default=None, metavar="LANGUAGE",
                    help="Ground answers in real code: short snippets with the "
                         "actual function and type names, rather than prose about "

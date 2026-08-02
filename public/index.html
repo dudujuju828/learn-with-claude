@@ -1765,24 +1765,34 @@
   to dismiss one you don't care about (↩ brings them all back).</p>
   <p><b>tutor style</b> changes how the tutor answers — from highly technical
   to simple everyday words — and applies from the next turn, even mid-run.</p>
-  <p><b>answer length</b> is the hard ceiling on one answer, in words — 150
-  by default, which is what this app ran on for its whole life. Pick a
-  preset or type your own number (40–1600). The rest of the tutor's length
-  brief scales with it, so raising the ceiling really does buy longer
-  answers instead of leaving a sentence count arguing with it. It binds your
-  own custom tutors too, and 🔍 double-check is told the same number so it
-  never "corrects" an answer for being exactly as long as you asked. Below
-  the default, the risk is a thin answer; above it, a lecture — the tutor is
-  meant to answer the one question you asked, and a much longer answer is
-  often several questions at once, which is what ⤵ <b>branch</b> and
-  <b>→ next</b> exist to do properly. At the top, <b>spell it right out</b>
-  (1600 words) is for the ideas that only make sense whole: room for the
-  mechanism, the why, an example and the caveats in a single answer. It's
-  still <i>one</i> question answered, just with nothing left implicit — and
-  the tutor is told to break a long answer into more parts, so you can still
-  read it one idea at a time. The <b>concise</b> style keeps its own tighter
-  limit whatever you set. Like the tutor style, it is remembered per
-  profile.</p>
+  <p><b>answer length</b> is how long an answer must actually be — a
+  <b>floor</b>, not a cap. Set 1600 and the tutor is told that anything under
+  1600 words is unfinished. (It used to be a ceiling, which is a limit a model
+  stays comfortably clear of: asking for 1600 got you 700, and the setting
+  read as broken.) Pick a preset or type your own number (40–1600).</p>
+  <p>The interesting half is <i>how</i> it reaches the number, because a
+  length target is exactly the pressure that produces waffle. The tutor is
+  told to get there by going further into the question you actually asked —
+  the mechanism under the mechanism, a worked example carried all the way
+  through, what happens at the edges, the obvious alternative and where it
+  loses, what people reliably get wrong — and that restating, hedging,
+  summarising and "in other words" are failures however long the answer ends
+  up. Extra words go <i>deeper</i>, never <i>wider</i>: it is still one
+  question answered, which is what ⤵ <b>branch</b> and <b>→ next</b> are for.
+  And it is told to come up short rather than invent — if it doesn't have
+  1600 words of true things to say, a thin answer costs you far less than a
+  padded-out one you can't tell from the real thing. And because asking
+  politely isn't enough on its own, the server <i>counts</i> the answer too:
+  one materially short of the number goes back once with the shortfall named
+  (an extra call, only when it happens, and the first answer stands if the
+  retry doesn't beat it).</p>
+  <p>A longer setting also arrives split into more labelled parts, so it
+  still reads one idea at a time. It binds your own custom tutors, and
+  🔍 double-check is told the same number — it may cut genuine padding, but
+  it is explicitly forbidden from <i>extending</i> a short answer, since
+  writing the missing material would make the checker the tutor. The
+  <b>concise</b> style overrides all of this and keeps its own short answers.
+  Like the tutor style, it is remembered per profile.</p>
   <p><b>💻 code examples</b> — for a topic you'll actually write or read code
   for. The tutor shows the idea <i>in code</i> rather than describing what
   the code would look like: a few real lines, using the actual function and
@@ -3114,24 +3124,26 @@ function levelHint(){
     : `how much the simulated learner already knows — it shapes the questions it can ask.`;
 }
 
-/* how long one tutor answer may be — the hard ceiling in its brief, which
-   was a hardcoded 150 for this project's whole life and is now yours.
+/* how long one tutor answer must REACH — a floor, not a cap.
 
-   Only the ceiling is stored. Everything else in the prompt's length clause
-   (the "usually N-M words" band, the sentence count) is derived from it
-   server-side in personas.length_rule(), because a brief saying "3-6
-   sentences" under a 400-word cap is a brief arguing with itself — and a
-   model handed two limits obeys the tighter, more specific one, so the
-   setting would look broken. It rides on tutorParams(), so it reaches the sim
-   loop, your own questions, banked ones, 🧑 free turns and the custom-tutor
-   preview from one place. */
+   It was a ceiling until the obvious problem with that surfaced: a ceiling is
+   a limit a model stays comfortably clear of, so asking for 1600 words
+   reliably produced 700 and the setting read as broken. As a floor it does
+   what the label says.
+
+   Only the number is stored; everything the prompt builds around it (how to
+   reach the length without padding, how far past it counts as answering a
+   second question, how many labelled parts the answer may use) is derived
+   server-side in personas.length_rule(). It rides on tutorParams(), so it
+   reaches the sim loop, your own questions, banked ones, 🧑 free turns and
+   the custom-tutor preview from one place. */
 const ANSWER_WORDS_DEFAULT = 150, ANSWER_WORDS_MIN = 40, ANSWER_WORDS_MAX = 1600;
 const ANSWER_LENGTHS = [
-  [80,   "brief — 80 words"],
-  [150,  "standard — 150 words (default)"],
-  [300,  "fuller — 300 words"],
-  [600,  "in depth — 600 words"],
-  [1600, "spell it right out — 1600 words"],
+  [80,   "brief — 80+ words"],
+  [150,  "standard — 150+ words (default)"],
+  [300,  "fuller — 300+ words"],
+  [600,  "in depth — 600+ words"],
+  [1600, "spell it right out — 1600+ words"],
 ];
 function cleanAnswerWords(v){
   const n = Math.round(Number(v));
@@ -3147,7 +3159,7 @@ function buildLenSelect(){
   const sel = $("lensel");
   const v = answerWords();
   const opts = ANSWER_LENGTHS.slice();
-  if (!opts.some(([n]) => n === v)) opts.push([v, `custom — ${v} words`]);
+  if (!opts.some(([n]) => n === v)) opts.push([v, `custom — ${v}+ words`]);
   opts.sort((a, b) => a[0] - b[0]);
   sel.innerHTML = opts.map(([n, l]) => `<option value="${n}">${esc(l)}</option>`).join("") +
                   `<option value="__custom">＋ set a number…</option>`;
@@ -3155,23 +3167,21 @@ function buildLenSelect(){
 }
 function lenHint(){
   const n = answerWords();
-  // the caution and the reassurance are opposite halves of the same point, so
-  // only one of them is ever true for the setting you're looking at: below the
-  // default the risk is a thin answer, above it a lecture
   const note = n >= 600
-    ? `room for the mechanism, the why, an example and the caveats in one ` +
-      `answer — worth it on the ideas that only make sense whole. It's still ` +
-      `<i>one</i> question answered, just without leaving anything implicit, ` +
-      `and it arrives split into more parts so you can still read it one idea ` +
-      `at a time.`
-    : `longer isn't simply better: the tutor is meant to answer the one ` +
-      `question you asked, and a much longer answer is usually several at once.`;
+    ? `enough for the mechanism, a worked example, the edges and why the ` +
+      `obvious alternative loses — on the ideas that only make sense whole. ` +
+      `It arrives split into more parts, so it still reads one idea at a time.`
+    : `it's still <i>one</i> question answered — the extra words go deeper ` +
+      `into it, never wider.`;
   $("lenhint").innerHTML =
-    `the hard ceiling on one answer — most land well under it (around ` +
-    `${Math.round(n * 0.4)}–${Math.round(n * 0.8)} words). ${note} ` +
-    `Applies from the next turn.` +
+    `how long an answer must actually be. This is a <b>floor</b>: the tutor ` +
+    `is told an answer under ${n} words is unfinished, and to reach it by ` +
+    `going further into what you asked — the mechanism under the mechanism, a ` +
+    `worked example, the edge cases — never by padding or restating. ${note} ` +
+    `If it genuinely doesn't know ${n} words' worth of true things, it is told ` +
+    `to come up short rather than invent. Applies from the next turn.` +
     (prefs.tmode === "concise"
-      ? ` <b>concise</b> keeps its own tighter limit whatever you set here.`
+      ? ` <b>concise</b> overrides this and keeps its own short answers.`
       : "");
 }
 
@@ -3219,9 +3229,9 @@ function codeLang(){
 function tutorParams(){
   const t = currentTutor();
   const style = t ? {mode: "balanced", custom_style: t.style} : {mode: prefs.tmode};
-  // the ceiling binds a custom tutor exactly as it binds a built-in style —
+  // the length binds a custom tutor exactly as it binds a built-in style —
   // it lives in the tutor's hard rules, not in the style addendum
-  const p = {...style, max_words: answerWords()};
+  const p = {...style, target_words: answerWords()};
   // 💻 orthogonal to the style rather than one of them: you can want the three
   // lines that show the lock being taken in any voice at all
   if (prefs.code) Object.assign(p, {code: true, code_language: codeLang()});
@@ -3287,7 +3297,7 @@ async function tryTutor(){
     // an answer it will never actually write
     const r = await api("tutor", {kind: "root", turns: [], action: q,
                                   custom_style: style.slice(0, 4000),
-                                  max_words: answerWords(),
+                                  target_words: answerWords(),
                                   ...(prefs.code ? {code: true, code_language: codeLang()} : {})});
     box.innerHTML = `<div class="who">${ico("📘")}${esc(oneLine(q, 60))} · ${fmtCost(r.cost)}</div>` +
                     tutorBodyHtml({tutor: r.tutor, parts: r.parts});

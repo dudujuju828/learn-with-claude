@@ -5,6 +5,95 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 61 — answer length becomes a floor, not a ceiling
+
+*(user-requested: "the explanation length should be forced. It must reach AT
+LEAST that many words (if I put 1600 - it should reach 1600)".)*
+
+Feature 59 made the number settable but left it a **ceiling**, and a ceiling
+is a limit a model stays comfortably clear of. The brief said "usually 40-80%
+of it", so asking for 1600 words reliably produced 700 and the setting read as
+broken. It is now a floor: an answer under the number is unfinished.
+
+**A floor is by far the more dangerous of the two instruments, and the clause
+is built around that.** Told to write 1600 words about something it knows 300
+words about, a model pads, restates, hedges — and then invents, which is the
+failure that actually costs the reader something. So `length_rule()` grew from
+one bullet to three, and the proportions are the whole design:
+
+1. **the floor**, plus an upper bound at 1.5× (past which you have started
+   answering a second question, so "at least" doesn't become "as long as you
+   like");
+2. **how to reach it**, which is most of the text — go further into the SAME
+   question, with five named directions to go (the mechanism under the
+   mechanism, a worked example carried through with real values, the edges,
+   the obvious alternative and where it loses, what people reliably get
+   wrong) — and an explicit list of what doesn't count: restating, hedging,
+   summarising, "in other words", announcing what you are about to explain;
+3. **permission to come up short rather than invent.** Not an escape hatch
+   for laziness — the same rule that stops ⚡ facts making up numbers and 🖼
+   illustrate drawing decoration. A thin answer costs the reader a little; a
+   padded-out invented one costs them far more, and they cannot tell it from
+   the real thing, which is the asymmetry this whole app is arranged around.
+
+**Wording alone does not get there, and measuring said so.** Run against a
+real model, the floor clause on its own produced **992 words for a 1600
+target** — 62% — because a model regresses toward whatever it considers the
+question's natural length, and no amount of "AT LEAST" moves it far. Worse,
+a purely one-sided floor *overshot* badly at the small end: 150 became 367.
+Two fixes, both from that measurement:
+
+- **The number is given as a band and in paragraphs.** `write between 1600
+  and 2400 words … about 80-120 short paragraphs`. The band binds the top end
+  the one-sided version didn't, and the paragraph count is the part that
+  actually helps: because the layout rule already puts one sentence per
+  paragraph, paragraphs are something a writer can *steer by*, where a word
+  count is something they discover they have missed.
+- **The server counts what came back and asks once more.** `prose_words()`
+  (fenced code excluded — it is outside the length rule, so three lines of
+  Python must not satisfy a 600-word floor) against `LENGTH_SHORTFALL = 0.85`;
+  under that, `extend_answer()` sends the draft back with the shortfall named.
+  It asks for the WHOLE answer again rather than a continuation, because an
+  appended block re-introduces itself and breaks the `[tag]` markup down the
+  middle. One extra call, only when it fires; the original stands if the
+  retry fails or comes back no longer; and it runs *before* the review, so 🔍
+  double-check reads the answer the reader will actually see.
+
+**Two other hard rules had been written against a ceiling and had to go.**
+*"If the honest answer is finished in three sentences, stop at three"* is
+directly opposed to a floor and is now *"Going DEEPER into the question you
+were given is always right; going WIDER than it never is"* — which keeps the
+scope discipline (the actual point of that bullet) while pointing the extra
+words somewhere legitimate. And *"pick the one the learner asked for"* gained
+*"take it all the way down"*.
+
+**`concise` becomes the one style that moves the target**, via
+`effective_words()`. Its entire content is brevity, so leaving it beside a
+1600-word floor produced a prompt containing both "at most 35 words" and "at
+least 1600" — unsatisfiable, and a model resolves that by guessing which half
+you meant. Picking concise now pins the whole brief to 35.
+
+**The reviewer gets the number, and one instruction about it it didn't need
+before:** it may cut genuine padding, but an answer that falls *short* is
+explicitly **not its to extend**. Writing the missing material would make the
+checker the tutor — and what it invented to fill the gap is precisely what
+nobody would be left to check. (Mechanically it would have failed anyway:
+`REVIEW_GROWTH` refuses a rewrite 1.8× the original, so an 8× expansion would
+be discarded and the turn would lose its badge for no reason.)
+
+**`max_words` → `target_words` everywhere**, because a name saying "max" on a
+minimum is how the next person introduces a bug. `handle_tutor()` still reads
+the old field as a fallback: a page served from the service worker's cache is
+still sending it. Token budgets moved from `+4×` to `+8×` the number, since
+answers now genuinely land near it rather than at half of it.
+
+**This changes the default.** At 150 the tutor used to land at 60-120 words
+and now lands at 150+. That is the consistent reading of a setting labelled
+"150 words", and *brief — 80+ words* is roughly where the old default sat for
+anyone who wants it back.
+
+---
+
 ## Feature 60 — 💻 code examples: show it, don't describe it
 
 *(user-requested: "a sort of 'programming' type flag — that you turn on/off

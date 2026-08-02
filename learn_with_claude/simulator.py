@@ -194,7 +194,7 @@ def run_conversation(
     level: str = "student",
     timeout: int = 300,
     double_check: bool = False,
-    max_words: int = TUTOR_WORDS_DEFAULT,
+    target_words: int = TUTOR_WORDS_DEFAULT,
     code: bool = False,
     code_language: str = "",
     renderer: Renderer | None = None,
@@ -211,7 +211,8 @@ def run_conversation(
     `double_check` (🔍) sends each tutor reply to a reviewer before it is
     printed or recorded. It costs a third model call per turn.
 
-    `max_words` is the hard ceiling on one tutor answer (`--answer-words`),
+    `target_words` is the length one tutor answer must reach
+    (`--answer-words`),
     and `code` (💻, `--code`) asks for answers grounded in real snippets.
     Both reach the reviewer unchanged: it enforces the tutor's brief, so one
     holding a deliberately long answer to the default — or reading a snippet
@@ -227,7 +228,7 @@ def run_conversation(
         exclude_dynamic=True,
         timeout=timeout,
     )
-    tutor_prompt = tutor_system(max_words=max_words, code=code,
+    tutor_prompt = tutor_system(target_words=target_words, code=code,
                                 code_language=code_language)
     if tutor_extra_system:
         tutor_prompt += f"\n\n{tutor_extra_system}"
@@ -250,7 +251,7 @@ def run_conversation(
     def double_checked(question: str, answer: str) -> tuple:
         nonlocal review_cost
         session = ClaudeSession(
-            system_prompt=review_system(max_words=max_words, code=code,
+            system_prompt=review_system(target_words=target_words, code=code,
                                         code_language=code_language),
             model=tutor_model,
             effort=effort,

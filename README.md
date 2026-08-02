@@ -108,21 +108,34 @@ directly (a local `claude` login can't run on a server), so it needs an
   (the original terse style), applied from the next turn — or write your own
   **custom tutor** (name + how it should answer, with a try-before-saving
   preview), which syncs across devices like the trees and keeps the base
-  rules in force. Under it, **answer length** sets the hard ceiling on one
-  answer in words — 150 by default, the figure this app ran on for its whole
-  life, with presets from *brief* (80) up to **spell it right out** (1600),
-  or any number you type (40–1600). Only the ceiling is stored: the rest of
-  the tutor's length brief (the "usually N–M words" band, the sentence
-  count, and how many labelled parts a reply may be split into) is derived
-  from it, because a brief saying "3–6 sentences" under a 400-word cap is a
-  brief arguing with itself and the model would obey the tighter half. The
-  top setting is for the ideas that only make sense whole — the mechanism,
-  the why, an example and the caveats in one answer — and it is still *one*
-  question answered, just with nothing left implicit; a longer answer also
-  comes back in more parts, so it still reads one idea at a time. It binds
-  custom tutors too, and 🔍 double-check is handed the same number so it
-  never "corrects" a reply for being exactly as long as you asked for.
-  Remembered per profile, like the style.
+  rules in force. Under it, **answer length** sets how long an answer must
+  actually be — a **floor**, not a cap: set 1600 and the tutor is told that
+  anything under 1600 words is unfinished. (It was a ceiling at first, which
+  is a limit a model stays comfortably clear of; asking for 1600 got you 700
+  and the setting read as broken.) Presets run from *brief* (80+) to **spell
+  it right out** (1600+), or type any number (40–1600). The interesting half
+  is *how* it gets there, since a length target is exactly the pressure that
+  produces waffle: the tutor is told to reach it by going further into the
+  question you actually asked — the mechanism under the mechanism, a worked
+  example carried all the way through, what happens at the edges, the obvious
+  alternative and where it loses, what people reliably get wrong — and that
+  restating, hedging and "in other words" are failures however long the
+  answer ends up. Extra words go *deeper*, never *wider*; it is still one
+  question answered, which is what ⤵ branch and → next are for. And it is
+  told to come up **short rather than invent**: a thin answer costs you a
+  little, a padded-out invented one costs you far more and you can't tell it
+  from the real thing. Wording alone doesn't make a floor bind — a 1600-word
+  floor asked for politely came back at 992 — so the server also *counts* the
+  prose it got (fenced code doesn't count toward it) and, when an answer is
+  materially short, sends it back once with the shortfall named. One extra
+  call, only when it fires, and the first answer stands if the retry doesn't
+  improve on it. A longer setting also arrives split into more labelled
+  parts, so it still reads one idea at a time. It binds custom tutors, and
+  🔍 double-check is handed the same number — it may cut genuine padding, but
+  it is explicitly forbidden from *extending* a short answer, since writing
+  the missing material would make the checker the tutor. **concise**
+  overrides the whole thing and keeps its own short replies. Remembered per
+  profile, like the style.
   Beside them, **💻 code examples** is for a topic you will actually write or
   read code for: the tutor shows the idea *in code* rather than describing
   what the code would look like — a few real lines using the actual function
@@ -749,7 +762,7 @@ knowledge/                    # your saved trees (*.know.json) + exported markdo
 | `--learner-model` / `--tutor-model` | = `--model` | per-persona override |
 | `--effort` | `xhigh` | reasoning effort for both personas (`low`…`max`) |
 | `--double-check` | off | read every tutor answer back before showing it — wrong claims, misleading wording, broken rules. Corrections are printed and saved with what it said first. A third model call per turn. |
-| `--answer-words` | `150` | hard ceiling on one tutor answer, in words (40–1600). The rest of the length brief scales with it; the reviewer gets the same number. The web app sets this under *answer length*. |
+| `--answer-words` | `150` | how long one tutor answer must be, in words (40–1600) — a **floor**: an answer under it is unfinished. The tutor is told to reach it by going deeper into the same question, never by padding, and to come up short rather than invent. The reviewer gets the same number. The web app sets this under *answer length*. |
 | `--code [LANG]` | off | 💻 ground answers in real code — short snippets with the actual names, not prose about what the code would look like. `--code python` pins the language; bare `--code` lets the question decide. |
 | `-d, --dir` | `knowledge` | knowledge directory |
 | `--width` | `66` | terminal wrap width (dyslexia-friendly short measure) |

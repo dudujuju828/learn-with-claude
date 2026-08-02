@@ -42,11 +42,12 @@ from .personas import (
     TUTOR_MODES,
     branch_learner_message,
     branch_tutor_context,
-    clean_max_words,
+    clean_target_words,
     deepen_learner_message,
     deepen_tutor_context,
     define_message,
     exam_message,
+    extend_message,
     feedback_message,
     first_learner_message,
     followup_learner_message,
@@ -72,7 +73,7 @@ from .personas import (
     teachback_message,
     tutor_system,
 )
-from .render import space_sentences
+from .render import _CODE_FENCE, space_sentences
 from .simulator import clean_term, extract_turn, first_json_object, review_result
 
 
@@ -277,18 +278,20 @@ REVIEW_EFFORT = "medium"
 REVIEW_MAX_TOKENS = 8000
 
 
-def _answer_tokens(max_words: int, floor: int) -> int:
+def _answer_tokens(target_words: int, floor: int) -> int:
     """A token budget that leaves room to write the answer out in full.
 
-    Both the tutor and the reviewer emit up to `max_words` of prose — the
-    reviewer because a repair is the WHOLE corrected reply, not a diff — on
-    top of whatever reasoning they do. At the 150-word default both budgets
-    were already many times what an answer needs, so this returns the old
-    constant unchanged and only bites at the long end, where a truncated
-    answer (or a repair cut off mid-sentence, which review_result would then
-    have to refuse) is a real failure.
+    Both the tutor and the reviewer emit `target_words` of prose or more —
+    the reviewer because a repair is the WHOLE corrected reply, not a diff —
+    on top of whatever reasoning they do. Now that the number is a floor
+    rather than a ceiling, answers really do land near it, so the slack has to
+    be real. At the 150-word default both budgets were already many times what
+    an answer needs, so this returns the old constant unchanged and only bites
+    at the long end, where a truncated answer (or a repair cut off
+    mid-sentence, which review_result would then have to refuse) is a real
+    failure.
     """
-    return max(floor, 6000 + max_words * 4)
+    return max(floor, 6000 + target_words * 8)
 
 
 def review_context(body: dict) -> str:
@@ -312,16 +315,16 @@ def review_context(body: dict) -> str:
 
 
 def review_answer(body: dict, action: str, answer: str, call_model,
-                  mode: str, custom: "str | None", max_words: int,
+                  mode: str, custom: "str | None", target_words: int,
                   code: bool, code_language: str) -> tuple:
     """Second pass over one tutor reply. Returns (text, checked, cost).
 
     Everything shaping the tutor's brief has to reach here unchanged: the
-    reviewer's "contract" defect kind covers going past the length ceiling and
-    answering more than was asked. A reviewer left on the default 150 would
-    "repair" a deliberately long answer, and one that was never told 💻 code
-    examples are wanted reads a snippet as padding and cuts it — in both cases
-    undoing exactly what the reader turned on.
+    reviewer's "contract" defect kind covers a length well outside the brief
+    and answering more than was asked. A reviewer left on the default 150
+    would "repair" a deliberately long answer, and one that was never told 💻
+    code examples are wanted reads a snippet as padding and cuts it — in both
+    cases undoing exactly what the reader turned on.
     """
     message = review_message(
         action, answer, review_context(body), source_of(body),
@@ -329,11 +332,11 @@ def review_answer(body: dict, action: str, answer: str, call_model,
     try:
         text, cost = call_model(
             review_system(mode=mode, custom_style=custom, segments=True,
-                          max_words=max_words, code=code,
+                          target_words=target_words, code=code,
                           code_language=code_language),
             [{"role": "user", "content": message}], "reviewer",
             effort=REVIEW_EFFORT,
-            max_tokens=_answer_tokens(max_words, REVIEW_MAX_TOKENS),
+            max_tokens=_answer_tokens(target_words, REVIEW_MAX_TOKENS),
         )
     except ApiError:
         # The answer is already written and already paid for. A checker that
@@ -342,6 +345,49 @@ def review_answer(body: dict, action: str, answer: str, call_model,
         return answer, None, 0.0
     shown, checked = review_result(first_json_object(text), answer)
     return shown, checked, cost
+
+
+# --------------------------------------------------------------------------- #
+# Making the length floor bind. See extend_message() in personas.py for why
+# wording alone doesn't: a model handed a 1600-word floor writes about 1000
+# and stops, so the server measures what came back and asks once more.
+# --------------------------------------------------------------------------- #
+# How far under the floor is worth a second call. Not 1.0: an answer at 92% of
+# the number is finished by any reading, and paying for another whole call to
+# buy eighty words would be a poor trade for the reader.
+LENGTH_SHORTFALL = 0.85
+
+
+def prose_words(text: str) -> int:
+    """Words of PROSE — fenced code blocks don't count.
+
+    They are outside the length rule by design (see the 💻 clause), so
+    counting them would let three lines of Python satisfy a 600-word floor.
+    """
+    parts = _CODE_FENCE.split(text or "")
+    return sum(len(parts[i].split()) for i in range(0, len(parts), 2))
+
+
+def extend_answer(system: str, messages: list, draft: str, target: int,
+                  call_model) -> tuple:
+    """One more pass at an answer that came up short. Returns (text, cost).
+
+    Degrades to the draft on anything unexpected — a failed call, or a second
+    attempt that isn't actually longer. The reader has a complete answer
+    either way; the only thing at stake is whether it reaches the length they
+    asked for, and a shorter or broken retry is not worth taking it away for.
+    """
+    got = prose_words(draft)
+    convo = messages + [
+        {"role": "assistant", "content": draft},
+        {"role": "user", "content": extend_message(target, got)},
+    ]
+    try:
+        text, cost = call_model(system, convo, "tutor",
+                                max_tokens=_answer_tokens(target, 16000))
+    except ApiError:
+        return draft, 0.0
+    return (text if prose_words(text) > got else draft), cost
 
 
 def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict:
@@ -356,14 +402,18 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
         custom = None
     elif len(custom) > 4000:
         custom = custom[:4000]
-    # the reader's answer-length setting; absent or junk falls back to the
-    # 150-word ceiling this has always used
-    max_words = clean_max_words(body.get("max_words"))
+    # the reader's answer-length setting — the length an answer must REACH.
+    # "max_words" is the name this field had while it was a ceiling; a page
+    # served from the service worker's cache may still be sending it.
+    raw_words = body.get("target_words")
+    if raw_words is None:
+        raw_words = body.get("max_words")
+    target_words = clean_target_words(raw_words)
     # 💻 code examples, and optionally the language they want them in
     code = bool(body.get("code"))
     code_language = " ".join(str(body.get("code_language") or "").split())[:40]
     system = tutor_system(mode=mode, custom_style=custom, segments=True,
-                          grounding=grounding, max_words=max_words,
+                          grounding=grounding, target_words=target_words,
                           code=code, code_language=code_language)
     extra = tutor_extra_context(body)
     if extra:
@@ -375,12 +425,20 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
             messages.append({"role": "assistant", "content": t["tutor"]})
     messages.append({"role": "user", "content": action})
     text, cost = call_model(system, messages, "tutor",
-                            max_tokens=_answer_tokens(max_words, 16000))
+                            max_tokens=_answer_tokens(target_words, 16000))
+
+    # the floor, actually enforced. Before the review, so 🔍 double-check reads
+    # the answer the reader will see rather than a draft that is about to be
+    # replaced — and so the two never fight over the same text.
+    if prose_words(text) < target_words * LENGTH_SHORTFALL:
+        text, extend_cost = extend_answer(system, messages, text, target_words,
+                                          call_model)
+        cost += extend_cost   # one turn, one bill
 
     checked = None
     if body.get("double_check"):
         text, checked, review_cost = review_answer(
-            body, action, text, call_model, mode, custom, max_words,
+            body, action, text, call_model, mode, custom, target_words,
             code, code_language,
         )
         # one turn, one bill: the header stays honest about what was spent
