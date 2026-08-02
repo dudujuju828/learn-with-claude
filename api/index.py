@@ -12,10 +12,16 @@ every request well under the function time limit and the server stateless.
 
 Env vars:
   APP_PASSWORD       required — the login password
-  ANTHROPIC_API_KEY  required — picked up by the anthropic SDK
+  LEARN_PROVIDER     "anthropic" (default) or "deepseek" — which API answers
+  ANTHROPIC_API_KEY  required for the anthropic provider
+  DEEPSEEK_API_KEY   required for the deepseek provider
   LEARN_LEARNER_MODEL / LEARN_TUTOR_MODEL   default claude-sonnet-5
-  LEARN_EFFORT       default xhigh
+  LEARN_EFFORT       default xhigh (anthropic only — DeepSeek has no equivalent)
   LEARN_MAX_TURNS    default 20
+
+The provider is a switch rather than a rewrite: both transports satisfy the
+same call_model() contract webapi.model_routes() expects, so every route,
+prompt and cost display works either way and flipping back is one env var.
 """
 
 from __future__ import annotations
@@ -31,7 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from learn_with_claude import gemini_images  # noqa: E402
+from learn_with_claude import deepseek_backend, gemini_images  # noqa: E402
 from learn_with_claude.personas import LEARNER_LEVELS, TUTOR_MODES  # noqa: E402
 from learn_with_claude.webapi import (  # noqa: E402
     ApiError,
@@ -39,7 +45,15 @@ from learn_with_claude.webapi import (  # noqa: E402
     split_tutor_parts,  # noqa: F401  (re-export; tests import it from here)
 )
 
-import anthropic  # noqa: E402
+PROVIDER = os.environ.get("LEARN_PROVIDER", "anthropic").strip().lower()
+USING_DEEPSEEK = PROVIDER == "deepseek"
+
+# The SDK is the package's only third-party dependency and it is imported for
+# one provider. On DeepSeek (stdlib urllib) a missing or broken install must
+# not take the deployment down with it.
+anthropic = None
+if not USING_DEEPSEEK:
+    import anthropic  # noqa: E402
 
 LEARNER_MODEL = os.environ.get("LEARN_LEARNER_MODEL", "claude-sonnet-5")
 TUTOR_MODEL = os.environ.get("LEARN_TUTOR_MODEL", "claude-sonnet-5")
@@ -81,7 +95,7 @@ PRICES = [
     ("claude-haiku", (1.0, 5.0)),
 ]
 
-_client = anthropic.Anthropic(timeout=280.0, max_retries=1)
+_client = anthropic.Anthropic(timeout=280.0, max_retries=1) if anthropic else None
 
 
 # --------------------------------------------------------------------------- #
@@ -142,6 +156,12 @@ def call_model(
     system: str, messages: list, role: str,
     effort: "str | None" = None, max_tokens: int = 16000,
 ) -> tuple[str, float]:
+    if USING_DEEPSEEK:
+        try:
+            return deepseek_backend.call_model(system, messages, role,
+                                               effort=effort, max_tokens=max_tokens)
+        except deepseek_backend.DeepSeekError as exc:
+            raise ApiError(str(exc), exc.status) from exc
     model = ROLE_MODELS.get(role, TUTOR_MODEL)
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise ApiError(
@@ -187,10 +207,16 @@ def handle_login(body: dict) -> tuple[dict, str]:
 
 
 def handle_config() -> dict:
+    # the model names travel to the browser, where they land in the per-node
+    # chips and the cost tooltip — so they have to name the model that
+    # actually answered, not the one this file defaults to
     return {
-        "learner_model": LEARNER_MODEL,
-        "tutor_model": TUTOR_MODEL,
-        "effort": EFFORT,
+        "provider": PROVIDER,
+        "learner_model": (deepseek_backend.model_for("learner") if USING_DEEPSEEK
+                          else LEARNER_MODEL),
+        "tutor_model": (deepseek_backend.model_for("tutor") if USING_DEEPSEEK
+                        else TUTOR_MODEL),
+        "effort": "" if USING_DEEPSEEK else EFFORT,
         "max_turns": MAX_TURNS,
         "modes": list(TUTOR_MODES),
         "levels": list(LEARNER_LEVELS),

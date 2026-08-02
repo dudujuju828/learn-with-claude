@@ -5,6 +5,47 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 62 — DeepSeek as a second provider
+
+*(user-requested: the Anthropic bill had run out, and a per-turn cost roughly
+twenty times lower is the whole point.)*
+
+`LEARN_PROVIDER` picks which API answers — `anthropic` (default) or
+`deepseek`. Production now runs the latter on `deepseek-v4-flash`; measured
+end to end on a real turn, **$0.003 against ~$0.055** for the same question.
+
+**A switch, not a fork, and that was the only design decision worth making.**
+Both transports satisfy the same `call_model(system, messages, role, effort,
+max_tokens) -> (text, cost)` contract that `model_routes()` already expected,
+so every route, every prompt, the length floor and its top-up pass, the
+double-check reviewer, the cost display and all 57 tests work unchanged. The
+temptation was a per-provider branch inside the handlers; that would have
+doubled the surface where a feature can work on one provider and not the
+other. `ANTHROPIC_API_KEY` is deliberately left in place, so flipping back is
+one env var and no redeploy of anything but config.
+
+`deepseek_backend.py` is **stdlib `urllib`**, like `gemini_images.py` and for
+the same reason: the package stays dependency-free. The `anthropic` SDK — its
+one third-party import — is now imported *only* when that provider is
+selected, so a broken install can't take the deployment down while it isn't
+even being used.
+
+Three small conversions. DeepSeek speaks OpenAI's shape, so the separate
+`system` becomes the first message. `effort` is an Anthropic reasoning-budget
+knob with no equivalent, so it is accepted and dropped rather than forwarded
+as something the API would reject. And cost comes from DeepSeek's own
+cache-hit/miss split, at rates that are **env-overridable**
+(`LEARN_DEEPSEEK_PRICE_IN` / `_OUT` / `_CACHED`) precisely because they are the
+one thing here that can go stale without failing loudly — a wrong rate shows a
+wrong number in the header rather than breaking anything.
+
+Per-role overrides (`LEARN_DEEPSEEK_<ROLE>_MODEL`) survive, so the two
+judgement calls that used to justify opus — the examiner and the fact list —
+can be put back on `deepseek-v4-pro` without moving the whole conversation up
+with them.
+
+---
+
 ## Feature 61 — answer length becomes a floor, not a ceiling
 
 *(user-requested: "the explanation length should be forced. It must reach AT

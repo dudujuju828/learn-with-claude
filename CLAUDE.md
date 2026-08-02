@@ -35,6 +35,15 @@ Adding a route means three things, and the third is easy to forget:
 3. **the route name added to `vercel.json`'s rewrite list** — miss this and it
    works locally and 404s in production
 
+**Which API answers is `LEARN_PROVIDER`** (`anthropic` default, `deepseek`).
+Both transports satisfy the same `call_model()` contract, so every route,
+prompt, cost display and test works either way and flipping back is one env
+var — never fork a handler per provider. `deepseek_backend.py` is stdlib
+`urllib` like `gemini_images.py`, so the package stays dependency-free; the
+`anthropic` SDK is imported *only* when that provider is selected. DeepSeek
+speaks OpenAI's shape, so the system prompt becomes the first message, and
+`effort` (an Anthropic reasoning knob) is accepted and dropped.
+
 `call_model(system, messages, role, …)`'s `role` picks the model per backend:
 `learner` / `tutor` / `glossary` / `examiner` / `facts` / `reviewer`. Hosted
 maps them in `api/index.py`'s `ROLE_MODELS` (examiner and facts →
@@ -204,7 +213,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 56 tests
+python -m pytest -q                     # 57 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

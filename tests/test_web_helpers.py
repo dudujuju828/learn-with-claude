@@ -5,6 +5,7 @@ Run with:  python tests/test_web_helpers.py
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -1761,6 +1762,123 @@ def test_length_topup():
     print("ok  length top-up (fires on a real shortfall, degrades safely, bills once)")
 
 
+def test_deepseek_backend():
+    """DeepSeek as an alternative transport.
+
+    It satisfies the same call_model() contract as the Anthropic path, which
+    is the whole reason every route, prompt and cost display works either way
+    — so what matters here is the conversion (Anthropic's separate `system`
+    becomes OpenAI's first message) and that failures arrive as something
+    webapi can turn into a real status code rather than a 500.
+    """
+    import io
+    import urllib.error
+    from unittest import mock
+
+    from learn_with_claude import deepseek_backend as ds
+
+    def fake(payload, status=200, body=None):
+        """Stand in for one HTTP round trip. Returns (result, captured request)."""
+        seen = {}
+
+        class Resp:
+            def read(self):
+                return json.dumps(payload).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def urlopen(req, timeout=None):
+            seen["url"] = req.full_url
+            seen["headers"] = dict(req.headers)
+            seen["body"] = json.loads(req.data.decode())
+            seen["timeout"] = timeout
+            if status != 200:
+                raise urllib.error.HTTPError(
+                    req.full_url, status, "err", {},
+                    io.BytesIO(json.dumps(body or {}).encode()))
+            return Resp()
+
+        return urlopen, seen
+
+    reply = {"choices": [{"message": {"content": "  An answer.  "},
+                          "finish_reason": "stop"}],
+             "usage": {"prompt_tokens": 1000, "prompt_cache_hit_tokens": 400,
+                       "prompt_cache_miss_tokens": 600, "completion_tokens": 200}}
+
+    with mock.patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-test"}, clear=False):
+        urlopen, seen = fake(reply)
+        with mock.patch("urllib.request.urlopen", urlopen):
+            text, cost = ds.call_model("SYS", [{"role": "user", "content": "q"}],
+                                       "tutor", effort="xhigh", max_tokens=9000)
+        assert text == "An answer."                     # stripped
+        # the system prompt becomes the FIRST message, ahead of the history
+        assert seen["body"]["messages"] == [
+            {"role": "system", "content": "SYS"},
+            {"role": "user", "content": "q"},
+        ]
+        assert seen["body"]["model"] == "deepseek-v4-flash"
+        assert seen["body"]["max_tokens"] == 9000 and seen["body"]["stream"] is False
+        # `effort` is an Anthropic reasoning knob with no equivalent — accepted
+        # and dropped, never forwarded as something DeepSeek would reject
+        assert "effort" not in seen["body"] and "output_config" not in seen["body"]
+        assert seen["headers"]["Authorization"] == "Bearer sk-test"
+        # cache hits are billed separately, so they can't be counted as fresh
+        want = (600 * ds.PRICE_IN + 400 * ds.PRICE_CACHED
+                + 200 * ds.PRICE_OUT) / 1e6
+        assert abs(cost - want) < 1e-12
+        # …and a reply that omits the split still costs something sane
+        assert ds.usage_cost({"prompt_tokens": 100, "completion_tokens": 0}) > 0
+        assert ds.usage_cost(None) == 0.0
+
+        # per-role override, so the examiner can be raised without moving the
+        # whole conversation up with it
+        with mock.patch.dict(os.environ, {"LEARN_DEEPSEEK_EXAMINER_MODEL": "deepseek-v4-pro"}):
+            assert ds.model_for("examiner") == "deepseek-v4-pro"
+            assert ds.model_for("tutor") == "deepseek-v4-flash"
+
+        # failures carry a status webapi can hand back as itself
+        for code, expect_status, needle in (
+            (401, 500, "invalid"), (402, 402, "credit"), (429, 429, "rate limited"),
+            (500, 502, "DeepSeek API error 500"),
+        ):
+            urlopen, _ = fake({}, status=code, body={"error": {"message": "boom"}})
+            with mock.patch("urllib.request.urlopen", urlopen):
+                try:
+                    ds.call_model("s", [], "tutor")
+                except ds.DeepSeekError as exc:
+                    assert exc.status == expect_status, (code, exc.status)
+                    assert needle in str(exc), (code, str(exc))
+                else:
+                    raise AssertionError(f"{code} did not raise")
+
+        # an answer truncated to nothing is a real failure mode at long
+        # answer lengths, and "" is not a useful thing to show a reader
+        urlopen, _ = fake({"choices": [{"message": {"content": ""},
+                                        "finish_reason": "length"}]})
+        with mock.patch("urllib.request.urlopen", urlopen):
+            try:
+                ds.call_model("s", [], "tutor")
+            except ds.DeepSeekError as exc:
+                assert "token limit" in str(exc)
+            else:
+                raise AssertionError("empty answer did not raise")
+
+    # no key → a message that says what to do about it, not a stack trace
+    with mock.patch.dict(os.environ, {"DEEPSEEK_API_KEY": ""}, clear=False):
+        assert not ds.available()
+        try:
+            ds.call_model("s", [], "tutor")
+        except ds.DeepSeekError as exc:
+            assert exc.status == 500 and "vercel env add" in str(exc)
+        else:
+            raise AssertionError("missing key did not raise")
+    print("ok  deepseek backend (message shape, cost, per-role models, failures)")
+
+
 def test_code_examples():
     """💻 code examples — a switch on top of a style, not one of them.
 
@@ -1970,4 +2088,5 @@ if __name__ == "__main__":
     test_answer_length()
     test_length_topup()
     test_code_examples()
+    test_deepseek_backend()
     print("\nall green")

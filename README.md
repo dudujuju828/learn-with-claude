@@ -57,13 +57,24 @@ environment variable.
 The same learner↔tutor loop as a password-protected web app — open a link on
 any device, log in, and grow trees. Prompts, models (`claude-sonnet-5` @
 `xhigh`), loop semantics, and the `.know.json` format are identical to the
-CLI; the only difference is that the server calls the Anthropic **API**
-directly (a local `claude` login can't run on a server), so it needs an
-`ANTHROPIC_API_KEY` and bills per token at the same ~$0.05–0.07/turn.
+CLI; the only difference is that the server calls a model **API** directly (a
+local `claude` login can't run on a server), so it needs a key and bills per
+token — ~$0.05–0.07/turn on Anthropic, or about a twentieth of that with
+`LEARN_PROVIDER=deepseek` (below).
 
 - `api/index.py` — stateless backend: login (HMAC cookie from `APP_PASSWORD`),
   one endpoint per model step; imports `personas.py` / `knowledge.py` /
-  `render.py` / `simulator.py` unchanged. Roles map to models here: the
+  `render.py` / `simulator.py` unchanged. **`LEARN_PROVIDER`** picks which API
+  answers — `anthropic` (default) or `deepseek`, which needs a
+  `DEEPSEEK_API_KEY` and runs every role on `deepseek-v4-flash` (override per
+  role with `LEARN_DEEPSEEK_<ROLE>_MODEL`, e.g. to put the examiner back on
+  `deepseek-v4-pro`). It is a switch, not a fork: both transports satisfy the
+  same `call_model()` contract, so every route, prompt and cost display works
+  either way and flipping back is one env var. DeepSeek runs at roughly a
+  twentieth of the per-turn cost, which is the reason to reach for it; set
+  `LEARN_DEEPSEEK_PRICE_IN` / `_OUT` / `_CACHED` (USD per million tokens) if
+  the built-in rates drift out of date and the header's `$` stops matching
+  your bill. Roles map to models here: the
   learner and tutor run on `claude-sonnet-5`, glossary definitions on a cheap
   fast model, and the **examiner** (📄 exam's paper-setter and marker) on
   `claude-opus-5` — setting a fair paper and marking essays to a scheme are
