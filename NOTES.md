@@ -5,6 +5,68 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 59 — answer length: the 150-word ceiling becomes a setting
+
+*(user-requested: "make the 150 word-count that has been hardcoded into the
+prompts into a variable that is change-able in some sort of settings".)*
+
+`TUTOR_SYSTEM` carried the line *"Usually 3-6 sentences (roughly 60-120
+words), and 150 words is a hard ceiling"* since the beginning. It is now
+`TUTOR_WORDS_DEFAULT`, moved by **answer length** in the sidebar (presets 80 /
+150 / 300 / 600, or any number 40–800) and by `--answer-words` in the CLI.
+
+**The number is not substituted on its own, and that is the whole design.**
+Dropping 400 into a sentence that still says "3-6 sentences" produces a brief
+arguing with itself — and a model handed two limits obeys the tighter, more
+specific one, so the setting would appear to do nothing. So `length_rule()`
+**derives every figure** from the ceiling: the usual band is 40–80% of it, the
+sentence counts come from that at ~20 words a sentence. At 150 this
+reproduces the original wording byte for byte, which a test asserts against
+`git show HEAD` — a settings knob that silently reworded the tutor for
+everyone who never touches it is not a settings knob. Past about eight
+sentences the count is dropped from the clause entirely and only the word band
+remains: "12-24 sentences" reads as an instruction to write twenty-four of
+them.
+
+**The reviewer gets the same number, and this was the real trap.**
+`review_system()` quotes `tutor_system()` verbatim so its *contract* defect
+kind means something — and that kind explicitly covers "well past the length
+ceiling". A reviewer still holding the default while the tutor writes to 400
+would flag, and then *rewrite*, replies that were exactly what the reader
+asked for: 🔍 double-check turned into a machine for undoing this setting. So
+`max_words` threads through `review_answer()` in both web backends and through
+`run_conversation()`'s reviewer session in the CLI.
+
+**It lives in the hard rules, not in the style**, so it binds a custom tutor
+as firmly as a built-in one — you can write your own voice without also
+inheriting an argument about length.
+
+**`concise` is the deliberate exception.** Its whole content is brevity, so it
+does *not* grow with the ceiling: picking "concise" and then asking for 600
+words is asking for two different things, and the more specific instrument
+wins. It does shrink under a ceiling tighter than itself, since a style
+permitting more than the hard rules allow is a contradiction. The hint says so
+when that style is selected, rather than leaving the picker looking broken.
+
+**Rejected: a raw number box.** Presets carry the meaning ("brief", "in
+depth") that a bare integer doesn't, and this app's controls are selects and
+toggles. **Rejected: presets only** — "changeable variable" means a number you
+can actually set, so `＋ set a number…` prompts for one and the picker then
+shows it as *custom — 225 words* rather than hiding it. **Rejected: storing it
+on the tree**, per node. Tutor style already applies from the next turn rather
+than being pinned to a conversation, and a length that varied turn by turn
+inside one transcript would be a worse artifact than one that changes when you
+change it.
+
+Stored beside the other things that describe *how you read an interest* —
+`PROFILE_SETTINGS`, so the ceiling follows the profile across devices, and one
+`tutorParams()` field so it reaches the sim loop, your own questions, banked
+ones, 🧑 free turns and the custom-tutor preview from a single place. The
+learner is deliberately **not** given it: it asks the questions, it does not
+write the answers.
+
+---
+
 ## Feature 58 — 🧑 free: the same tutor, with you asking
 
 *(user-requested: "a free-tutor version — instead of the learner asking

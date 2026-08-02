@@ -1765,6 +1765,18 @@
   to dismiss one you don't care about (↩ brings them all back).</p>
   <p><b>tutor style</b> changes how the tutor answers — from highly technical
   to simple everyday words — and applies from the next turn, even mid-run.</p>
+  <p><b>answer length</b> is the hard ceiling on one answer, in words — 150
+  by default, which is what this app ran on for its whole life. Pick a
+  preset or type your own number (40–800). The rest of the tutor's length
+  brief scales with it, so raising the ceiling really does buy longer
+  answers instead of leaving a sentence count arguing with it. It binds your
+  own custom tutors too, and 🔍 double-check is told the same number so it
+  never "corrects" an answer for being exactly as long as you asked. Longer
+  isn't simply better here: the tutor is meant to answer the one question you
+  asked, and a much longer answer is usually several questions at once —
+  which is the thing ⤵ <b>branch</b> and <b>→ next</b> exist to do properly.
+  The <b>concise</b> style keeps its own tighter limit whatever you set.
+  Like the tutor style, it is remembered per profile.</p>
   <p><b>learner</b> sets how much the simulated learner already knows, from a
   curious novice to an expert from a neighbouring field — so its questions can
   keep up with the tutor. <b>auto</b> (the default) matches the tutor style;
@@ -2130,6 +2142,12 @@
         <button id="tutoreditbtn" title="create or edit custom tutors" aria-label="create or edit custom tutors">✎</button>
       </div>
       <p class="hint">applies to the tutor's answers from the next turn on. ✎ makes your own tutor.</p>
+
+      <h2>answer length</h2>
+      <div class="newrow">
+        <select id="lensel" aria-label="answer length" style="flex:1"></select>
+      </div>
+      <p class="hint" id="lenhint"></p>
 
       <div class="newrow switchrow">
         <label for="dblbtn"><b>🔍 double-check</b></label>
@@ -2792,7 +2810,7 @@ const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
                        tmode: "balanced", think: true, llevel: "auto",
-                       dblcheck: false,
+                       dblcheck: false, awords: 150,
                        revtype: false, drill: false, drillwait: 5, examq: 5};
 /* tmode/think/llevel/dblcheck are the live values, but they belong to the
    active profile — see the profiles section, which saves and restores them
@@ -2868,6 +2886,7 @@ function applyPrefs(){
   $("levelsel").value = prefs.llevel || "auto";
   if ($("levelsel").selectedIndex < 0) $("levelsel").value = prefs.llevel = "auto";
   levelHint();
+  buildLenSelect(); lenHint();
   document.body.classList.toggle("ruler-on", prefs.ruler);
   document.body.classList.toggle("focus-on", prefs.focus);
   if (rulerActive()) refreshRuler(); else clearRuler();
@@ -2898,10 +2917,27 @@ function buildPanel(){
   $("modesel").onchange = () => {
     const v = $("modesel").value;
     if (v === "__new"){ openTutorEditor(null); return; }
-    prefs.tmode = v; savePrefs(); rememberProfileSettings(); levelHint();
+    prefs.tmode = v; savePrefs(); rememberProfileSettings(); levelHint(); lenHint();
   };
   $("levelsel").onchange = () => {
     prefs.llevel = $("levelsel").value; savePrefs(); rememberProfileSettings(); levelHint();
+  };
+  $("lensel").onchange = () => {
+    const v = $("lensel").value;
+    if (v === "__custom"){
+      const raw = prompt(
+        `at most how many words in one answer?  (${ANSWER_WORDS_MIN}–${ANSWER_WORDS_MAX})`,
+        String(answerWords()));
+      // put the picker back on the real value either way — a cancelled
+      // prompt must not leave it reading "set a number…"
+      buildLenSelect();
+      const n = raw == null ? 0 : cleanAnswerWords(raw);
+      if (!n) return;
+      prefs.awords = n;
+    } else {
+      prefs.awords = cleanAnswerWords(v) || ANSWER_WORDS_DEFAULT;
+    }
+    savePrefs(); rememberProfileSettings(); buildLenSelect(); lenHint();
   };
   // lives in the sidebar rather than the reading panel: it changes what the
   // tutor sends, not how the page renders it
@@ -3027,6 +3063,56 @@ function levelHint(){
     : `how much the simulated learner already knows — it shapes the questions it can ask.`;
 }
 
+/* how long one tutor answer may be — the hard ceiling in its brief, which
+   was a hardcoded 150 for this project's whole life and is now yours.
+
+   Only the ceiling is stored. Everything else in the prompt's length clause
+   (the "usually N-M words" band, the sentence count) is derived from it
+   server-side in personas.length_rule(), because a brief saying "3-6
+   sentences" under a 400-word cap is a brief arguing with itself — and a
+   model handed two limits obeys the tighter, more specific one, so the
+   setting would look broken. It rides on tutorParams(), so it reaches the sim
+   loop, your own questions, banked ones, 🧑 free turns and the custom-tutor
+   preview from one place. */
+const ANSWER_WORDS_DEFAULT = 150, ANSWER_WORDS_MIN = 40, ANSWER_WORDS_MAX = 800;
+const ANSWER_LENGTHS = [
+  [80,  "brief — 80 words"],
+  [150, "standard — 150 words (default)"],
+  [300, "fuller — 300 words"],
+  [600, "in depth — 600 words"],
+];
+function cleanAnswerWords(v){
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(ANSWER_WORDS_MIN, Math.min(ANSWER_WORDS_MAX, n));
+}
+function answerWords(){
+  return cleanAnswerWords(prefs.awords) || ANSWER_WORDS_DEFAULT;
+}
+/* the presets, plus whatever number you typed if it isn't one of them — so a
+   custom ceiling is visible in the picker rather than hiding behind it */
+function buildLenSelect(){
+  const sel = $("lensel");
+  const v = answerWords();
+  const opts = ANSWER_LENGTHS.slice();
+  if (!opts.some(([n]) => n === v)) opts.push([v, `custom — ${v} words`]);
+  opts.sort((a, b) => a[0] - b[0]);
+  sel.innerHTML = opts.map(([n, l]) => `<option value="${n}">${esc(l)}</option>`).join("") +
+                  `<option value="__custom">＋ set a number…</option>`;
+  sel.value = String(v);
+}
+function lenHint(){
+  const n = answerWords();
+  $("lenhint").innerHTML =
+    `the hard ceiling on one answer — most land well under it (around ` +
+    `${Math.round(n * 0.4)}–${Math.round(n * 0.8)} words). Longer isn't simply ` +
+    `better: the tutor is meant to answer the one question you asked, and a ` +
+    `much longer answer is usually several at once. Applies from the next turn.` +
+    (prefs.tmode === "concise"
+      ? ` <b>concise</b> keeps its own tighter limit whatever you set here.`
+      : "");
+}
+
 function loadTutorsDoc(){
   try {
     const d = JSON.parse(localStorage.getItem("lwc.tutors.v1"));
@@ -3068,7 +3154,10 @@ function currentTutor(){
 function tutorParams(){
   const t = currentTutor();
   const style = t ? {mode: "balanced", custom_style: t.style} : {mode: prefs.tmode};
-  return prefs.dblcheck ? {...style, double_check: true} : style;
+  // the ceiling binds a custom tutor exactly as it binds a built-in style —
+  // it lives in the tutor's hard rules, not in the style addendum
+  const p = {...style, max_words: answerWords()};
+  return prefs.dblcheck ? {...p, double_check: true} : p;
 }
 function styleName(){
   const t = currentTutor();
@@ -3125,8 +3214,12 @@ async function tryTutor(){
   box.innerHTML = `<div class="who">${ico("📘")}asking<span class="dots"></span></div>`;
   $("tutortry").disabled = true;
   try {
+    // the preview has to be the real thing, so it gets the same answer-length
+    // ceiling a real turn would — otherwise you tune a tutor against a length
+    // it will never actually write to
     const r = await api("tutor", {kind: "root", turns: [], action: q,
-                                  custom_style: style.slice(0, 4000)});
+                                  custom_style: style.slice(0, 4000),
+                                  max_words: answerWords()});
     box.innerHTML = `<div class="who">${ico("📘")}${esc(oneLine(q, 60))} · ${fmtCost(r.cost)}</div>` +
                     tutorBodyHtml({tutor: r.tutor, parts: r.parts});
   } catch (e){
@@ -4675,7 +4768,7 @@ async function syncProfilesFromServer(){
    prefs still holds the LIVE values (every reader of prefs.tmode is
    unchanged); switching profile saves the outgoing set and loads the
    incoming one. */
-const PROFILE_SETTINGS = ["tmode", "think", "llevel", "dblcheck"];
+const PROFILE_SETTINGS = ["tmode", "think", "llevel", "dblcheck", "awords"];
 function captureProfileSettings(name){
   const rec = profileRecord(name, true);
   if (!rec) return;
@@ -4687,7 +4780,7 @@ function applyProfileSettings(){
   const s = rec && rec.settings;
   if (s) for (const k of PROFILE_SETTINGS) if (k in s) prefs[k] = s[k];
   // the tutor list itself is profile-scoped, so it is rebuilt either way
-  buildModeSelect(); buildLevelSelect(); applyPrefs();
+  buildModeSelect(); buildLevelSelect(); buildLenSelect(); applyPrefs();
 }
 /* the panel changed a setting — it belongs to the profile you're in */
 function rememberProfileSettings(){
@@ -11860,9 +11953,11 @@ async function boot(){
 buildPanel();
 buildModeSelect();
 buildLevelSelect();
+buildLenSelect();
 wireLocalSettings();
-// the active profile carries its own tutor style and learner level, so the
-// panel has to be built from the profile before the prefs are applied to it
+// the active profile carries its own tutor style, learner level and answer
+// length, so the panel has to be built from the profile before the prefs
+// are applied to it
 applyProfileSettings();
 applyPrefs();
 renderAll(true);

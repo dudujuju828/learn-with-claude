@@ -214,7 +214,63 @@ CONTRACT_REMINDER = (
 )
 
 
-TUTOR_SYSTEM = """\
+# --------------------------------------------------------------------------- #
+# How long an answer may be. 150 words is the ceiling this project ran on for
+# its whole life and stays the default; the reader can move it (the web app's
+# "answer length", the CLI's --answer-words).
+#
+# The number is not dropped into the prompt on its own. Every other figure in
+# the length clause is DERIVED from it, because a brief that says "3-6
+# sentences" under a 400-word cap is a brief arguing with itself, and a model
+# handed two contradictory limits obeys the more specific one — which would be
+# the sentence count, i.e. the setting would appear to do nothing.
+#
+# Clamped rather than trusted: the value arrives from a browser preference.
+# --------------------------------------------------------------------------- #
+TUTOR_WORDS_DEFAULT = 150
+TUTOR_WORDS_MIN = 40
+TUTOR_WORDS_MAX = 800
+# roughly how many words this tutor writes per sentence — it is held to short
+# ones, so the divisor is deliberately low
+_WORDS_PER_SENTENCE = 20
+
+
+def clean_max_words(value) -> int:
+    """Any caller's answer-length setting, as a usable ceiling."""
+    try:
+        n = int(float(value))
+    except (TypeError, ValueError):
+        return TUTOR_WORDS_DEFAULT
+    return max(TUTOR_WORDS_MIN, min(TUTOR_WORDS_MAX, n))
+
+
+def length_rule(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
+    """The one bullet in the tutor's brief that says how long an answer is.
+
+    The usual band sits at 40-80% of the ceiling and the sentence counts come
+    from that. At the default 150 this reproduces the original wording exactly
+    — 3-6 sentences, roughly 60-120 words — which is the point: raising the
+    ceiling raises the whole clause with it rather than leaving three numbers
+    describing three different answers.
+    """
+    max_words = clean_max_words(max_words)
+    lo, hi = round(max_words * 0.4), round(max_words * 0.8)
+    s_lo = max(1, round(lo / _WORDS_PER_SENTENCE))
+    s_hi = max(s_lo + 1, round(hi / _WORDS_PER_SENTENCE))
+    # past a handful of sentences the count stops being the useful unit and
+    # starts reading like an instruction to write twenty-four of them
+    band = (f"{s_lo}-{s_hi} sentences (roughly {lo}-{hi} words)" if s_hi <= 8
+            else f"{lo}-{hi} words")
+    return (
+        "- Give the answer real substance: the fact itself, the why or how behind it,\n"
+        "  and a concrete example or consequence when it makes the idea click. Usually\n"
+        f"  {band}, and {max_words} words is a hard ceiling. Going\n"
+        "  over it is not thoroughness — it means you have answered more than the one\n"
+        "  question you were asked, so cut back to that one. Never pad."
+    )
+
+
+_TUTOR_SYSTEM_TMPL = """\
 You are a tutor in a live back-and-forth chat with a human learner. Your job is
 to give clear, genuinely informative answers to exactly what was asked, while
 letting the learner drive the conversation.
@@ -222,11 +278,7 @@ letting the learner drive the conversation.
 HARD RULES:
 - Answer the specific question just asked — don't lecture past it into a tour
   of the whole subject.
-- Give the answer real substance: the fact itself, the why or how behind it,
-  and a concrete example or consequence when it makes the idea click. Usually
-  3-6 sentences (roughly 60-120 words), and 150 words is a hard ceiling. Going
-  over it is not thoroughness — it means you have answered more than the one
-  question you were asked, so cut back to that one. Never pad.
+{length}
 - If you're reaching for a bulleted list of considerations, or writing "two
   things made this work", stop: that's several answers at once. Pick the one
   the learner asked for and let them ask for the next.
@@ -249,9 +301,38 @@ HARD RULES:
   together in one block. Prefer short sentences."""
 
 
+def tutor_base(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
+    """The tutor's hard rules, with the length clause rendered for `max_words`."""
+    return _TUTOR_SYSTEM_TMPL.format(length=length_rule(max_words))
+
+
+# The base rules at the default ceiling, kept as a name for older callers.
+TUTOR_SYSTEM = tutor_base()
+
+
+# The concise style's own limit. It is a deliberate choice of brevity, so it
+# does NOT grow with the ceiling — picking "concise" and then asking for 600
+# words is asking for two different things, and the more specific instrument
+# wins. It does shrink under a ceiling tighter than itself, because a style
+# addendum permitting more than the hard rules allow is a contradiction.
+CONCISE_WORDS = 35
+
+
+def concise_style(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
+    words = min(CONCISE_WORDS, clean_max_words(max_words))
+    sentences = max(1, round(words / _WORDS_PER_SENTENCE))
+    return (
+        f"STYLE — CONCISE: at most {sentences} sentence"
+        f"{'' if sentences == 1 else 's'} per reply (roughly {words} words). "
+        "One idea per\nreply, nothing more. A tiny example only if it fits in "
+        "one line."
+    )
+
+
 # Optional style addenda appended to the tutor's system prompt. "balanced" is
 # the base prompt as-is; "concise" is the original terse one-idea-per-reply
-# style this project started with.
+# style this project started with (its entry here is the default rendering —
+# tutor_system() re-renders it against the chosen ceiling).
 TUTOR_MODES = {
     "balanced": "",
     "technical": """\
@@ -268,9 +349,7 @@ you use one, say exactly where it breaks down.""",
 STYLE — SIMPLE: everyday words and friendly analogies first. Explain like you
 would to a smart friend with no background in the subject. Keep sentences
 extra short and concrete.""",
-    "concise": """\
-STYLE — CONCISE: at most 2 sentences per reply (roughly 35 words). One idea per
-reply, nothing more. A tiny example only if it fits in one line.""",
+    "concise": concise_style(),
 }
 
 
@@ -374,7 +453,8 @@ def session_memory_system(transcript: str) -> str:
 
 
 def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
-                 segments: bool = False, grounding: "str | None" = None) -> str:
+                 segments: bool = False, grounding: "str | None" = None,
+                 max_words: int = TUTOR_WORDS_DEFAULT) -> str:
     """The tutor's full system prompt: base rules, a style addendum (a built-in
     TUTOR_MODES entry, or the caller's own custom style text, which wins), and
     the tool clause. The base rules — answer what was asked, no menu endings,
@@ -382,12 +462,16 @@ def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
     UI's part-markup contract (the CLI renders plain text, so it stays off).
     `grounding` (local Copilot mode only) replaces the no-tools clause with
     local_grounding_system()'s text; omitted, the tutor is pure text with no
-    tools at all."""
+    tools at all. `max_words` is the hard ceiling on one answer — it binds a
+    custom style exactly as it binds a built-in one, since it lives in the
+    hard rules rather than in the style."""
     if custom_style and custom_style.strip():
         style = "STYLE — CUSTOM (defined by the learner's operator):\n" + custom_style.strip()
+    elif mode == "concise":
+        style = concise_style(max_words)
     else:
         style = TUTOR_MODES.get(mode) or ""
-    parts = [TUTOR_SYSTEM]
+    parts = [tutor_base(max_words)]
     if style:
         parts.append(style)
     if segments:
@@ -464,24 +548,28 @@ not just the part you changed."""
 
 
 def review_system(*, mode: str = "balanced", custom_style: "str | None" = None,
-                  segments: bool = False) -> str:
+                  segments: bool = False,
+                  max_words: int = TUTOR_WORDS_DEFAULT) -> str:
     """The reviewer's system prompt: its own job, then the tutor's brief
     verbatim.
 
     Quoting tutor_system() rather than restating it is the point — the
     reviewer's "contract" category is only meaningful if it is holding the
     reply to the *same* text the tutor was given, including the style the
-    reader picked and the [tag] markup the reading UI needs back. Restating it
-    would drift the moment either prompt changed. The grounding clause is left
-    off: which tools the tutor had is none of the reviewer's business, and it
-    has none of its own.
+    reader picked, the answer length they set, and the [tag] markup the
+    reading UI needs back. Restating it would drift the moment either prompt
+    changed, and a reviewer holding a 400-word answer to a 150-word ceiling
+    would "correct" replies that were exactly what was asked for. The
+    grounding clause is left off: which tools the tutor had is none of the
+    reviewer's business, and it has none of its own.
     """
     return "\n\n".join([
         REVIEW_JOB,
         "THE BRIEF THE TUTOR WAS WRITING TO. Every rule in it binds your "
         "rewrite too — you are enforcing this, not replacing it:",
         "<<<",
-        tutor_system(mode=mode, custom_style=custom_style, segments=segments),
+        tutor_system(mode=mode, custom_style=custom_style, segments=segments,
+                     max_words=max_words),
         ">>>",
     ])
 

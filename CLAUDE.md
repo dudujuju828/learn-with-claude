@@ -48,6 +48,21 @@ into the one `cost` the turn is billed. The review can only ever *degrade* —
 a failure or an untrustworthy verdict leaves the original answer and puts no
 `checked` field on the turn.
 
+**Anything that changes the tutor's brief has to reach the reviewer too.**
+`review_system()` quotes `tutor_system()` verbatim so its *contract* defect
+kind is enforced against the same text — which means a new argument to
+`tutor_system()` that isn't also passed to `review_system()` turns
+double-check into a machine for undoing that setting. `mode`, `custom_style`,
+`segments` and `max_words` all thread through; `grounding` deliberately does
+not (which tools the tutor had is none of the reviewer's business).
+
+The tutor's answer-length ceiling is `personas.TUTOR_WORDS_DEFAULT` (150),
+overridden per request by `max_words` on the body (web: *answer length*, per
+profile) or `--answer-words` (CLI). Only the ceiling is stored — the rest of
+the length clause is derived in `length_rule()`, because a brief saying
+"3-6 sentences" under a 400-word cap is one the model resolves by obeying the
+tighter half. Never hardcode another length figure into the tutor's prompt.
+
 `illustrate` is the one route that isn't purely `call_model`: stage one is a
 normal `tutor` call, stage two goes to Gemini through `gemini_images.py`
 (stdlib `urllib`, so the *same* module serves both backends — there is no
@@ -162,7 +177,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 53 tests
+python -m pytest -q                     # 54 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

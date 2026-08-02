@@ -42,6 +42,7 @@ from .personas import (
     TUTOR_MODES,
     branch_learner_message,
     branch_tutor_context,
+    clean_max_words,
     deepen_learner_message,
     deepen_tutor_context,
     define_message,
@@ -297,14 +298,21 @@ def review_context(body: dict) -> str:
 
 
 def review_answer(body: dict, action: str, answer: str, call_model,
-                  mode: str, custom: "str | None") -> tuple:
-    """Second pass over one tutor reply. Returns (text, checked, cost)."""
+                  mode: str, custom: "str | None", max_words: int) -> tuple:
+    """Second pass over one tutor reply. Returns (text, checked, cost).
+
+    `max_words` has to be the SAME ceiling the tutor was given: the reviewer's
+    "contract" defect kind includes "well past the length ceiling", so a
+    reviewer holding a deliberately long answer to the default 150 would
+    "repair" replies that were exactly what the reader asked for.
+    """
     message = review_message(
         action, answer, review_context(body), source_of(body),
     )
     try:
         text, cost = call_model(
-            review_system(mode=mode, custom_style=custom, segments=True),
+            review_system(mode=mode, custom_style=custom, segments=True,
+                          max_words=max_words),
             [{"role": "user", "content": message}], "reviewer",
             effort=REVIEW_EFFORT, max_tokens=REVIEW_MAX_TOKENS,
         )
@@ -329,8 +337,11 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
         custom = None
     elif len(custom) > 4000:
         custom = custom[:4000]
+    # the reader's answer-length setting; absent or junk falls back to the
+    # 150-word ceiling this has always used
+    max_words = clean_max_words(body.get("max_words"))
     system = tutor_system(mode=mode, custom_style=custom, segments=True,
-                          grounding=grounding)
+                          grounding=grounding, max_words=max_words)
     extra = tutor_extra_context(body)
     if extra:
         system += f"\n\n{extra}"
@@ -345,7 +356,7 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
     checked = None
     if body.get("double_check"):
         text, checked, review_cost = review_answer(
-            body, action, text, call_model, mode, custom,
+            body, action, text, call_model, mode, custom, max_words,
         )
         # one turn, one bill: the header stays honest about what was spent
         cost += review_cost

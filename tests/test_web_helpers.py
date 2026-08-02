@@ -1531,6 +1531,84 @@ def test_handle_tutor_double_check():
     print("ok  handle_tutor double-check (off by default, corrected text, cost, failure)")
 
 
+def test_answer_length():
+    """The tutor's word ceiling is a setting, not a constant.
+
+    Two things have to hold. The default must render byte-identically to the
+    prompt this project ran on for years — a settings knob that silently
+    reworded the tutor is not a settings knob. And the reviewer must be given
+    the SAME ceiling, since its "contract" defect kind covers going past it:
+    a reviewer holding a deliberately long answer to 150 words would "repair"
+    replies that were exactly what the reader asked for.
+    """
+    from learn_with_claude.personas import (
+        TUTOR_WORDS_DEFAULT, TUTOR_WORDS_MAX, TUTOR_WORDS_MIN, clean_max_words,
+        concise_style, length_rule, review_system, tutor_system,
+    )
+    from learn_with_claude.webapi import handle_tutor
+
+    assert TUTOR_WORDS_DEFAULT == 150
+
+    # the default clause, word for word as it always read
+    d = length_rule()
+    assert "3-6 sentences (roughly 60-120 words), and 150 words is a hard ceiling" in d
+    assert length_rule(TUTOR_WORDS_DEFAULT) == d
+    assert tutor_system() == tutor_system(max_words=TUTOR_WORDS_DEFAULT)
+
+    # every figure moves together — a brief saying "3-6 sentences" under a
+    # 400-word cap is a brief arguing with itself
+    assert "2-3 sentences (roughly 32-64 words), and 80 words is a hard ceiling" in length_rule(80)
+    assert "120-240 words, and 300 words is a hard ceiling" in length_rule(300)
+    assert "3-6 sentences" not in length_rule(300)
+    # past a handful, the sentence count stops being the useful unit
+    assert "sentences" in length_rule(200) and "sentences" not in length_rule(400)
+
+    # clamped, never trusted — it arrives from a browser preference
+    assert clean_max_words(None) == clean_max_words("junk") == TUTOR_WORDS_DEFAULT
+    assert clean_max_words(1) == TUTOR_WORDS_MIN
+    assert clean_max_words(99999) == TUTOR_WORDS_MAX
+    assert clean_max_words("300") == clean_max_words(300.4) == 300
+
+    # concise is a deliberate choice of brevity: it does NOT grow with the
+    # ceiling, but it may not exceed one tighter than itself
+    assert concise_style(600) == concise_style()
+    assert "35 words" in concise_style(600)
+    assert "roughly 40 words" not in concise_style(40)
+    assert tutor_system(mode="concise", max_words=600) != tutor_system(max_words=600)
+
+    # the ceiling binds a custom tutor too — it lives in the hard rules
+    custom = tutor_system(custom_style="speak only in haiku", max_words=400)
+    assert "400 words is a hard ceiling" in custom and "haiku" in custom
+
+    # …and the reviewer is handed the very same brief
+    for n in (80, 400):
+        assert f"{n} words is a hard ceiling" in review_system(max_words=n)
+    assert "150 words is a hard ceiling" in review_system()
+
+    # end to end through the route both web backends serve
+    seen = {}
+
+    def spy(system, messages, role, effort=None, max_tokens=16000):
+        seen[role] = system
+        if role == "reviewer":
+            return '{"verdict": "clean"}', 0.01
+        return "Short answer.", 0.02
+
+    body = {"kind": "root", "topic": "x", "turns": [], "action": "q",
+            "max_words": 400, "double_check": True}
+    handle_tutor(dict(body), spy)
+    assert "400 words is a hard ceiling" in seen["tutor"]
+    assert "400 words is a hard ceiling" in seen["reviewer"]
+
+    seen.clear()
+    handle_tutor({**body, "max_words": "nonsense"}, spy)
+    assert "150 words is a hard ceiling" in seen["tutor"]
+    seen.clear()
+    handle_tutor({k: v for k, v in body.items() if k != "max_words"}, spy)
+    assert "150 words is a hard ceiling" in seen["tutor"]   # absent → the old default
+    print("ok  answer length (default unchanged, derived clause, clamps, reviewer agrees)")
+
+
 def test_free_conversation():
     """🧑 free — a conversation with no simulated learner in it.
 
@@ -1669,4 +1747,5 @@ if __name__ == "__main__":
     test_handle_tutor_double_check()
     test_checked_exports()
     test_free_conversation()
+    test_answer_length()
     print("\nall green")

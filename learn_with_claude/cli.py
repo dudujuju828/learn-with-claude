@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from .backend import ClaudeError
+from .personas import TUTOR_WORDS_DEFAULT, TUTOR_WORDS_MAX, TUTOR_WORDS_MIN
 from .render import prepare_console
 from .repl import Shell
 
@@ -49,6 +50,13 @@ def build_parser() -> argparse.ArgumentParser:
                         "claims, misleading wording, and the rules it was given. "
                         "Corrections are printed and saved with what it said first. "
                         "Costs a third model call per turn.")
+    p.add_argument("--answer-words", type=int, default=TUTOR_WORDS_DEFAULT,
+                   metavar="N",
+                   help=f"Hard ceiling on one tutor answer, in words "
+                        f"(default: {TUTOR_WORDS_DEFAULT}, "
+                        f"clamped to {TUTOR_WORDS_MIN}-{TUTOR_WORDS_MAX}). The "
+                        "rest of the length brief scales with it. The web app "
+                        "sets this under 'answer length'.")
     p.add_argument("-d", "--dir", default=None,
                    help=f"Knowledge directory (default: $LEARN_DIR or {DEFAULT_DIR}).")
     p.add_argument("--width", type=int, default=66,
@@ -87,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         effort=args.effort,
         level=args.level,
         double_check=args.double_check,
+        answer_words=args.answer_words,
         timeout=args.timeout,
         width=args.width,
         line_spacing=args.line_spacing,
