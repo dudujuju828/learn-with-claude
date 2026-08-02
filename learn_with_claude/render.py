@@ -124,17 +124,26 @@ class Renderer:
         print()
 
     # --- a learner turn --------------------------------------------------
-    def learner(self, turn: int, thinking: str, new_term: str, action: str, confidence) -> None:
+    def learner(self, turn: int, thinking: str, new_term: str, action: str, confidence,
+                user: bool = False) -> None:
+        """`user` marks a question the reader typed themselves (🧑 free mode,
+        or their own question mid-investigation). It gets its own label and
+        colour: a transcript that headed both with "I ask Claude" would make
+        the reader's words and the simulated learner's indistinguishable on a
+        re-read, which is the one thing this replay must not do."""
         c = self.c
         self._rule(f"Turn {turn}")
+        meta = f"(confidence {confidence}%)" if confidence is not None else ""
         if thinking:
-            meta = f"(confidence {confidence}%)" if confidence is not None else ""
             self._emit_block("💭 Thinking to myself", wrap_paragraphs(thinking, self.width - 2),
                              c.yellow, meta)
+            meta = ""            # shown once, on the first block of the turn
         if new_term:
             print(f"{c.magenta}{c.bold}🔍 New word I hit:{c.reset} {c.magenta}{new_term}{c.reset}")
             print()
-        self._emit_block("🙋 I ask Claude", wrap_paragraphs(action, self.width - 2), c.green)
+        self._emit_block("🧑 My own question" if user else "🙋 I ask Claude",
+                         wrap_paragraphs(action, self.width - 2),
+                         c.magenta if user else c.green, meta)
 
     def tutor(self, text: str) -> None:
         text = space_sentences(text)
@@ -197,9 +206,13 @@ class Renderer:
         self.section(f"[{node.id}] {node.label}", breadcrumb)
         if node.focus:
             print(f"{self.c.grey}  Re-investigating: {node.focus}{self.c.reset}")
+        if getattr(node, "free", False):
+            print(f"{self.c.grey}  Free conversation — no simulated learner here; "
+                  f"every question below is one I asked myself.{self.c.reset}")
         for t in node.turns:
             self.learner(t["turn"], t.get("thinking", ""), t.get("new_term", ""),
-                         t.get("action", ""), t.get("confidence"))
+                         t.get("action", ""), t.get("confidence"),
+                         user=bool(t.get("user")))
             if t.get("tutor"):
                 self.tutor(t["tutor"])
                 checked = t.get("checked")

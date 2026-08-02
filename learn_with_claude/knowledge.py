@@ -159,6 +159,12 @@ class Node:
     # for a tutor-chosen follow-up: its one-sentence "why this is the best
     # next step" — display metadata that must survive the web↔CLI round-trip
     why: str = ""
+    # 🧑 free: this conversation has no simulated learner in it — every
+    # question is one the reader typed, and every confidence is one they set.
+    # A property of the CONVERSATION, not of the tree, so a tree can hold both
+    # kinds: ask freely here, then hand one answer to the simulated learner
+    # with `branch` and let it grind through the parts you skated over.
+    free: bool = False
 
     @property
     def is_root(self) -> bool:
@@ -465,6 +471,10 @@ class KnowledgeTree:
                 else f"↳T{node.branch_from_turn} · {len(node.turns)} turns · "
                 f"conf {fmt_conf(node.final_confidence)}"
             )
+            # which conversations you drove yourself is the first thing you
+            # want off a map you're re-reading months later
+            if node.free:
+                meta += " · you asked"
             if is_root:
                 head = f"{c.bold}● [{node.id}] {node.label}{c.reset}"
                 lines.append(f"{head}  {c.grey}({meta}){c.reset}")
@@ -537,6 +547,10 @@ class KnowledgeTree:
             if node.focus:
                 out.append(f"**Re-investigating:** {node.focus}")
                 out.append("")
+            if node.free:
+                out.append("**Free conversation** — no simulated learner here; "
+                           "every question below is one I asked myself.")
+                out.append("")
             for t in node.turns:
                 conf = f" · confidence {t['confidence']}%" if t.get("confidence") is not None else ""
                 out.append(f"**Turn {t['turn']}{conf}**")
@@ -551,7 +565,12 @@ class KnowledgeTree:
                     # a question asked about a specific passage keeps it
                     out.append(f"> ❝ About: {one_line(t['quote'], 400)}")
                     out.append("")
-                out.append(f"🙋 **I ask Claude:** {t['action']}")
+                # 🙋 is the simulated learner talking — the same first person
+                # as "💭 Thinking to myself" above it. A question the reader
+                # typed is a different voice and has to look like one, or a
+                # re-read months later credits their own words to the sim.
+                asker = "🧑 **My own question:**" if t.get("user") else "🙋 **I ask Claude:**"
+                out.append(f"{asker} {t['action']}")
                 out.append("")
                 if t.get("tutor"):
                     answer = apply_asides(space_sentences(t["tutor"]),

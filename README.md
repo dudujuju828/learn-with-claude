@@ -129,7 +129,25 @@ directly (a local `claude` login can't run on a server), so it needs an
   already knows (curious novice → student → practitioner → expert from a
   neighbouring field), so its questions scale with the tutor; **auto** (the
   default) derives the level from the tutor style, and each investigation
-  keeps the learner it started with. For a broad topic, **🗺 survey** maps
+  keeps the learner it started with.
+  **🧑 free** — the button beside `new` and `full` — is the same tool with
+  the simulated learner taken out: *you* ask the questions. Everything else
+  is identical, deliberately so — the same tutor, the same style, answers
+  split into parts, the glossary, highlights, 🔍 double-check, ⤵ branch,
+  quiz, exam, both exports. Press it with a topic and that topic is asked as
+  the first question; from then on you type them. Two things differ. A turn
+  is one model call instead of two, since nobody has to think up the
+  question. And the **confidence** — the one thing the simulated learner used
+  to supply — is yours: a slider under the conversation, asked at the only
+  moment it can honestly be answered, right after you have read the answer.
+  It stamps that turn (`55% · getting there`, a number and the word that
+  makes the number answerable), so the sparkline and the tree map's dial stay
+  a real trace of how the conversation landed. It is a property of the
+  conversation, not the tree, so the two modes mix: ⤵ **branch** still hands
+  any answer to the simulated learner when you would rather it did the
+  digging, and **🧑 free** in the conversation header starts one you drive on
+  a tree the sim grew, seeded with what it already covered.
+  For a broad topic, **🗺 survey** maps
   before diving: one model call breaks it into the foundations it's built on
   (each with a one-line why, two levels deep, any piece expandable further);
   *investigate* runs a normal conversation on a piece — the first roots the
@@ -450,7 +468,10 @@ Gemini feature, so that key's Google Cloud project needs billing enabled
 changes). `LEARN_IMAGE_MODEL` picks the model (default `gemini-3-pro-image`,
 ~$0.13 a figure; `gemini-3.1-flash-image` is ~half that and
 `gemini-3.1-flash-lite-image` ~a quarter), and `LEARN_IMAGE_SIZE` the
-resolution (`1K` by default). Not in the web app: `many`, `seeplusplus`.
+resolution (`1K` by default). Not in the web app: `many`, `seeplusplus`. Not
+in the CLI: **🧑 free** — it needs an interactive tutor loop the shell doesn't
+have — though the conversations it produces open, replay (`show`) and export
+there like any other, marked `· you asked`.
 
 ## Local web app (no keys — GitHub Copilot)
 

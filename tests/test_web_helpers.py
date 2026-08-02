@@ -1531,6 +1531,71 @@ def test_handle_tutor_double_check():
     print("ok  handle_tutor double-check (off by default, corrected text, cost, failure)")
 
 
+def test_free_conversation():
+    """🧑 free — a conversation with no simulated learner in it.
+
+    Two things have to survive the trip to the CLI and back out through both
+    exports: the flag that says who drove (so `tree` and the reading page can
+    say so), and the distinction between a question the sim asked and one the
+    reader typed. Reading your own words back as the simulated learner's is
+    the same failure the tinted asides exist to prevent elsewhere.
+    """
+    from learn_with_claude.export_html import tree_to_html
+    from learn_with_claude.knowledge import KnowledgeTree
+
+    d = {
+        "format": "learn-with-claude/knowledge-tree", "version": 1, "id": "f1",
+        "root_topic": "what a hash table is", "created": "2026-08-02",
+        "root_id": 1, "next": 3,
+        "nodes": {
+            "1": {"id": 1, "label": "what a hash table is", "children": [2],
+                  "free": True, "learner_level": "", "final_confidence": 45,
+                  "turns": [
+                      {"turn": 1, "action": "what a hash table is",
+                       "tutor": "A keyed lookup table.", "confidence": 45,
+                       "user": True},
+                      {"turn": 2, "action": "how does the hashing bit work?",
+                       "tutor": "It derives a slot from the key.", "user": True},
+                  ]},
+            "2": {"id": 2, "label": "collisions", "parent_id": 1,
+                  "branch_from_turn": 2, "children": [], "learner_level": "student",
+                  "turns": [{"turn": 1, "thinking": "hm", "new_term": "bucket",
+                             "action": "wait what is a bucket",
+                             "tutor": "A slot that holds several keys.",
+                             "confidence": 30}]},
+        },
+    }
+    kb = KnowledgeTree.from_dict(d)
+    assert kb.nodes[1].free is True
+    assert kb.nodes[2].free is False          # the default, not an accident
+    # the flag is a real Node field, so a CLI save can't strip it
+    assert kb.to_dict()["nodes"]["1"]["free"] is True
+    assert kb.to_dict()["nodes"]["2"]["free"] is False
+
+    tree_render = kb.render()
+    assert "you asked" in tree_render                       # on the free node
+    assert tree_render.count("you asked") == 1              # and only there
+
+    md = kb.to_markdown()
+    assert "🧑 **My own question:** what a hash table is" in md
+    assert "🧑 **My own question:** how does the hashing bit work?" in md
+    # the simulated learner keeps its own first-person voice, beside 💭
+    assert "🙋 **I ask Claude:** wait what is a bucket" in md
+    assert "🧑 **My own question:** wait what is a bucket" not in md
+    assert "**Free conversation**" in md
+    assert md.count("**Free conversation**") == 1
+    assert "confidence 45%" in md
+
+    html = tree_to_html(kb)
+    assert "🧑 My own question" in html and "🙋 I ask Claude" in html
+    assert 'class="block ask own"' in html
+    assert html.count('class="block ask own"') == 2         # both free turns
+    assert "Free conversation" in html
+    # the style for it actually ships in the self-contained page
+    assert ".block.ask.own" in html
+    print("ok  free conversations (flag round-trips, exports keep the voices apart)")
+
+
 def test_checked_exports():
     """A corrected answer travels with its correction. An export showing only
     the repaired text would present a second pass's sentences as the tutor's."""
@@ -1603,4 +1668,5 @@ if __name__ == "__main__":
     test_review_result()
     test_handle_tutor_double_check()
     test_checked_exports()
+    test_free_conversation()
     print("\nall green")

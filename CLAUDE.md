@@ -113,6 +113,20 @@ Breaking one of these is a regression even if nothing errors.
   `::before`/`::after`, which don't survive the copy button or the exports.
   Anything else that puts the reader's writing next to the tutor's owes the
   same distinction.
+- **Nor as the simulated learner's.** A turn with `user: true` is a question
+  the human typed; `🙋 I ask Claude` is the sim speaking, in the same first
+  person as the `💭 Thinking to myself` above it. The app (`.action.user-q`),
+  both exports, and the CLI's `replay()` each give the human turn its own
+  label and colour. 🧑 **free** makes every turn one of these, so a surface
+  that renders turns and doesn't check `user` is now wrong on a whole
+  conversation rather than on one interjection.
+- **A free conversation has no learner to resume.** `node.free` (a `Node`
+  field, so it survives `.know.json`) means every turn is the reader's own.
+  `canContinue()` returns false for one outright — ▶ continue there would set
+  the *simulated* learner loose on a conversation someone deliberately drove
+  themselves. Free mode adds no route, prompt, or model role and must not
+  grow one: its whole claim is that the answers are the same ones the sim
+  would have got.
 - **A corrected answer never passes as the original.** 🔍 double-check may
   replace the tutor's words, so a repaired turn always carries *why*
   (`checked.issues`) and *what it said first* (`checked.before`), in the app
@@ -148,7 +162,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 52 tests
+python -m pytest -q                     # 53 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

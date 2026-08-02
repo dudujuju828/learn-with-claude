@@ -123,6 +123,7 @@ a{{color:var(--ans);}}
 .block{{border-left:5px solid var(--line); padding:.15rem 0 .15rem 1rem; margin:.2rem 0 1.1rem;}}
 .block.think .label{{color:var(--think);}} .block.think{{border-color:var(--think);}}
 .block.ask .label{{color:var(--ask);}} .block.ask{{border-color:var(--ask);}}
+.block.ask.own .label{{color:var(--term);}} .block.ask.own{{border-color:var(--term);}}
 .block.ans .label{{color:var(--ans);}} .block.ans{{border-color:var(--ans);}}
 .term{{display:inline-block; background:var(--term-bg); color:var(--term);
   border:1px solid var(--term-line); border-radius:.45rem; padding:.12rem .55rem; font-weight:bold; margin:.2rem 0 1rem;}}
@@ -739,8 +740,15 @@ def _turn_html(t: dict, highlights=None, figures=None, asides=None) -> str:
         )
     if t.get("new_term"):
         parts.append(f'<div class="term">🔍 New word I hit: {_esc(t["new_term"])}</div>')
+    # 🙋 is the simulated learner speaking, in the same first person as the
+    # 💭 block above it. A question the reader typed gets its own colour and
+    # its own label — reading your own words back as the sim's is exactly the
+    # confusion the app's tinted asides exist to prevent elsewhere.
+    own = bool(t.get("user"))
     parts.append(
-        '<div class="block ask"><div class="label">🙋 I ask Claude</div>'
+        f'<div class="block ask{" own" if own else ""}"><div class="label">'
+        + ("🧑 My own question" if own else "🙋 I ask Claude")
+        + "</div>"
         + (f'<div class="askquote">❝ {_esc(t["quote"])}</div>' if t.get("quote") else "")
         + f'<p>{_esc_sent(t["action"])}</p></div>'
     )
@@ -833,6 +841,10 @@ def tree_to_html(tree) -> str:
                 f'<div class="crumb">{crumb}</div>']
         if node.focus:
             body.append(f'<div class="muted">Re-investigating: {_esc(node.focus)}</div>')
+        if getattr(node, "free", False):
+            body.append('<div class="muted">Free conversation — no simulated '
+                        'learner here; every question below is one I asked '
+                        "myself.</div>")
         body.extend(_turn_html(t, hl_map.get((node.id, t.get("turn"))),
                                img_map.get((node.id, t.get("turn"))),
                                aside_map.get((node.id, t.get("turn"))))

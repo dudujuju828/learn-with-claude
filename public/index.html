@@ -288,7 +288,7 @@
       background:color-mix(in srgb, var(--card) 82%, transparent);
       box-shadow:var(--shadow-md); color:var(--muted); font-size:var(--t-md);
     }
-    #askrow{
+    #composer{
       position:sticky; bottom:calc(3.8rem + env(safe-area-inset-bottom));
       background:var(--bg); padding:.5rem 0;
     }
@@ -525,8 +525,37 @@
   body.hide-think #conv .block.thinking{display:none}
   .action{border-left-color:var(--ask)}
   .action.user-q{border-left-color:var(--term)}
-  #askrow{display:flex; gap:.5rem; margin:1.6rem 0 0}
+  #composer{margin:1.6rem 0 0}
+  #askrow{display:flex; gap:.5rem}
   #askrow input{flex:1}
+  /* 🧑 free mode's confidence control. It sits above the ask box because
+     that is where the reader already is once they have finished the answer —
+     the question "how well do you get it now?" is only answerable there. */
+  #confrow{
+    display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;
+    margin:0 0 .55rem; padding:.5rem .8rem;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg);
+    border-left:5px solid var(--ask);
+  }
+  #conflabel{font-size:var(--t-xs); letter-spacing:.06em; color:var(--muted)}
+  #confslider{flex:1; min-width:8rem; accent-color:var(--ask); margin:0}
+  #confslider:disabled{opacity:.45}
+  #confout{font-size:var(--t-sm); color:var(--fg); font-variant-numeric:tabular-nums;
+    white-space:nowrap}
+  #confout.unset{color:var(--muted)}
+  /* on a phone it wraps to two rows — the question, then the slider and its
+     answer. The slider gives up its comfortable minimum so the readout can
+     stay on the same row as it: a third row would push the ask box, and the
+     whole point of this control is that it sits where your thumb already is. */
+  @media (max-width:600px){
+    #conflabel{flex-basis:100%}
+    #confslider{min-width:5rem}
+  }
+  /* the empty free conversation, before its first question */
+  .freehint{
+    background:var(--card); border:1px dashed var(--line); border-radius:var(--r-lg);
+    padding:.9rem 1.1rem; margin:.9rem 0; color:var(--muted); font-size:var(--t-md);
+  }
   .tutor-b{border-left-color:var(--ans)}
   /* saved passage highlights — a highlighter over the tutor's own words */
   #conv mark.hl{
@@ -1585,7 +1614,7 @@
 
   @media print{
     header, aside, #statusbar, #jumpbtn, .branchrow, #aapanel, #tabbar,
-    #hopper, #askrow, #readbar, #skiplink, #helppanel, #gpop, #fcpop, #selchip, #palette, #qcap,
+    #hopper, #composer, #readbar, #skiplink, #helppanel, #gpop, #fcpop, #selchip, #palette, #qcap,
     #quizbox, #reviewbox, #statsbox, #hlbox, #docketbox, #notesbox, #srcbox, #teachbox, #exambox, #gapsbox, #tutoreditor, #overview, #qbankbox, #globalqbox, .who .copy{display:none !important}
     main{max-width:none; padding:0}
     .block{break-inside:avoid}
@@ -1676,6 +1705,20 @@
   one scoped question at a time until it can explain the idea in its own words.</p>
   <p><b>full</b> does that, then the tutor picks 3 more related concepts to
   investigate — a small tour of the topic.</p>
+  <p><b>🧑 free</b> is the same thing with the simulated learner taken out:
+  <i>you</i> ask the questions. Everything else is identical — the same
+  tutor, the same style, answers split into parts, the glossary, highlights,
+  🔍 double-check, branch, quiz, exam, both exports. Two differences. A turn
+  is one model call instead of two, since nobody has to think up the
+  question. And the <b>confidence</b> — the one thing the simulated learner
+  used to supply — is yours: a slider under the conversation, asked at the
+  only moment it can honestly be answered, right after you have read the
+  answer. It stamps that turn, so the sparkline and the tree map's dial are
+  a real trace of how the conversation actually landed. The header's
+  <b>🧑 free</b> starts one on a tree you already have, building on the
+  conversation you were reading. Either way, ⤵ <b>branch</b> still hands any
+  answer to the simulated learner, if you would rather it did the digging on
+  that one.</p>
   <p><b>📚 ground it in your own material</b> — the fold under the topic box:
   paste a passage (a textbook section, an article, your lecture notes) and
   it's <b>new</b> or <b>full</b> that grounds the whole tree in it — the
@@ -2049,6 +2092,7 @@
       <div class="btnrow">
         <button class="primary" id="newbtn" title="one investigation">new</button>
         <button id="fullbtn" title="root + 3 tutor-chosen follow-ups">full</button>
+        <button id="freebtn" title="you ask the questions instead of the simulated learner — same tutor, same style, same everything else. Half the cost per turn, and you set your own confidence as you go.">free</button>
         <button id="surveybtn" title="map the topic's foundations first — investigate them piece by piece, any time">survey</button>
         <button id="factsbtn" title="the lay of the land, fast — a few dozen one-sentence facts about the topic, grouped, in one call. Dig into any of them afterwards.">facts</button>
         <button id="gapsbtn" title="say what you already know first — the tutor maps what's solid, what's shaky, and what's missing, then aims the investigation there">gaps</button>
@@ -2071,6 +2115,9 @@
       </details>
       <p class="hint">“full” runs the root investigation, then the tutor picks 3 more
       related concepts to explore. Each turn is two real model calls (~5–7¢).
+      “free” drops the simulated learner and hands you the questions —
+      same tutor, same style, one model call a turn, and you set the
+      confidence as you go.
       “survey” maps a broad topic into the foundations it's built on — you
       pick what to investigate, one piece at a time. “gaps” interviews you
       first — a few quick questions on what you already know — then aims
@@ -2182,10 +2229,24 @@
 
   <main id="maincol" tabindex="-1">
     <div id="conv"></div>
-    <div id="askrow" style="display:none">
-      <input id="askinput" type="text" placeholder="ask the tutor yourself…"
-             aria-label="ask the tutor yourself" enterkeyhint="send" autocomplete="off">
-      <button id="askbtn" class="primary">ask</button>
+    <div id="composer" style="display:none">
+      <!-- 🧑 free mode: the number is yours, so the control is yours. It
+           always addresses the answer you have just read, and the turn it
+           stamps is that same one — so the sparkline is a real trace of how
+           this conversation actually landed, not a model's guess at it. -->
+      <div id="confrow" style="display:none">
+        <label for="confslider" id="conflabel">how well do you get it now?</label>
+        <!-- named by #conflabel, which says WHICH turn it stamps and changes
+             as you go; aria-valuetext so it is read as "55%, getting there"
+             rather than a bare number with no scale to hang it on -->
+        <input id="confslider" type="range" min="0" max="100" step="5" value="40">
+        <output id="confout" for="confslider"></output>
+      </div>
+      <div id="askrow" style="display:none">
+        <input id="askinput" type="text" placeholder="ask the tutor yourself…"
+               aria-label="ask the tutor yourself" enterkeyhint="send" autocomplete="off">
+        <button id="askbtn" class="primary">ask</button>
+      </div>
     </div>
   </main>
 </div>
@@ -5391,6 +5452,145 @@ function emptyHtml(){
   </div>`;
 }
 
+/* the node header's chips. Split out of renderConversation because the 🧑
+   free confidence slider repaints them on every drag — a full re-render
+   would take the slider out from under the finger mid-gesture. */
+function nodeChipsHtml(node){
+  const chips = [
+    `<span class="chip">${node.turns.length} turn${node.turns.length === 1 ? "" : "s"}</span>`,
+  ];
+  if (Number.isInteger(node.final_confidence) || sparkHtml(node.turns))
+    chips.push(`<span class="chip" title="${node.free
+      ? "the confidence you set as you went"
+      : "the learner&rsquo;s confidence across this conversation"}">` +
+               `${fmtConf(node.final_confidence)}${sparkHtml(node.turns)}</span>`);
+  chips.push(`<span class="chip" title="spend on this node · ` +
+             `${esc(node.free ? node.tutor_model : node.learner_model)}">${fmtCost(node.cost)}</span>`);
+  if (node.free)
+    chips.push(`<span class="chip" title="you asked the questions here — no simulated learner">` +
+               `${ico("🧑")}your questions</span>`);
+  else if (node.learner_level)
+    chips.push(`<span class="chip" title="how much the simulated learner already knew">${esc(node.learner_level)} learner</span>`);
+  return chips.join("");
+}
+
+/* ------------------------------------------------------------------ */
+/* 🧑 free — your confidence, on your own turns.                        */
+/*                                                                     */
+/* In a simulated conversation this number is the learner's own honest  */
+/* read of itself, emitted with every question. Free mode has no        */
+/* learner, so the number would simply be missing — and the confidence  */
+/* trace is what the sparkline, the tree map's dial, 📊 progress and    */
+/* both exports are all reading. So you supply it.                      */
+/*                                                                     */
+/* One control, one meaning: it always addresses the answer you have    */
+/* just finished reading, and stamps that same turn. "How well do you   */
+/* get it NOW" is only answerable at that moment, which is exactly      */
+/* where the control sits — at the bottom of the conversation, above    */
+/* the box you type the next question into.                            */
+/* ------------------------------------------------------------------ */
+/* The number is the record; the word is what makes it answerable. Nobody
+   can honestly say "I am 55% confident"; everybody can say whether they
+   could explain it to someone else yet. */
+const CONF_BANDS = [[15, "no idea yet"], [35, "fuzzy"], [55, "getting there"],
+                    [75, "solid"], [90, "could explain it"], [100, "could teach it"]];
+function confBand(v){
+  for (const [top, word] of CONF_BANDS) if (v <= top) return word;
+  return CONF_BANDS[CONF_BANDS.length - 1][1];
+}
+/* the last turn that actually has an answer. It is what the slider
+   addresses — stamping an unanswered question would be recording a reaction
+   to something you haven't read — and where a free child conversation hangs
+   itself, so rebuildCtx() finds a recap to hand the tutor. */
+function lastAnswered(node){
+  for (let i = node.turns.length - 1; i >= 0; i--)
+    if (node.turns[i].tutor) return node.turns[i];
+  return null;
+}
+/* the last confidence set BEFORE this turn — what confHtml() draws the ↑/↓
+   delta against, and what an untouched slider starts from, so the default
+   move is "unchanged" and every step is a deliberate one */
+function confBefore(node, turn){
+  let prev = null;
+  for (const t of node.turns){
+    if (t.turn === turn) break;
+    if (Number.isInteger(t.confidence)) prev = t.confidence;
+  }
+  return prev;
+}
+function paintConfOut(v){
+  const out = $("confout");
+  out.classList.toggle("unset", v == null);
+  out.textContent = v == null ? "drag to say" : `${v}% · ${confBand(v)}`;
+  $("confslider").setAttribute(
+    "aria-valuetext",
+    v == null ? "not set yet" : `${v} percent, ${confBand(v)}`);
+}
+function syncConfRow(node){
+  const t = lastAnswered(node);
+  const slider = $("confslider");
+  slider.disabled = !t;
+  if (!t){
+    $("conflabel").textContent = "how well do you get it now?";
+    $("confout").classList.add("unset");
+    $("confout").textContent = "after the first answer";
+    return;
+  }
+  const set = Number.isInteger(t.confidence);
+  const prev = confBefore(node, t.turn);
+  slider.value = String(set ? t.confidence : (Number.isInteger(prev) ? prev : 40));
+  $("conflabel").textContent = `after turn ${t.turn} — how well do you get it now?`;
+  paintConfOut(set ? t.confidence : null);
+}
+/* repaint just the two places the number shows, rather than re-rendering the
+   conversation: a full render would rebuild the slider and take it out from
+   under the finger mid-drag (and the keyboard focus with it, on every arrow) */
+function repaintConf(node, t){
+  const head = document.querySelector(`#conv .turn[data-turn="${t.turn}"] .turnhead`);
+  if (head) head.innerHTML = `<span>turn ${t.turn}</span>` + confHtml(t, confBefore(node, t.turn));
+  const chips = document.querySelector("#conv .nchips");
+  if (chips) chips.innerHTML = nodeChipsHtml(node);
+}
+let confSaveTimer = null;
+function flushConf(){
+  clearTimeout(confSaveTimer); confSaveTimer = null;
+  saveStore(); renderMap();
+}
+function setConf(v){
+  const tree = cur(); if (!tree || running || currentNode == null) return;
+  const node = getNode(tree, currentNode);
+  const t = node && node.free && lastAnswered(node);
+  if (!t) return;
+  t.confidence = v;
+  // the same rule the sim loop follows: the node's headline confidence is
+  // whatever the latest turn ended up saying
+  node.final_confidence = v;
+  paintConfOut(v);
+  repaintConf(node, t);
+  clearTimeout(confSaveTimer);
+  confSaveTimer = setTimeout(flushConf, 600);
+}
+$("confslider").addEventListener("input", (e) => setConf(+e.target.value));
+$("confslider").addEventListener("change", flushConf);
+/* a drag left mid-flight when the tab is hidden or closed still counts */
+window.addEventListener("pagehide", () => { if (confSaveTimer) flushConf(); });
+
+/* the composer under a conversation: your own question box, plus — in a free
+   conversation — the confidence that goes with it. Both hide during a run:
+   they write into a node the queue is actively growing. */
+function updateComposer(node){
+  const free = !!(node && node.free);
+  const show = !!node && !running && (free || node.turns.some(t => t.tutor));
+  $("composer").style.display = show ? "" : "none";
+  $("askrow").style.display = show ? "" : "none";
+  $("confrow").style.display = (show && free) ? "" : "none";
+  if (!show) return;
+  const label = free ? "ask your next question…" : "ask the tutor yourself…";
+  $("askinput").placeholder = label;
+  $("askinput").setAttribute("aria-label", label);
+  if (free) syncConfRow(node);
+}
+
 function nearBottom(){
   return window.innerHeight + window.scrollY >= document.body.scrollHeight - 220;
 }
@@ -5414,7 +5614,7 @@ function renderConversation(keepScroll){
         `<p><button class="primary" onclick="openFacts()">${ico("⚡")}open the facts</button></p></div>`
       : emptyHtml();
     document.body.classList.remove("has-turns");
-    $("askrow").style.display = "none";
+    updateComposer(null);
     return;
   }
   const node = getNode(tree, currentNode);
@@ -5434,19 +5634,14 @@ function renderConversation(keepScroll){
   // it would just repeat the title
   if (node.parent_id != null)
     h += `<div class="crumb">${crumbHtml(tree, node.id)}</div>`;
-  const chips = [
-    `<span class="chip">${node.turns.length} turn${node.turns.length === 1 ? "" : "s"}</span>`,
-  ];
-  if (Number.isInteger(node.final_confidence) || sparkHtml(node.turns))
-    chips.push(`<span class="chip" title="the learner's confidence across this conversation">` +
-               `${fmtConf(node.final_confidence)}${sparkHtml(node.turns)}</span>`);
-  chips.push(`<span class="chip" title="spend on this node · ${esc(node.learner_model)}">${fmtCost(node.cost)}</span>`);
-  if (node.learner_level)
-    chips.push(`<span class="chip" title="how much the simulated learner already knew">${esc(node.learner_level)} learner</span>`);
-  h += `<div class="nchips">${chips.join("")}</div>`;
+  h += `<div class="nchips">${nodeChipsHtml(node)}</div>`;
   const acts = [];
   if (!running && canContinue(node))
     acts.push(`<button class="primary" onclick="continueNode(${node.id})" title="pick the conversation back up where it stopped">${ico("▶")}continue</button>`);
+  if (!running && freeUnanswered(node))
+    acts.push(`<button class="primary" onclick="cmdFreeAnswer()"` +
+              ` title="that question never got its answer — ask it again, as the same turn">` +
+              `${ico("▶")}get that answer</button>`);
   if (!running && Object.values(tree.nodes).some(n => n.turns.some(t => t.tutor)))
     acts.push(`<button${canContinue(node) ? "" : ' class="primary"'} onclick="cmdNext()"` +
               ` title="the tutor reviews what this tree covered and picks the next best concept to build on it — one more investigation">${ico("→")}next</button>`);
@@ -5454,6 +5649,10 @@ function renderConversation(keepScroll){
     acts.push(`<button onclick="cmdDeepen(${node.id})" title="re-investigate this SAME topic at real depth — ` +
               `internals, edge cases, tradeoffs — as a full new conversation seeded with everything covered here">` +
               `${ico("🔬")}look deeper</button>`);
+  if (!running && node.turns.some(t => t.tutor))
+    acts.push(`<button onclick="cmdFreeHere()" title="a new conversation on this tree that YOU drive —` +
+              ` no simulated learner, you type every question. It builds on what this one covered.">` +
+              `${ico("🧑")}free</button>`);
   if (!running && node.turns.length){
     acts.push(`<button onclick="listenNode()" title="read the whole conversation aloud — Esc stops">${ico("🔊")}listen</button>`);
     acts.push(`<button onclick="copyLink(this)" title="copy a link straight to this conversation">${ico("🔗")}link</button>`);
@@ -5514,6 +5713,13 @@ function renderConversation(keepScroll){
     acts.push(`<button class="rm" onclick="removeBranch(${node.id})">${ico("✕")}remove</button>`);
   if (acts.length) h += `<div class="nacts">${acts.join("")}</div>`;
   h += `</div>`;
+  if (node.free && !node.turns.length)
+    h += `<div class="freehint">${ico("🧑")}<b>you're driving this one.</b> ` +
+         `Ask your first question in the box below. Everything else is exactly as it ` +
+         `always is — same tutor, same style, answers split into parts, select a word to ` +
+         `add it to the glossary, branch any answer into a real investigation. There's no ` +
+         `simulated learner here, so a turn costs one model call instead of two, and the ` +
+         `confidence is yours to set.</div>`;
   let prevConf = null;
   for (const t of node.turns){
     h += turnHtml(node, t, prevConf, !running);
@@ -5527,7 +5733,7 @@ function renderConversation(keepScroll){
   applyHighlights();
   applyAsides();
   annotateTerms();
-  $("askrow").style.display = (!running && node.turns.some(t => t.tutor)) ? "" : "none";
+  updateComposer(node);
   if (stick && running) window.scrollTo(0, document.body.scrollHeight);
   if (rulerActive()) refreshRuler();
   updateJump();
@@ -5554,12 +5760,13 @@ function renderMap(){
     const title = `[${n.id}] ${n.label}` +
       (firstQ ? `\n“${oneLine(firstQ, 90)}”` : "") +
       `\n${n.turns.length} turns · confidence ${fmtConf(n.final_confidence)} · ${fmtCost(n.cost)}` +
+      (n.free ? "\nyou asked the questions here" : "") +
       (!live && canContinue(n) ? "\nunfinished — can continue" : "");
     return `<div class="noderow${n.id === currentNode ? " active" : ""}"` +
       ` onclick="selectNode(${n.id})" tabindex="0" role="button" title="${esc(title)}"` +
       ` aria-label="${esc(oneLine(title, 160))}"` +
       (n.id === currentNode ? ` aria-current="true"` : "") + `>` +
-      dot + `<span class="mlabel">${esc(oneLine(n.label, 30))}</span>` +
+      dot + `<span class="mlabel">${n.free ? ico("🧑") : ""}${esc(oneLine(n.label, 30))}</span>` +
       (!live && canContinue(n) ? `<span class="mbadge" role="img" aria-label="unfinished">⏸</span>` : "") +
       `<span class="meta">${n.turns.length}t</span></div>`;
   };
@@ -6491,8 +6698,12 @@ function examWords(s){
    wrote is actually right. */
 function examMaterial(node){
   const out = [];
+  // in a 🧑 free conversation EVERY question is the student's own, so saying
+  // it once beats tagging forty lines with the same clause
+  if (node.free) out.push("(The student asked all of these questions themselves.)");
   for (const t of node.turns){
-    if (t.action) out.push((t.user ? "Q (the student's own question): " : "Q: ") + t.action);
+    if (t.action)
+      out.push((!node.free && t.user ? "Q (the student's own question): " : "Q: ") + t.action);
     if (t.tutor) out.push("A: " + t.tutor);
   }
   return out.join("\n\n");
@@ -10009,7 +10220,8 @@ function openOverview(){
       `confidence ${fmtConf(n.final_confidence)}</title>` +
       `<circle cx="${X(p)}" cy="${Y(p)}" r="${r}" fill="${fill}" fill-opacity=".85"${ring}/>` +
       `<text x="${X(p) + r + 7}" y="${Y(p) - 1}">${esc(oneLine(n.label, 22))}</text>` +
-      `<text class="osub" x="${X(p) + r + 7}" y="${Y(p) + 14}">${n.turns.length}t · ${fmtConf(n.final_confidence)}</text>` +
+      `<text class="osub" x="${X(p) + r + 7}" y="${Y(p) + 14}">${n.turns.length}t · ` +
+      `${fmtConf(n.final_confidence)}${n.free ? " · 🧑" : ""}</text>` +
       `</g>`;
   }
   $("otitle").textContent = oneLine(tree.root_topic, 60);
@@ -10077,6 +10289,9 @@ function paletteActions(){
     if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor) && !canContinue(getNode(tree, currentNode)))
       acts.push({icon: "🔬", label: "look deeper", sub: "the SAME topic, re-investigated at real depth",
         run(){ cmdDeepen(currentNode); }});
+    if (currentNode != null && getNode(tree, currentNode)?.turns.length)
+      acts.push({icon: "🧑", label: "free — ask it yourself",
+        sub: "a new conversation on this tree that you drive", run(){ cmdFreeHere(); }});
     if (currentNode != null && getNode(tree, currentNode)?.turns.some(t => t.tutor))
       acts.push({icon: "🗣", label: "explain it back", sub: "teach it in your own words — the tutor checks it", run(){ openTeach(); }});
     acts.push({icon: "🎓", label: "quiz me", sub: "questions on this tree", run(){ startQuiz(); }});
@@ -10304,6 +10519,7 @@ $("statusdismiss").onclick = () => clearStatus();
 const queue = [];
 let queueActive = false;
 let activeRun = null;           // {treeId, nodeId} of the node being grown
+let askAgain = false;           // put the cursor back in the 🧑 free ask box
 
 function enqueue(...thunks){
   queue.push(...thunks);
@@ -10344,6 +10560,7 @@ async function drainQueue(){
     runLabel = "";
     clearStatus();
     renderAll(true);
+    if (askAgain){ askAgain = false; focusAsk(); }
   }
 }
 
@@ -10421,8 +10638,9 @@ function offerRetry(err){
 function setRunning(on){
   running = on;
   document.body.classList.toggle("running", on);
-  $("newbtn").disabled = $("fullbtn").disabled = $("surveybtn").disabled =
-    $("factsbtn").disabled = $("gapsbtn").disabled = $("topic").disabled = on;
+  $("newbtn").disabled = $("fullbtn").disabled = $("freebtn").disabled =
+    $("surveybtn").disabled = $("factsbtn").disabled = $("gapsbtn").disabled =
+    $("topic").disabled = on;
   $("importbtn").disabled = on;
   updateRevRow();   // the review button sits out runs too
 }
@@ -10652,9 +10870,22 @@ function cmdDeepen(nodeId){
 window.cmdDeepen = cmdDeepen;
 
 function canContinue(node){
-  if (!node || !node.turns.length || node.turns.length >= CONFIG.max_turns) return false;
+  // A 🧑 free conversation is never "unfinished": there is no loop to resume,
+  // only you deciding whether to ask again. Without this guard every free
+  // node would offer ▶ continue and that button would set the SIMULATED
+  // learner loose on a conversation you deliberately drove yourself.
+  if (!node || node.free) return false;
+  if (!node.turns.length || node.turns.length >= CONFIG.max_turns) return false;
   const last = node.turns[node.turns.length - 1];
   return !last.done && !!last.action;
+}
+/* a free turn whose tutor call failed: the question is recorded, the answer
+   never arrived. It gets its own button rather than being silently dropped,
+   because asking again would leave the dangling question in the transcript
+   (and in both exports) looking like something the tutor ignored. */
+function freeUnanswered(node){
+  const last = node && node.free && node.turns[node.turns.length - 1];
+  return (last && last.action && !last.tutor) ? last : null;
 }
 function rebuildCtx(tree, node){
   // reconstruct the opening context for a resumed investigation; for
@@ -10711,9 +10942,28 @@ function askedWithQuote(question, quote){
   return ["About this, from what you said:", "<<<", quote, ">>>", "", question]
     .join("\n");
 }
+/* Answer one already-recorded turn of yours. Every question the human asks
+   funnels through here — the ask box, a banked question, and every 🧑 free
+   turn — so the grounding passage, the node's context and 🔍 double-check
+   reach all three from one place. Idempotent on purpose: a retry after a
+   failed call answers the SAME turn rather than asking it twice. */
+async function answerTurn(tree, node, rec, what){
+  if (rec.tutor) return;
+  activity = {nodeId: node.id, kind: "tutor"};
+  setStatus(answeringStatus(what)); renderAll();
+  const before = node.turns.slice(0, node.turns.indexOf(rec));
+  const T = await api("tutor", {...rebuildCtx(tree, node),
+                                ...(tree.source ? {source: tree.source} : {}),
+                                turns: before,
+                                action: askedWithQuote(rec.action, rec.quote),
+                                ...tutorParams()});
+  node.cost += T.cost;
+  takeTutorReply(rec, T);
+  saveStore();
+  activity = null;
+}
 function askThunk(treeId, nodeId, question, quote){
   let rec = null;
-  const asked = askedWithQuote(question, quote);
   return async () => {
     runLabel = "";
     const tree = store[treeId];
@@ -10726,18 +10976,7 @@ function askThunk(treeId, nodeId, question, quote){
       node.turns.push(rec);
       saveStore(); renderAll();
     }
-    if (!rec.tutor){
-      activity = {nodeId, kind: "tutor"};
-      setStatus(answeringStatus("you")); renderAll();
-      const before = node.turns.slice(0, node.turns.indexOf(rec));
-      const T = await api("tutor", {...rebuildCtx(tree, node),
-                                    ...(tree.source ? {source: tree.source} : {}),
-                                    turns: before, action: asked, ...tutorParams()});
-      node.cost += T.cost;
-      takeTutorReply(rec, T);
-      saveStore();
-    }
-    activity = null;
+    await answerTurn(tree, node, rec, "you");
     renderAll(true);
   };
 }
@@ -10747,6 +10986,14 @@ function askTutor(){
   const q = $("askinput").value.trim();
   if (!node || !q) return;
   $("askinput").value = "";
+  // a free conversation opened from the header has no name until you say what
+  // it is about — your first question is the truest label it could have
+  if (node.free && !node.turns.length && node.parent_id != null)
+    node.label = oneLine(q, 44);
+  // a free conversation is a conversation: put the cursor back in the box
+  // when the answer lands. Not on touch — there, the keyboard would spring
+  // up over the answer you just waited for.
+  askAgain = node.free && !matchMedia("(pointer:coarse)").matches;
   enqueue(askThunk(tree.id, node.id, q));
 }
 $("askbtn").onclick = askTutor;
@@ -10775,20 +11022,9 @@ function bankInvestigateThunk(treeId, qid){
       node.turns.push(rec);
       saveStore(); renderAll();
     }
-    if (!rec.tutor){
-      activity = {nodeId: node.id, kind: "tutor"};
-      setStatus(answeringStatus("a banked question")); renderAll();
-      const before = node.turns.slice(0, node.turns.indexOf(rec));
-      const T = await api("tutor", {...rebuildCtx(tree, node),
-                                    ...(tree.source ? {source: tree.source} : {}),
-                                    turns: before, action: q.text, ...tutorParams()});
-      node.cost += T.cost;
-      takeTutorReply(rec, T);
-      saveStore();
-    }
+    await answerTurn(tree, node, rec, "a banked question");
     q.answered = true; q.answerTurn = rec.turn;
     saveStore();
-    activity = null;
     renderAll(true);
   };
 }
@@ -10825,6 +11061,103 @@ function globalBankInvestigateThunk(qid){
     renderAll(true);   // keep an open global bank honest as this concludes
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* 🧑 free — the same tutor, without the simulated learner in front of  */
+/* it. The learner sim is what makes this tool descend into a topic     */
+/* one unknown at a time; it is also what makes it ask questions that   */
+/* are not yours. Free mode swaps it out for you and changes NOTHING    */
+/* else: same tutor prompt, same style, same [part] markup, same 🔍     */
+/* double-check, same glossary, branch, quiz, exam and exports. A turn  */
+/* is one model call instead of two, and the confidence — the one       */
+/* number the learner sim used to supply — is yours to set.             */
+/* ------------------------------------------------------------------ */
+function makeFreeNode(tree, label, parentId=null, branchTurn=null){
+  const node = makeNode(tree, label, parentId, branchTurn, "");
+  node.free = true;
+  // there is no simulated learner here, and a "student learner" chip on a
+  // conversation you drove yourself is a small lie both exports would repeat
+  node.learner_level = "";
+  return node;
+}
+/* pressing `free` with a topic asks that topic as the first question, so one
+   press gets you a real answer — exactly as `new` starts a real
+   investigation. Everything after it is yours to type. */
+function freeRootThunk(topic, source, known){
+  let node = null, treeId = null, first = null;
+  return async () => {
+    runLabel = "";
+    if (!node){
+      const tree = newTree(topic, source);
+      // ✓ skip what you already know composes with free mode for free:
+      // rebuildCtx() turns a baseline on the tree into the same "don't
+      // re-explain what they have solid" context the gaps flow gives.
+      if (known && known.length)
+        tree.baseline = {text: known.join("\n"), solid: known, shaky: [], gaps: [],
+                         level: "", focus: "", when: nowIso()};
+      store[tree.id] = tree; currentId = tree.id; treeId = tree.id;
+      node = makeFreeNode(tree, topic);
+      currentNode = node.id;
+      saveStore(); renderAll();
+    }
+    // memoised like `node`: a retry after a failed call must resume the same
+    // turn, not push a second copy of the question
+    if (!first) first = askThunk(treeId, node.id, topic);
+    await first();
+  };
+}
+function freeAnswerThunk(treeId, nodeId){
+  return async () => {
+    runLabel = "";
+    const tree = store[treeId];
+    const node = tree && getNode(tree, nodeId);
+    const rec = node && freeUnanswered(node);
+    if (!rec) return;
+    activeRun = {treeId, nodeId};
+    await answerTurn(tree, node, rec, "you");
+    renderAll(true);
+  };
+}
+function cmdFree(topic, source, known){
+  enqueue(freeRootThunk(topic, source, known));
+}
+/* 🧑 free from inside a tree: a new conversation on it that you drive. It
+   hangs off whatever you were reading, so the tutor gets the same "already
+   covered" context a branch does — and nothing is spent until you ask. */
+function cmdFreeHere(){
+  const tree = cur(); if (!tree || running || currentNode == null) return;
+  const from = getNode(tree, currentNode);
+  // hang it off the last ANSWERED turn: that is what rebuildCtx() reads to
+  // build the "you already covered this, don't re-explain it" context, and an
+  // unanswered turn would silently drop the whole recap
+  const at = from && lastAnswered(from);
+  if (!at) return;
+  const node = makeFreeNode(tree, "my own questions", from.id, at.turn);
+  currentNode = node.id;
+  saveStore(); renderAll(true);
+  focusAsk();
+}
+function cmdFreeAnswer(){
+  const tree = cur(); if (!tree || running || currentNode == null) return;
+  if (freeUnanswered(getNode(tree, currentNode)))
+    enqueue(freeAnswerThunk(tree.id, currentNode));
+}
+function focusAsk(){
+  closeMenu();   // on a phone the sheet is over the conversation; the box is under it
+  setTimeout(() => { const el = $("askinput"); if (el.offsetParent !== null) el.focus(); }, 40);
+}
+/* An empty free conversation is a question box nobody typed into. Walking
+   away from one drops it rather than leaving a permanent 0-turn node in the
+   tree map and in every export — the same rule the run queue applies to a
+   node whose learner never spoke. Nothing was spent on it either way. */
+function dropEmptyFree(){
+  const tree = cur();
+  if (!tree || running || currentNode == null) return;
+  const node = getNode(tree, currentNode);
+  if (node && node.free && !node.turns.length && !node.children.length)
+    removeNodeFromTree(tree, node.id);
+}
+window.cmdFreeHere = cmdFreeHere; window.cmdFreeAnswer = cmdFreeAnswer;
 
 function cmdNew(topic, source, known){
   enqueue((known && known.length) ? knownThunk(topic, known, "", source)
@@ -10898,6 +11231,7 @@ window.addEventListener("pagehide", rememberScroll);
 try { history.scrollRestoration = "manual"; } catch {}   // we restore it ourselves
 function openTree(id){
   if (running) return;
+  if (currentId !== id) dropEmptyFree();
   const changed = currentId !== id;
   rememberScroll();
   currentId = id;
@@ -10907,6 +11241,7 @@ function openTree(id){
   closeMenu();
 }
 function selectNode(id){
+  if (currentNode !== id) dropEmptyFree();
   const changed = currentNode !== id;
   if (changed && !running) rememberScroll();
   currentNode = id; renderAll(true);
@@ -10960,6 +11295,7 @@ function takeKnown(){
 }
 $("newbtn").onclick = () => { const t = guardTopic(); if (t) cmdNew(t, takeSource(), takeKnown()); };
 $("fullbtn").onclick = () => { const t = guardTopic(); if (t) cmdFull(t, takeSource(), takeKnown()); };
+$("freebtn").onclick = () => { const t = guardTopic(); if (t) cmdFree(t, takeSource(), takeKnown()); };
 $("surveybtn").onclick = () => { const t = guardTopic(); if (t) cmdSurvey(t); };
 $("factsbtn").onclick = () => { const t = guardTopic(); if (t) cmdFacts(t); };
 $("topic").addEventListener("keydown", (e) => { if (e.key === "Enter") $("newbtn").click(); });

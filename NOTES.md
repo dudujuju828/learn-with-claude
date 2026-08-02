@@ -5,6 +5,97 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 58 — 🧑 free: the same tutor, with you asking
+
+*(user-requested: "a free-tutor version — instead of the learner asking
+whichever question, you get to ask it. But the structure, response style etc.
+is all the same. You set your confidence on each turn. Another button 'free'
+by where new/full are.")*
+
+The simulated learner is the engine of this tool: it descends into a topic one
+unknown at a time, and it never lets itself off the hook. It is also, some
+days, asking questions that are not yours. `free` takes it out and puts you in
+its seat.
+
+**The design constraint was "change nothing else", and it turned out to be
+achievable literally.** Free mode adds **no route, no prompt, no model role,
+and no `vercel.json` entry**. It reuses `/api/tutor` exactly as the ask box
+already did — same `tutor_system()`, same style addendum, same `[part]`
+markup, same 🔍 double-check, same grounding passage. That is not tidiness for
+its own sake: the whole promise of the feature is that the answers are
+*identical* to the ones the sim would have got, so anything that forked the
+tutor's brief would have quietly broken it.
+
+**It is a property of the conversation, not the tree** (`Node.free`). So a
+tree holds both kinds, and the two modes compose in the direction that
+matters: ask freely, hit an answer you can't follow, and **⤵ branch** hands
+that exact answer to the simulated learner to grind through. The header's
+**🧑 free** is the mirror move — a conversation you drive, hanging off one the
+sim drove, seeded with its digest via the same `rebuildCtx()` a branch uses.
+
+**Every free turn is a `user: true` turn** — the shape the ask box has written
+since "ask the tutor yourself" existed. That single decision is what made the
+glossary, highlights, 🏷 my words, 🖼 figures, quiz, exam, 🗣 explain-it-back,
+search, ⌘K, profiles, sync and both exports work on day one without being
+touched: they were all already turn-shaped, and the sim's `thinking` /
+`new_term` fields were always optional.
+
+**The confidence is the one thing that genuinely had to be replaced.** It is
+not decoration — the sparkline, the tree map's dial, the node chips, 📊
+progress and both exports all read it, and in a sim conversation it arrives
+free in the learner's JSON. So it becomes a control.
+
+Three decisions in it, each of which could have gone the other way:
+
+- **It addresses the last *answered* turn, and stamps that turn.** The
+  alternative — ride along with the question you are about to ask, mirroring
+  the sim's own semantics exactly — is more faithful and less honest. "How
+  well do you get it now?" is only answerable *after* reading an answer, and
+  a control that asks it at any other moment gets a guess. Stamping the turn
+  you just read makes the sparkline a real trace of how the conversation
+  landed, and makes the final answer count, which the sim's own ordering
+  never manages.
+- **A number and a word, together.** Nobody can honestly answer "are you 55%
+  confident?"; everybody can answer "could you explain this to someone yet?"
+  So the readout is `55% · getting there`. The number is what everything
+  downstream reads; the band is what makes it answerable.
+- **It repaints, it does not re-render.** `renderConversation()` rebuilds the
+  composer, which would take the slider out from under the finger mid-drag —
+  and out from under the keyboard on every arrow press. So `setConf()` patches
+  the two places the number shows (the turn head, the node chips) and defers
+  the save; `nodeChipsHtml()` was split out of `renderConversation()` for
+  exactly this.
+
+**Rejected: a "done" button.** The sim ends a conversation by declaring it can
+explain the idea in its own words. Free mode has no equivalent and does not
+want one — you stop when you stop. `canContinue()` returns false for a free
+node outright, which also stops **▶ continue** from setting the *simulated*
+learner loose on a conversation you deliberately drove yourself.
+
+**Rejected: a CLI `free` command.** The data round-trips (it is a `Node`
+field, so `_NODE_FIELDS` keeps it), `tree` marks the node `· you asked`, and
+`show` replays it with its own label — but an interactive tutor loop in the
+shell is a different feature, and this one was asked for as a button.
+
+**Two failure modes got explicit handling, both because free mode makes them
+common rather than rare.** A tutor call that fails leaves the question
+recorded and unanswered; asking again would append a second copy and leave the
+first looking like something the tutor ignored, so the node offers **▶ get
+that answer** and `answerTurn()` is idempotent on the turn it is given. And an
+empty free conversation opened from the header is a question box nobody typed
+into — walking away from one drops it, the same rule the run queue already
+applies to a node whose learner never spoke.
+
+**Both exports keep the two voices apart.** `🙋 I ask Claude` is the simulated
+learner speaking, in the same first person as the `💭 Thinking to myself`
+above it. A question you typed reads `🧑 My own question`, in the colour the
+app already uses for your own material. Reading your own words back as the
+sim's months later is the same failure the tinted asides exist to prevent —
+and fixing it here fixed it retroactively for every `user: true` turn the ask
+box has ever written.
+
+---
+
 ## Feature 57 — 🔍 double-check: a second pass over every tutor answer
 
 *(user-requested: "the teacher's response gets re-submitted to an AI after
