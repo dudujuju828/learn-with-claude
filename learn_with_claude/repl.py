@@ -60,7 +60,7 @@ class Shell:
                  learner_model="claude-sonnet-5", tutor_model="claude-sonnet-5",
                  effort="xhigh", level="student", timeout=300,
                  double_check=False, answer_words=TUTOR_WORDS_DEFAULT,
-                 width=66, line_spacing=1) -> None:
+                 code=False, code_language="", width=66, line_spacing=1) -> None:
         self.dir = Path(knowledge_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.r = Renderer(color=color, width=width, spacing=line_spacing)
@@ -74,6 +74,9 @@ class Shell:
         # the hard ceiling on one tutor answer (--answer-words); the rest of
         # the length brief is derived from it in personas.length_rule()
         self.answer_words = clean_max_words(answer_words)
+        # 💻 --code: ground answers in real snippets, optionally in one language
+        self.code = bool(code)
+        self.code_language = " ".join(str(code_language or "").split())[:40]
         self.kb: KnowledgeTree | None = None
 
     # ------------------------------------------------------------------ #
@@ -143,7 +146,8 @@ class Shell:
             topic, max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
             timeout=self.timeout, double_check=self.double_check,
-            max_words=self.answer_words, renderer=self.r,
+            max_words=self.answer_words, code=self.code,
+            code_language=self.code_language, renderer=self.r,
         )
         kb.add_root(topic, result, learner_model=self.learner_model, tutor_model=self.tutor_model,
                     learner_level=self.level)
@@ -175,7 +179,8 @@ class Shell:
                 topic, max_turns=self.max_turns, learner_model=self.learner_model,
                 tutor_model=self.tutor_model, effort=self.effort, level=self.level,
                 timeout=self.timeout, double_check=self.double_check,
-                max_words=self.answer_words, renderer=silent,
+                max_words=self.answer_words, code=self.code,
+                code_language=self.code_language, renderer=silent,
             )
 
         trees: dict[str, KnowledgeTree] = {}
@@ -264,7 +269,8 @@ class Shell:
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
             timeout=self.timeout, double_check=self.double_check,
-            max_words=self.answer_words, renderer=self.r,
+            max_words=self.answer_words, code=self.code,
+            code_language=self.code_language, renderer=self.r,
         )
         result.cost += pick_cost  # the picker call belongs to this node
 
@@ -323,7 +329,8 @@ class Shell:
             max_turns=self.max_turns, learner_model=self.learner_model,
             tutor_model=self.tutor_model, effort=self.effort, level=self.level,
             timeout=self.timeout, double_check=self.double_check,
-            max_words=self.answer_words, renderer=self.r,
+            max_words=self.answer_words, code=self.code,
+            code_language=self.code_language, renderer=self.r,
         )
 
         label = focus or self._derive_label(result, bt["tutor"])

@@ -123,6 +123,20 @@ directly (a local `claude` login can't run on a server), so it needs an
   custom tutors too, and 🔍 double-check is handed the same number so it
   never "corrects" a reply for being exactly as long as you asked for.
   Remembered per profile, like the style.
+  Beside them, **💻 code examples** is for a topic you will actually write or
+  read code for: the tutor shows the idea *in code* rather than describing
+  what the code would look like — a few real lines using the actual function
+  and type names, fenced so they render properly, copy with the ⧉ button and
+  travel into both exports. Deliberately not a tutor style but a switch on
+  top of one, since you can want the three lines that show a lock being taken
+  in plain everyday words just as much as in technical ones. The snippet
+  isn't charged against the answer length (the ceiling applies to the prose
+  around it), it never invents an API — a made-up function name is worse than
+  no example, because you would go and search for it — and where an idea has
+  no code form at all (a tradeoff, a piece of history) it says so instead of
+  drawing one anyway. Name a language to pin examples to it, or leave the box
+  blank and the tutor uses whatever the question implies. Per profile too, so
+  *computer-science* can have it on while *history* doesn't.
   Beside it, **🔍 double-check** turns on a second pass over every answer
   before you see it. A reviewer — handed the tutor's own brief verbatim, plus
   the question, the previous exchange and (for a 📚 sourced tree) the passage
@@ -736,6 +750,7 @@ knowledge/                    # your saved trees (*.know.json) + exported markdo
 | `--effort` | `xhigh` | reasoning effort for both personas (`low`…`max`) |
 | `--double-check` | off | read every tutor answer back before showing it — wrong claims, misleading wording, broken rules. Corrections are printed and saved with what it said first. A third model call per turn. |
 | `--answer-words` | `150` | hard ceiling on one tutor answer, in words (40–1600). The rest of the length brief scales with it; the reviewer gets the same number. The web app sets this under *answer length*. |
+| `--code [LANG]` | off | 💻 ground answers in real code — short snippets with the actual names, not prose about what the code would look like. `--code python` pins the language; bare `--code` lets the question decide. |
 | `-d, --dir` | `knowledge` | knowledge directory |
 | `--width` | `66` | terminal wrap width (dyslexia-friendly short measure) |
 | `--line-spacing` | `1` | `2` adds a blank line between lines for extra airiness |

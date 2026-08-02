@@ -195,6 +195,8 @@ def run_conversation(
     timeout: int = 300,
     double_check: bool = False,
     max_words: int = TUTOR_WORDS_DEFAULT,
+    code: bool = False,
+    code_language: str = "",
     renderer: Renderer | None = None,
 ) -> ConversationResult:
     """Run one investigation: learner and tutor alternating until done.
@@ -209,10 +211,12 @@ def run_conversation(
     `double_check` (🔍) sends each tutor reply to a reviewer before it is
     printed or recorded. It costs a third model call per turn.
 
-    `max_words` is the hard ceiling on one tutor answer (`--answer-words`).
-    The reviewer gets the same number: it enforces the tutor's brief, so
-    holding a deliberately long answer to the default would have it "repair"
-    replies that were exactly what was asked for.
+    `max_words` is the hard ceiling on one tutor answer (`--answer-words`),
+    and `code` (💻, `--code`) asks for answers grounded in real snippets.
+    Both reach the reviewer unchanged: it enforces the tutor's brief, so one
+    holding a deliberately long answer to the default — or reading a snippet
+    it was never told to expect — would "repair" replies that were exactly
+    what was asked for.
     """
     r = renderer or Renderer(color=True)
 
@@ -223,7 +227,8 @@ def run_conversation(
         exclude_dynamic=True,
         timeout=timeout,
     )
-    tutor_prompt = tutor_system(max_words=max_words)
+    tutor_prompt = tutor_system(max_words=max_words, code=code,
+                                code_language=code_language)
     if tutor_extra_system:
         tutor_prompt += f"\n\n{tutor_extra_system}"
     tutor = ClaudeSession(
@@ -245,7 +250,8 @@ def run_conversation(
     def double_checked(question: str, answer: str) -> tuple:
         nonlocal review_cost
         session = ClaudeSession(
-            system_prompt=review_system(max_words=max_words),
+            system_prompt=review_system(max_words=max_words, code=code,
+                                        code_language=code_language),
             model=tutor_model,
             effort=effort,
             exclude_dynamic=True,

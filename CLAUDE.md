@@ -53,8 +53,9 @@ a failure or an untrustworthy verdict leaves the original answer and puts no
 kind is enforced against the same text — which means a new argument to
 `tutor_system()` that isn't also passed to `review_system()` turns
 double-check into a machine for undoing that setting. `mode`, `custom_style`,
-`segments` and `max_words` all thread through; `grounding` deliberately does
-not (which tools the tutor had is none of the reviewer's business).
+`segments`, `max_words` and `code`/`code_language` all thread through;
+`grounding` deliberately does not (which tools the tutor had is none of the
+reviewer's business).
 
 The tutor's answer-length ceiling is `personas.TUTOR_WORDS_DEFAULT` (150),
 overridden per request by `max_words` on the body (web: *answer length*, per
@@ -62,6 +63,15 @@ profile) or `--answer-words` (CLI). Only the ceiling is stored — the rest of
 the length clause is derived in `length_rule()`, because a brief saying
 "3-6 sentences" under a 400-word cap is one the model resolves by obeying the
 tighter half. Never hardcode another length figure into the tutor's prompt.
+
+💻 `code` / `code_language` is a **switch on top of a style, not one of
+them** — it lands after the style addendum so it composes with `simple`,
+`concise` and a custom tutor alike. Its clause scopes the word ceiling to
+*prose* explicitly; without that, `concise` plus a snippet is unsatisfiable.
+Nothing in the rendering pipeline needed changing for it and nothing should:
+fenced blocks already survive `space_sentences()`, `split_tutor_parts()`,
+`copyBlock()` (`p,pre`) and `_md_lite()`, and `pre` is already excluded from
+the glossary underliner and the highlight/aside walkers.
 
 `illustrate` is the one route that isn't purely `call_model`: stage one is a
 normal `tutor` call, stage two goes to Gemini through `gemini_images.py`
@@ -177,7 +187,7 @@ Breaking one of these is a regression even if nothing errors.
 ## Testing
 
 ```bash
-python -m pytest -q                     # 54 tests
+python -m pytest -q                     # 55 tests
 python tests/test_web_helpers.py        # also runs standalone
 python tests/test_copilot_local.py
 ```

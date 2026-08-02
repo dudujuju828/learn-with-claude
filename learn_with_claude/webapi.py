@@ -312,13 +312,16 @@ def review_context(body: dict) -> str:
 
 
 def review_answer(body: dict, action: str, answer: str, call_model,
-                  mode: str, custom: "str | None", max_words: int) -> tuple:
+                  mode: str, custom: "str | None", max_words: int,
+                  code: bool, code_language: str) -> tuple:
     """Second pass over one tutor reply. Returns (text, checked, cost).
 
-    `max_words` has to be the SAME ceiling the tutor was given: the reviewer's
-    "contract" defect kind includes "well past the length ceiling", so a
-    reviewer holding a deliberately long answer to the default 150 would
-    "repair" replies that were exactly what the reader asked for.
+    Everything shaping the tutor's brief has to reach here unchanged: the
+    reviewer's "contract" defect kind covers going past the length ceiling and
+    answering more than was asked. A reviewer left on the default 150 would
+    "repair" a deliberately long answer, and one that was never told 💻 code
+    examples are wanted reads a snippet as padding and cuts it — in both cases
+    undoing exactly what the reader turned on.
     """
     message = review_message(
         action, answer, review_context(body), source_of(body),
@@ -326,7 +329,8 @@ def review_answer(body: dict, action: str, answer: str, call_model,
     try:
         text, cost = call_model(
             review_system(mode=mode, custom_style=custom, segments=True,
-                          max_words=max_words),
+                          max_words=max_words, code=code,
+                          code_language=code_language),
             [{"role": "user", "content": message}], "reviewer",
             effort=REVIEW_EFFORT,
             max_tokens=_answer_tokens(max_words, REVIEW_MAX_TOKENS),
@@ -355,8 +359,12 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
     # the reader's answer-length setting; absent or junk falls back to the
     # 150-word ceiling this has always used
     max_words = clean_max_words(body.get("max_words"))
+    # 💻 code examples, and optionally the language they want them in
+    code = bool(body.get("code"))
+    code_language = " ".join(str(body.get("code_language") or "").split())[:40]
     system = tutor_system(mode=mode, custom_style=custom, segments=True,
-                          grounding=grounding, max_words=max_words)
+                          grounding=grounding, max_words=max_words,
+                          code=code, code_language=code_language)
     extra = tutor_extra_context(body)
     if extra:
         system += f"\n\n{extra}"
@@ -373,6 +381,7 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
     if body.get("double_check"):
         text, checked, review_cost = review_answer(
             body, action, text, call_model, mode, custom, max_words,
+            code, code_language,
         )
         # one turn, one bill: the header stays honest about what was spent
         cost += review_cost

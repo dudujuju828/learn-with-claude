@@ -358,6 +358,59 @@ extra short and concrete.""",
 }
 
 
+# --------------------------------------------------------------------------- #
+# 💻 code examples — orthogonal to the style, not one of them.
+#
+# A style says how to WRITE; this says what to write WITH. Someone learning
+# how a mutex works wants the three lines that show the lock being taken,
+# whichever voice the answer is in — so this stacks on top of "simple" or
+# "concise" rather than replacing either. It is a toggle rather than a mode
+# for the same reason.
+#
+# The two rules doing the real work here are the ones pushing back against
+# what a model does by default when asked for code: it writes a *program*
+# (imports, error handling, a main) and it invents plausible API names. Both
+# are worse than no example — the first buries the one line that mattered,
+# the second sends the reader searching for something that doesn't exist.
+# --------------------------------------------------------------------------- #
+_CODE_EXAMPLES = """\
+CODE EXAMPLES — this learner is studying something they will actually read or
+write code for. Show it in code; don't only describe it.
+
+- Where the idea has a code form, GIVE the snippet instead of saying what the
+  code would look like. Three lines usually settle what a paragraph only
+  circles.
+- Keep it minimal: the fewest lines that make THIS point, and nothing else.
+  No imports, no error handling, no boilerplate that isn't part of the idea.
+  It is an illustration, not a program.
+- The word ceiling in your hard rules is a ceiling on PROSE. A short fenced
+  block sits outside it — which is not licence to write a long one, and never
+  replaces the one sentence saying what the snippet shows.
+- Always fence it with a language tag (```python), or it won't render as code.
+- Use REAL names: the actual functions, types, flags and error messages. An
+  invented API is worse than no example, because they will go and search for
+  it.
+- Where the idea genuinely has no code form — a tradeoff, a piece of history,
+  an analogy — say so in prose and move on. A snippet that illustrates nothing
+  is worse than none."""
+
+_CODE_ANY_LANGUAGE = """\
+- Use whatever language the question is about. Where it doesn't imply one,
+  pick the language this idea is most idiomatic in."""
+
+
+def code_examples_system(language: str = "") -> str:
+    """The 💻 code-examples clause, optionally pinned to one language."""
+    lang = " ".join(str(language or "").split())[:40]
+    if not lang:
+        return f"{_CODE_EXAMPLES}\n{_CODE_ANY_LANGUAGE}"
+    return (
+        f"{_CODE_EXAMPLES}\n"
+        f"- Write examples in {lang}, unless the question is plainly about a\n"
+        "  different language — then use that one."
+    )
+
+
 TUTOR_NO_TOOLS = """\
 This is a pure text conversation: do not use any tools or the filesystem."""
 
@@ -477,7 +530,8 @@ def session_memory_system(transcript: str) -> str:
 
 def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
                  segments: bool = False, grounding: "str | None" = None,
-                 max_words: int = TUTOR_WORDS_DEFAULT) -> str:
+                 max_words: int = TUTOR_WORDS_DEFAULT,
+                 code: bool = False, code_language: str = "") -> str:
     """The tutor's full system prompt: base rules, a style addendum (a built-in
     TUTOR_MODES entry, or the caller's own custom style text, which wins), and
     the tool clause. The base rules — answer what was asked, no menu endings,
@@ -487,7 +541,9 @@ def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
     local_grounding_system()'s text; omitted, the tutor is pure text with no
     tools at all. `max_words` is the hard ceiling on one answer — it binds a
     custom style exactly as it binds a built-in one, since it lives in the
-    hard rules rather than in the style."""
+    hard rules rather than in the style. `code` (💻) is orthogonal to the
+    style and lands after it: someone learning a mutex wants the three lines
+    that show the lock being taken whichever voice the answer is in."""
     if custom_style and custom_style.strip():
         style = "STYLE — CUSTOM (defined by the learner's operator):\n" + custom_style.strip()
     elif mode == "concise":
@@ -497,6 +553,8 @@ def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
     parts = [tutor_base(max_words)]
     if style:
         parts.append(style)
+    if code:
+        parts.append(code_examples_system(code_language))
     if segments:
         parts.append(tutor_segments(max_words))
     parts.append(grounding or TUTOR_NO_TOOLS)
@@ -572,19 +630,21 @@ not just the part you changed."""
 
 def review_system(*, mode: str = "balanced", custom_style: "str | None" = None,
                   segments: bool = False,
-                  max_words: int = TUTOR_WORDS_DEFAULT) -> str:
+                  max_words: int = TUTOR_WORDS_DEFAULT,
+                  code: bool = False, code_language: str = "") -> str:
     """The reviewer's system prompt: its own job, then the tutor's brief
     verbatim.
 
     Quoting tutor_system() rather than restating it is the point — the
     reviewer's "contract" category is only meaningful if it is holding the
     reply to the *same* text the tutor was given, including the style the
-    reader picked, the answer length they set, and the [tag] markup the
-    reading UI needs back. Restating it would drift the moment either prompt
-    changed, and a reviewer holding a 400-word answer to a 150-word ceiling
-    would "correct" replies that were exactly what was asked for. The
-    grounding clause is left off: which tools the tutor had is none of the
-    reviewer's business, and it has none of its own.
+    reader picked, the answer length they set, whether 💻 code examples were
+    asked for, and the [tag] markup the reading UI needs back. Restating it
+    would drift the moment either prompt changed, and a reviewer holding a
+    400-word answer to a 150-word ceiling — or reading a snippet it was never
+    told to expect — would "correct" replies that were exactly what was asked
+    for. The grounding clause is left off: which tools the tutor had is none
+    of the reviewer's business, and it has none of its own.
     """
     return "\n\n".join([
         REVIEW_JOB,
@@ -592,7 +652,7 @@ def review_system(*, mode: str = "balanced", custom_style: "str | None" = None,
         "rewrite too — you are enforcing this, not replacing it:",
         "<<<",
         tutor_system(mode=mode, custom_style=custom_style, segments=segments,
-                     max_words=max_words),
+                     max_words=max_words, code=code, code_language=code_language),
         ">>>",
     ])
 

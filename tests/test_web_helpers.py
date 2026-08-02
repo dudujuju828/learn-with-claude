@@ -1629,6 +1629,74 @@ def test_answer_length():
     print("ok  answer length (default unchanged, derived clause, clamps, reviewer agrees)")
 
 
+def test_code_examples():
+    """💻 code examples — a switch on top of a style, not one of them.
+
+    Off, every prompt must be byte-identical to what shipped before it
+    existed. On, it has to reach the reviewer too: a reviewer that was never
+    told snippets are wanted reads one as padding, calls it "contract", and
+    cuts it — undoing the setting the reader just turned on.
+    """
+    from learn_with_claude.personas import (
+        TUTOR_MODES, code_examples_system, review_system, tutor_system,
+    )
+    from learn_with_claude.webapi import handle_tutor
+
+    # off is the old prompt exactly, for every style and both segment modes
+    for mode in TUTOR_MODES:
+        for seg in (False, True):
+            plain = tutor_system(mode=mode, segments=seg)
+            assert "CODE EXAMPLES" not in plain
+            assert tutor_system(mode=mode, segments=seg, code=False,
+                                code_language="python") == plain
+            assert "CODE EXAMPLES" not in review_system(mode=mode, segments=seg)
+
+    # on, it stacks on the style rather than replacing it, and lands before
+    # the reading UI's markup contract
+    s = tutor_system(mode="simple", segments=True, code=True)
+    assert "STYLE — SIMPLE" in s and "CODE EXAMPLES" in s and "MARKUP" in s
+    assert s.index("STYLE — SIMPLE") < s.index("CODE EXAMPLES") < s.index("MARKUP")
+    # and on top of a custom tutor too
+    assert "CODE EXAMPLES" in tutor_system(custom_style="speak in haiku", code=True)
+
+    # the rules that earn their place: no invented APIs, no whole programs,
+    # and permission to decline when an idea has no code form
+    assert "invented API is worse than no example" in code_examples_system()
+    assert "It is an illustration, not a program." in code_examples_system()
+    assert "no code form" in code_examples_system()
+    # a snippet is not charged against the prose ceiling
+    assert "ceiling on PROSE" in code_examples_system()
+
+    # language: pinned when given, chosen from the question when not
+    assert "Write examples in rust" in code_examples_system("rust")
+    assert "Use whatever language the question is about" in code_examples_system()
+    assert "Write examples in" not in code_examples_system()
+    # junk in the language box can't restructure the prompt: newlines are
+    # collapsed (so it can't open a bullet of its own) and it is capped
+    assert "Write examples in py thon," in code_examples_system("py\nthon")
+    long = code_examples_system("x" * 200)
+    assert "x" * 40 in long and "x" * 41 not in long
+
+    # end to end, and the reviewer is handed the very same brief
+    seen = {}
+
+    def spy(system, messages, role, effort=None, max_tokens=16000):
+        seen[role] = system
+        return ('{"verdict": "clean"}' if role == "reviewer" else "a"), 0.01
+
+    body = {"kind": "root", "topic": "x", "turns": [], "action": "q",
+            "double_check": True}
+    handle_tutor({**body, "code": True, "code_language": "go"}, spy)
+    assert "CODE EXAMPLES" in seen["tutor"] and "Write examples in go" in seen["tutor"]
+    assert "CODE EXAMPLES" in seen["reviewer"] and "Write examples in go" in seen["reviewer"]
+
+    seen.clear()
+    handle_tutor(dict(body), spy)          # absent → off, as it always was
+    assert "CODE EXAMPLES" not in seen["tutor"]
+    assert "CODE EXAMPLES" not in seen["reviewer"]
+    print("ok  code examples (off is unchanged, stacks on styles, reviewer agrees)")
+
+
 def test_free_conversation():
     """🧑 free — a conversation with no simulated learner in it.
 
@@ -1768,4 +1836,5 @@ if __name__ == "__main__":
     test_checked_exports()
     test_free_conversation()
     test_answer_length()
+    test_code_examples()
     print("\nall green")

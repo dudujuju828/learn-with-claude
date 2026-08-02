@@ -1783,6 +1783,19 @@
   read it one idea at a time. The <b>concise</b> style keeps its own tighter
   limit whatever you set. Like the tutor style, it is remembered per
   profile.</p>
+  <p><b>💻 code examples</b> — for a topic you'll actually write or read code
+  for. The tutor shows the idea <i>in code</i> rather than describing what
+  the code would look like: a few real lines, using the actual function and
+  type names so you can go and search for them, fenced so they render as
+  code. Deliberately not a tutor style but a switch on top of one — you can
+  want the three lines that show a lock being taken in plain everyday words
+  just as much as in technical ones. The snippet doesn't eat the answer
+  length; the word ceiling applies to the prose around it. And where an idea
+  has no code form — a design tradeoff, a piece of history — it says so
+  instead of inventing a snippet that illustrates nothing. Name a language to
+  pin examples to it, or leave the box blank and the tutor uses whatever the
+  question implies. Remembered per profile, so <i>computer-science</i> can
+  have it on while <i>history</i> doesn't.</p>
   <p><b>learner</b> sets how much the simulated learner already knows, from a
   curious novice to an expert from a neighbouring field — so its questions can
   keep up with the tutor. <b>auto</b> (the default) matches the tutor style;
@@ -2154,6 +2167,24 @@
         <select id="lensel" aria-label="answer length" style="flex:1"></select>
       </div>
       <p class="hint" id="lenhint"></p>
+
+      <div class="newrow switchrow">
+        <label for="codebtn"><b>💻 code examples</b></label>
+        <button id="codebtn" class="toggle" role="switch">off</button>
+      </div>
+      <div class="newrow" id="codelangrow" style="display:none">
+        <input id="codelang" type="text" maxlength="40" style="flex:1"
+               placeholder="language (optional) — e.g. python"
+               aria-label="preferred language for code examples" autocomplete="off">
+      </div>
+      <p class="hint">for a topic you'll actually write or read code for: the
+      tutor shows the idea <b>in code</b> instead of describing what the code
+      would look like — a few real lines, with the actual function and type
+      names, fenced so they render properly. It stacks on any tutor style, and
+      the snippet doesn't eat the word ceiling. Where an idea has no code form
+      (a tradeoff, a bit of history) it says so instead of inventing one. Name
+      a language to pin examples to it, or leave it blank and the tutor uses
+      whatever the question implies.</p>
 
       <div class="newrow switchrow">
         <label for="dblbtn"><b>🔍 double-check</b></label>
@@ -2816,7 +2847,7 @@ const PREF_DEFAULTS = {font: "Lexend", fs: 17, lh: 1.75, ls: 0.02, ws: 0.07,
                        theme: "cream", speak: false, ruler: false, focus: false,
                        rate: 1, voice: "",
                        tmode: "balanced", think: true, llevel: "auto",
-                       dblcheck: false, awords: 150,
+                       dblcheck: false, awords: 150, code: false, codelang: "",
                        revtype: false, drill: false, drillwait: 5, examq: 5};
 /* tmode/think/llevel/dblcheck are the live values, but they belong to the
    active profile — see the profiles section, which saves and restores them
@@ -2881,7 +2912,7 @@ function applyPrefs(){
   document.body.classList.toggle("hide-think", !prefs.think);
   for (const [id, key] of [["speakbtn", "speak"], ["rulerbtn", "ruler"],
                            ["focusbtn", "focus"], ["thinkbtn", "think"],
-                           ["dblbtn", "dblcheck"]]){
+                           ["dblbtn", "dblcheck"], ["codebtn", "code"]]){
     const b = $(id);
     b.textContent = prefs[key] ? "on" : "off";
     b.classList.toggle("on", prefs[key]);
@@ -2893,6 +2924,9 @@ function applyPrefs(){
   if ($("levelsel").selectedIndex < 0) $("levelsel").value = prefs.llevel = "auto";
   levelHint();
   buildLenSelect(); lenHint();
+  // the language box is only meaningful once code examples are on
+  $("codelangrow").style.display = prefs.code ? "" : "none";
+  if ($("codelang").value !== (prefs.codelang || "")) $("codelang").value = prefs.codelang || "";
   document.body.classList.toggle("ruler-on", prefs.ruler);
   document.body.classList.toggle("focus-on", prefs.focus);
   if (rulerActive()) refreshRuler(); else clearRuler();
@@ -2949,6 +2983,17 @@ function buildPanel(){
   // tutor sends, not how the page renders it
   $("dblbtn").onclick = () => {
     prefs.dblcheck = !prefs.dblcheck; applyPrefs(); rememberProfileSettings();
+  };
+  /* 💻 code examples — also a "what the tutor sends" setting, not a rendering
+     one, so it lives here rather than in the reading panel */
+  $("codebtn").onclick = () => {
+    prefs.code = !prefs.code; applyPrefs(); rememberProfileSettings();
+    if (prefs.code) setTimeout(() => $("codelang").focus(), 30);
+  };
+  $("codelang").onchange = () => {
+    prefs.codelang = $("codelang").value.replace(/\s+/g, " ").trim().slice(0, 40);
+    $("codelang").value = prefs.codelang;
+    savePrefs(); rememberProfileSettings();
   };
   $("tutoreditbtn").onclick = () => {
     const t = currentTutor();
@@ -3168,12 +3213,18 @@ function currentTutor(){
 /* everything that shapes a tutor call, in one place — every caller spreads
    this, so 🔍 double-check reaches the sim loop, ⛏ dig, your own questions and
    the banked ones without four separate wirings */
+function codeLang(){
+  return String(prefs.codelang || "").replace(/\s+/g, " ").trim().slice(0, 40);
+}
 function tutorParams(){
   const t = currentTutor();
   const style = t ? {mode: "balanced", custom_style: t.style} : {mode: prefs.tmode};
   // the ceiling binds a custom tutor exactly as it binds a built-in style —
   // it lives in the tutor's hard rules, not in the style addendum
   const p = {...style, max_words: answerWords()};
+  // 💻 orthogonal to the style rather than one of them: you can want the three
+  // lines that show the lock being taken in any voice at all
+  if (prefs.code) Object.assign(p, {code: true, code_language: codeLang()});
   return prefs.dblcheck ? {...p, double_check: true} : p;
 }
 function styleName(){
@@ -3231,12 +3282,13 @@ async function tryTutor(){
   box.innerHTML = `<div class="who">${ico("📘")}asking<span class="dots"></span></div>`;
   $("tutortry").disabled = true;
   try {
-    // the preview has to be the real thing, so it gets the same answer-length
-    // ceiling a real turn would — otherwise you tune a tutor against a length
-    // it will never actually write to
+    // the preview has to be the real thing, so it gets the same answer length
+    // and 💻 setting a real turn would — otherwise you tune a tutor against
+    // an answer it will never actually write
     const r = await api("tutor", {kind: "root", turns: [], action: q,
                                   custom_style: style.slice(0, 4000),
-                                  max_words: answerWords()});
+                                  max_words: answerWords(),
+                                  ...(prefs.code ? {code: true, code_language: codeLang()} : {})});
     box.innerHTML = `<div class="who">${ico("📘")}${esc(oneLine(q, 60))} · ${fmtCost(r.cost)}</div>` +
                     tutorBodyHtml({tutor: r.tutor, parts: r.parts});
   } catch (e){
@@ -4785,7 +4837,8 @@ async function syncProfilesFromServer(){
    prefs still holds the LIVE values (every reader of prefs.tmode is
    unchanged); switching profile saves the outgoing set and loads the
    incoming one. */
-const PROFILE_SETTINGS = ["tmode", "think", "llevel", "dblcheck", "awords"];
+const PROFILE_SETTINGS = ["tmode", "think", "llevel", "dblcheck", "awords",
+                          "code", "codelang"];
 function captureProfileSettings(name){
   const rec = profileRecord(name, true);
   if (!rec) return;
@@ -10595,7 +10648,10 @@ function setStatus(msg){
   const lvl = runNode && runNode.learner_level && runNode.learner_level !== "student"
     ? runNode.learner_level + " learner · " : "";
   statusBase = (runLabel ? runLabel + " · " : "") +
-               (styleName() ? styleName() + " · " : "") + lvl + msg;
+               (styleName() ? styleName() + " · " : "") +
+               // 💻 is easy to leave on by accident; the running status is
+               // where you'd notice, before the answers arrive
+               (prefs.code ? (codeLang() || "code") + " · " : "") + lvl + msg;
   statusStart = Date.now();
   $("statusmsg").setAttribute("role", "status");
   if (!statusTimer) statusTimer = setInterval(statusTick, 1000);

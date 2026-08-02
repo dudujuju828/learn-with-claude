@@ -57,6 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
                         f"clamped to {TUTOR_WORDS_MIN}-{TUTOR_WORDS_MAX}). The "
                         "rest of the length brief scales with it. The web app "
                         "sets this under 'answer length'.")
+    p.add_argument("--code", nargs="?", const="", default=None, metavar="LANGUAGE",
+                   help="Ground answers in real code: short snippets with the "
+                        "actual function and type names, rather than prose about "
+                        "what the code would look like. Give a language to pin "
+                        "them to it (--code python); omit it and the tutor picks "
+                        "whatever the question implies.")
     p.add_argument("-d", "--dir", default=None,
                    help=f"Knowledge directory (default: $LEARN_DIR or {DEFAULT_DIR}).")
     p.add_argument("--width", type=int, default=66,
@@ -96,6 +102,9 @@ def main(argv: list[str] | None = None) -> int:
         level=args.level,
         double_check=args.double_check,
         answer_words=args.answer_words,
+        # --code with no value means "yes, any language"; absent means off
+        code=args.code is not None,
+        code_language=args.code or "",
         timeout=args.timeout,
         width=args.width,
         line_spacing=args.line_spacing,

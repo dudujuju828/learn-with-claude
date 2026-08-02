@@ -5,6 +5,73 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Feature 60 — 💻 code examples: show it, don't describe it
+
+*(user-requested: "a sort of 'programming' type flag — that you turn on/off
+and if on will support with more examples".)*
+
+A toggle beside 🔍 double-check. On, the tutor shows the idea **in code**
+instead of describing what the code would look like, with an optional
+language box that only exists while the switch is on.
+
+**Deliberately not a tutor style.** That was the first design decision and the
+one everything else follows from. The styles are mutually exclusive answers to
+*how should this be written*; wanting the three lines that show a lock being
+taken is orthogonal to that — you can want them in plain everyday words just
+as much as in technical ones. So it stacks: it lands after the style addendum
+in `tutor_system()` and works on top of `simple`, `concise`, and a custom
+tutor alike.
+
+**Two rules in the prompt do the real work,** and both push against what a
+model does by default when asked for code:
+
+- *It is an illustration, not a program.* Asked for an example, models write a
+  runnable file — imports, error handling, a `main` — which buries the one
+  line that mattered under scaffolding.
+- *Use REAL names.* A plausible invented API is worse than no example at all,
+  because the reader will go and search for it. This is the same asymmetry 🔍
+  double-check exists for: a wrong snippet and a right one look identical to
+  someone who came here because they don't know the subject.
+
+A third earns its place by what it *doesn't* do: where an idea has no code
+form — a tradeoff, a piece of history, an analogy — the tutor is told to say
+so and move on, the same licence to decline that keeps 🖼 illustrate from
+drawing decoration.
+
+**The snippet is not charged against the answer length.** The word ceiling is
+explicitly scoped to prose, or `concise` (35 words) plus a code block would be
+unsatisfiable and the tutor would silently drop one of them. The clause says
+so — and says in the same breath that this is not licence to write a long
+block, and never replaces the sentence saying what the snippet shows.
+
+**The reviewer gets it too**, which is the trap this repo now has a written
+rule about: a reviewer that was never told snippets are wanted reads one as
+answering more than was asked, files it under *contract*, and cuts it —
+double-check quietly undoing the switch the reader just turned on.
+
+**Nothing had to be built for the rendering**, which is a good sign the seam
+was already in the right place. `space_sentences()` has always left fenced
+blocks alone, `split_tutor_parts()` already skips fences when scanning for
+`[tag]` lines, the browser renders them as `<pre>`, `copyBlock()` harvests
+`p,pre`, the glossary underliner and the highlight/aside walkers already
+exclude `pre` (a `malloc` inside a listing must not sprout a popover), and
+`_md_lite()` in the HTML export handles fences. A probe asserts the round
+trip anyway.
+
+**Rejected: telling the simulated learner.** It would ask sharper
+programming-shaped questions — and it would also stop being ignorant in the
+way that drives the whole descent. Tutor-only, exactly like the answer-length
+ceiling. **Rejected: code in glossary definitions** (they are 10-35 words; a
+snippet breaks the flashcard shape) **and in the quiz and exam** (different
+artifacts, different briefs).
+
+Stored in `PROFILE_SETTINGS`, so *computer-science* can have it on while
+*history* doesn't, and surfaced in the running status line (`python · turn 3:
+claude is answering…`) because a flag you left on by accident is one you want
+to notice before the answers arrive, not after.
+
+---
+
 ## Feature 59 — answer length: the 150-word ceiling becomes a setting
 
 *(user-requested: "make the 150 word-count that has been hardcoded into the
