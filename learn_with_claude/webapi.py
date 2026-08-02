@@ -269,12 +269,26 @@ def tutor_payload(text: str) -> tuple:
 # and review_result() in simulator.py for what its reply is trusted to say.
 # --------------------------------------------------------------------------- #
 REVIEW_CONTEXT_MAX = 1200
-# The reply is ~150 words and the judgement is "is any of this wrong", not
-# "work this out from first principles" — so what it needs is a careful read,
-# not a deep one. Full effort here would double the wait on every single turn,
-# which is the cost the reader actually feels.
+# The judgement is "is any of this wrong", not "work this out from first
+# principles" — so what it needs is a careful read, not a deep one. Full
+# effort here would double the wait on every single turn, which is the cost
+# the reader actually feels.
 REVIEW_EFFORT = "medium"
 REVIEW_MAX_TOKENS = 8000
+
+
+def _answer_tokens(max_words: int, floor: int) -> int:
+    """A token budget that leaves room to write the answer out in full.
+
+    Both the tutor and the reviewer emit up to `max_words` of prose — the
+    reviewer because a repair is the WHOLE corrected reply, not a diff — on
+    top of whatever reasoning they do. At the 150-word default both budgets
+    were already many times what an answer needs, so this returns the old
+    constant unchanged and only bites at the long end, where a truncated
+    answer (or a repair cut off mid-sentence, which review_result would then
+    have to refuse) is a real failure.
+    """
+    return max(floor, 6000 + max_words * 4)
 
 
 def review_context(body: dict) -> str:
@@ -314,7 +328,8 @@ def review_answer(body: dict, action: str, answer: str, call_model,
             review_system(mode=mode, custom_style=custom, segments=True,
                           max_words=max_words),
             [{"role": "user", "content": message}], "reviewer",
-            effort=REVIEW_EFFORT, max_tokens=REVIEW_MAX_TOKENS,
+            effort=REVIEW_EFFORT,
+            max_tokens=_answer_tokens(max_words, REVIEW_MAX_TOKENS),
         )
     except ApiError:
         # The answer is already written and already paid for. A checker that
@@ -351,7 +366,8 @@ def handle_tutor(body: dict, call_model, grounding: "str | None" = None) -> dict
             messages.append({"role": "user", "content": t["action"]})
             messages.append({"role": "assistant", "content": t["tutor"]})
     messages.append({"role": "user", "content": action})
-    text, cost = call_model(system, messages, "tutor")
+    text, cost = call_model(system, messages, "tutor",
+                            max_tokens=_answer_tokens(max_words, 16000))
 
     checked = None
     if body.get("double_check"):

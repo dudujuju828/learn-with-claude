@@ -110,14 +110,19 @@ directly (a local `claude` login can't run on a server), so it needs an
   preview), which syncs across devices like the trees and keeps the base
   rules in force. Under it, **answer length** sets the hard ceiling on one
   answer in words — 150 by default, the figure this app ran on for its whole
-  life, with presets from 80 to 600 or any number you type (40–800). Only
-  the ceiling is stored: the rest of the tutor's length brief (the "usually
-  N–M words" band, the sentence count) is derived from it, because a brief
-  saying "3–6 sentences" under a 400-word cap is a brief arguing with itself
-  and the model would obey the tighter half. It binds custom tutors too, and
-  🔍 double-check is handed the same number so it never "corrects" a reply
-  for being exactly as long as you asked for. Remembered per profile, like
-  the style.
+  life, with presets from *brief* (80) up to **spell it right out** (1600),
+  or any number you type (40–1600). Only the ceiling is stored: the rest of
+  the tutor's length brief (the "usually N–M words" band, the sentence
+  count, and how many labelled parts a reply may be split into) is derived
+  from it, because a brief saying "3–6 sentences" under a 400-word cap is a
+  brief arguing with itself and the model would obey the tighter half. The
+  top setting is for the ideas that only make sense whole — the mechanism,
+  the why, an example and the caveats in one answer — and it is still *one*
+  question answered, just with nothing left implicit; a longer answer also
+  comes back in more parts, so it still reads one idea at a time. It binds
+  custom tutors too, and 🔍 double-check is handed the same number so it
+  never "corrects" a reply for being exactly as long as you asked for.
+  Remembered per profile, like the style.
   Beside it, **🔍 double-check** turns on a second pass over every answer
   before you see it. A reviewer — handed the tutor's own brief verbatim, plus
   the question, the previous exchange and (for a 📚 sourced tree) the passage
@@ -730,7 +735,7 @@ knowledge/                    # your saved trees (*.know.json) + exported markdo
 | `--learner-model` / `--tutor-model` | = `--model` | per-persona override |
 | `--effort` | `xhigh` | reasoning effort for both personas (`low`…`max`) |
 | `--double-check` | off | read every tutor answer back before showing it — wrong claims, misleading wording, broken rules. Corrections are printed and saved with what it said first. A third model call per turn. |
-| `--answer-words` | `150` | hard ceiling on one tutor answer, in words (40–800). The rest of the length brief scales with it; the reviewer gets the same number. The web app sets this under *answer length*. |
+| `--answer-words` | `150` | hard ceiling on one tutor answer, in words (40–1600). The rest of the length brief scales with it; the reviewer gets the same number. The web app sets this under *answer length*. |
 | `-d, --dir` | `knowledge` | knowledge directory |
 | `--width` | `66` | terminal wrap width (dyslexia-friendly short measure) |
 | `--line-spacing` | `1` | `2` adds a blank line between lines for extra airiness |

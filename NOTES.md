@@ -13,7 +13,22 @@ prompts into a variable that is change-able in some sort of settings".)*
 `TUTOR_SYSTEM` carried the line *"Usually 3-6 sentences (roughly 60-120
 words), and 150 words is a hard ceiling"* since the beginning. It is now
 `TUTOR_WORDS_DEFAULT`, moved by **answer length** in the sidebar (presets 80 /
-150 / 300 / 600, or any number 40–800) and by `--answer-words` in the CLI.
+150 / 300 / 600 / 1600, or any number 40–1600) and by `--answer-words` in the
+CLI.
+
+The top preset — *spell it right out*, added on request for "when you want the
+clearest of explanations" — is a real essay, and it needed three things beyond
+a bigger number to be worth having. The **part budget scales with it**
+(`segment_budget()`): three labelled cards is right for 150 words and wrong
+for 1600, since the whole purpose of that markup is that a long answer arrives
+one idea at a time, and capping it at three hands the reader three walls
+instead of one. The **token budgets scale** (`_answer_tokens()`) for the tutor
+and, more importantly, the reviewer — a 🔍 repair is the WHOLE corrected reply
+rather than a diff, so a reviewer cut off mid-sentence would produce a rewrite
+`review_result()` then has to refuse. Both return their old constants
+unchanged at the default. And the **hint flips sides**: below the default the
+risk worth naming is a thin answer, above it a lecture, so the panel stops
+cautioning against length once you have deliberately asked for it.
 
 **The number is not substituted on its own, and that is the whole design.**
 Dropping 400 into a sentence that still says "3-6 sentences" produces a brief

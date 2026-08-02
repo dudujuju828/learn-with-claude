@@ -229,7 +229,12 @@ CONTRACT_REMINDER = (
 # --------------------------------------------------------------------------- #
 TUTOR_WORDS_DEFAULT = 150
 TUTOR_WORDS_MIN = 40
-TUTOR_WORDS_MAX = 800
+# The top of the range is a genuine essay — the mechanism, the why, an
+# example and the caveats in one answer, for a topic that only makes sense
+# whole. The tutor's other hard rules still bind at that length (one question
+# answered, no menu ending, one sentence per paragraph), so it buys a fuller
+# explanation of the SAME question rather than licence to lecture.
+TUTOR_WORDS_MAX = 1600
 # roughly how many words this tutor writes per sentence — it is held to short
 # ones, so the divisor is deliberately low
 _WORDS_PER_SENTENCE = 20
@@ -360,7 +365,21 @@ This is a pure text conversation: do not use any tools or the filesystem."""
 # Web-only markup: the reading UI splits a tagged reply into small labelled
 # cards (the direct answer stays on top, each aspect becomes its own card), so
 # the learner can take the answer one piece at a time instead of one wall.
-TUTOR_SEGMENTS = """\
+#
+# The part budget scales with the answer-length ceiling, and has to. Three
+# parts is right for a 150-word reply and wrong for a 1600-word one: the whole
+# purpose of this markup is that a long answer arrives as one idea at a time,
+# so capping a very long answer at three parts hands the reader three walls
+# instead of one. It stays 3 at the default (and up to 300 words), which is
+# what keeps the ordinary reply exactly as it was.
+def segment_budget(max_words: int = TUTOR_WORDS_DEFAULT) -> int:
+    return min(6, max(3, round(clean_max_words(max_words) / 150)))
+
+
+def tutor_segments(max_words: int = TUTOR_WORDS_DEFAULT) -> str:
+    cap = segment_budget(max_words)
+    usual_lo = 1 if cap <= 3 else 2
+    return f"""\
 MARKUP — the learner's reading app shows your reply in small pieces:
 - START with the direct answer to the question: 1-3 sentences, NO tag.
 - When (and only when) your reply genuinely contains distinct aspects, split
@@ -373,9 +392,13 @@ MARKUP — the learner's reading app shows your reply in small pieces:
   [in context]
   You may also coin a tag that names the sub-question a part answers, a few
   words in the same square-bracket form, e.g. [so where does the copy live?]
-- At most 3 tagged parts per reply, usually 1-2. A short reply needs NO tags —
+- At most {cap} tagged parts per reply, usually {usual_lo}-{cap - 1}. A short \
+reply needs NO tags —
   never pad an answer just to use tags.
 - Tags sit alone at the start of a line, never mid-sentence, never in code."""
+
+
+TUTOR_SEGMENTS = tutor_segments()
 
 
 # Local-mode only (the Copilot CLI transport, `learn --web`): the tutor's
@@ -475,7 +498,7 @@ def tutor_system(*, mode: str = "balanced", custom_style: "str | None" = None,
     if style:
         parts.append(style)
     if segments:
-        parts.append(TUTOR_SEGMENTS)
+        parts.append(tutor_segments(max_words))
     parts.append(grounding or TUTOR_NO_TOOLS)
     return "\n\n".join(parts)
 

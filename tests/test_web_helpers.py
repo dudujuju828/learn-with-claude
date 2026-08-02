@@ -1542,12 +1542,14 @@ def test_answer_length():
     replies that were exactly what the reader asked for.
     """
     from learn_with_claude.personas import (
-        TUTOR_WORDS_DEFAULT, TUTOR_WORDS_MAX, TUTOR_WORDS_MIN, clean_max_words,
-        concise_style, length_rule, review_system, tutor_system,
+        TUTOR_SEGMENTS, TUTOR_WORDS_DEFAULT, TUTOR_WORDS_MAX, TUTOR_WORDS_MIN,
+        clean_max_words, concise_style, length_rule, review_system,
+        segment_budget, tutor_segments, tutor_system,
     )
-    from learn_with_claude.webapi import handle_tutor
+    from learn_with_claude.webapi import _answer_tokens, handle_tutor
 
     assert TUTOR_WORDS_DEFAULT == 150
+    assert TUTOR_WORDS_MAX == 1600
 
     # the default clause, word for word as it always read
     d = length_rule()
@@ -1567,7 +1569,25 @@ def test_answer_length():
     assert clean_max_words(None) == clean_max_words("junk") == TUTOR_WORDS_DEFAULT
     assert clean_max_words(1) == TUTOR_WORDS_MIN
     assert clean_max_words(99999) == TUTOR_WORDS_MAX
+    assert clean_max_words(1600) == 1600      # the top preset is reachable
     assert clean_max_words("300") == clean_max_words(300.4) == 300
+
+    # the reading UI's part budget scales too — capping a 1600-word answer at
+    # three parts hands the reader three walls instead of one, which is the
+    # opposite of what that markup is for
+    assert segment_budget() == segment_budget(300) == 3
+    assert segment_budget(600) == 4 and segment_budget(TUTOR_WORDS_MAX) == 6
+    assert tutor_segments() == TUTOR_SEGMENTS          # default untouched
+    assert "At most 3 tagged parts per reply, usually 1-2" in TUTOR_SEGMENTS
+    assert "At most 6 tagged parts per reply, usually 2-5" in tutor_segments(1600)
+    assert "At most 6" in tutor_system(segments=True, max_words=1600)
+    assert "At most 3" in tutor_system(segments=True)
+
+    # a long answer has to fit in the call that writes it — and in the
+    # reviewer's, since a repair is the WHOLE reply rather than a diff
+    assert _answer_tokens(TUTOR_WORDS_DEFAULT, 8000) == 8000     # unchanged
+    assert _answer_tokens(TUTOR_WORDS_DEFAULT, 16000) == 16000   # unchanged
+    assert _answer_tokens(TUTOR_WORDS_MAX, 8000) > 8000 * 1.4
 
     # concise is a deliberate choice of brevity: it does NOT grow with the
     # ceiling, but it may not exceed one tighter than itself

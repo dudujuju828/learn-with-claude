@@ -1767,16 +1767,22 @@
   to simple everyday words — and applies from the next turn, even mid-run.</p>
   <p><b>answer length</b> is the hard ceiling on one answer, in words — 150
   by default, which is what this app ran on for its whole life. Pick a
-  preset or type your own number (40–800). The rest of the tutor's length
+  preset or type your own number (40–1600). The rest of the tutor's length
   brief scales with it, so raising the ceiling really does buy longer
   answers instead of leaving a sentence count arguing with it. It binds your
   own custom tutors too, and 🔍 double-check is told the same number so it
-  never "corrects" an answer for being exactly as long as you asked. Longer
-  isn't simply better here: the tutor is meant to answer the one question you
-  asked, and a much longer answer is usually several questions at once —
-  which is the thing ⤵ <b>branch</b> and <b>→ next</b> exist to do properly.
-  The <b>concise</b> style keeps its own tighter limit whatever you set.
-  Like the tutor style, it is remembered per profile.</p>
+  never "corrects" an answer for being exactly as long as you asked. Below
+  the default, the risk is a thin answer; above it, a lecture — the tutor is
+  meant to answer the one question you asked, and a much longer answer is
+  often several questions at once, which is what ⤵ <b>branch</b> and
+  <b>→ next</b> exist to do properly. At the top, <b>spell it right out</b>
+  (1600 words) is for the ideas that only make sense whole: room for the
+  mechanism, the why, an example and the caveats in a single answer. It's
+  still <i>one</i> question answered, just with nothing left implicit — and
+  the tutor is told to break a long answer into more parts, so you can still
+  read it one idea at a time. The <b>concise</b> style keeps its own tighter
+  limit whatever you set. Like the tutor style, it is remembered per
+  profile.</p>
   <p><b>learner</b> sets how much the simulated learner already knows, from a
   curious novice to an expert from a neighbouring field — so its questions can
   keep up with the tutor. <b>auto</b> (the default) matches the tutor style;
@@ -3074,12 +3080,13 @@ function levelHint(){
    setting would look broken. It rides on tutorParams(), so it reaches the sim
    loop, your own questions, banked ones, 🧑 free turns and the custom-tutor
    preview from one place. */
-const ANSWER_WORDS_DEFAULT = 150, ANSWER_WORDS_MIN = 40, ANSWER_WORDS_MAX = 800;
+const ANSWER_WORDS_DEFAULT = 150, ANSWER_WORDS_MIN = 40, ANSWER_WORDS_MAX = 1600;
 const ANSWER_LENGTHS = [
-  [80,  "brief — 80 words"],
-  [150, "standard — 150 words (default)"],
-  [300, "fuller — 300 words"],
-  [600, "in depth — 600 words"],
+  [80,   "brief — 80 words"],
+  [150,  "standard — 150 words (default)"],
+  [300,  "fuller — 300 words"],
+  [600,  "in depth — 600 words"],
+  [1600, "spell it right out — 1600 words"],
 ];
 function cleanAnswerWords(v){
   const n = Math.round(Number(v));
@@ -3103,11 +3110,21 @@ function buildLenSelect(){
 }
 function lenHint(){
   const n = answerWords();
+  // the caution and the reassurance are opposite halves of the same point, so
+  // only one of them is ever true for the setting you're looking at: below the
+  // default the risk is a thin answer, above it a lecture
+  const note = n >= 600
+    ? `room for the mechanism, the why, an example and the caveats in one ` +
+      `answer — worth it on the ideas that only make sense whole. It's still ` +
+      `<i>one</i> question answered, just without leaving anything implicit, ` +
+      `and it arrives split into more parts so you can still read it one idea ` +
+      `at a time.`
+    : `longer isn't simply better: the tutor is meant to answer the one ` +
+      `question you asked, and a much longer answer is usually several at once.`;
   $("lenhint").innerHTML =
     `the hard ceiling on one answer — most land well under it (around ` +
-    `${Math.round(n * 0.4)}–${Math.round(n * 0.8)} words). Longer isn't simply ` +
-    `better: the tutor is meant to answer the one question you asked, and a ` +
-    `much longer answer is usually several at once. Applies from the next turn.` +
+    `${Math.round(n * 0.4)}–${Math.round(n * 0.8)} words). ${note} ` +
+    `Applies from the next turn.` +
     (prefs.tmode === "concise"
       ? ` <b>concise</b> keeps its own tighter limit whatever you set here.`
       : "");
