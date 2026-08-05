@@ -2749,6 +2749,16 @@
 /* ------------------------------------------------------------------ */
 const $ = (id) => document.getElementById(id);
 
+/* "is this keystroke going into something the reader is writing in?" —
+   asked before any single-key shortcut claims the key. The notes editor is
+   a contenteditable, not a textarea, so a selector that only knows about
+   form fields turned every bare-letter shortcut into a character you
+   couldn't type there (j/k/q/N/? all vanished mid-word). */
+function typingInto(el){
+  return !!el?.closest?.(
+    "input,select,textarea,[contenteditable]:not([contenteditable=false])");
+}
+
 function esc(s){
   return String(s ?? "").replace(/[&<>"']/g,
     (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -3609,7 +3619,7 @@ function stopSpeechFollow(){ speechFollow = false; }
 window.addEventListener("wheel", stopSpeechFollow, {passive: true});
 window.addEventListener("touchmove", stopSpeechFollow, {passive: true});
 window.addEventListener("keydown", (e) => {
-  if (e.target.closest?.("input,select,textarea")) return;
+  if (typingInto(e.target)) return;
   if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(e.key))
     stopSpeechFollow();
 });
@@ -11768,7 +11778,7 @@ document.addEventListener("keydown", (e) => {
     if (rulerActive()){ prefs.ruler = false; prefs.focus = false; applyPrefs(); }
     return;
   }
-  const typing = e.target.closest?.("input,select,textarea");
+  const typing = typingInto(e.target);
   /* quiz: 1-4 answers, Enter advances */
   if ($("quizbox").classList.contains("open") && !typing){
     if (/^[1-4]$/.test(e.key)){

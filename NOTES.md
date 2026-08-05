@@ -5,6 +5,40 @@ what was chosen, why, and which candidates were rejected.
 
 ---
 
+## Fix — you couldn't type "k" in your own notes
+
+*(user-reported.)*
+
+Bare-letter shortcuts (`j`/`k` step turns, `q`/`Q` jot a question, `N` opens
+notes, `?` help, `/` focus the topic box) all guarded themselves with
+
+```js
+const typing = e.target.closest?.("input,select,textarea");
+```
+
+The notes editor is none of those — it is a **contenteditable**, because notes
+are markdown rendered live as you type. So every one of those letters was
+claimed by a shortcut and then `preventDefault()`ed out of existence:
+"knowledge" came out as "nowledge", and with the reading ruler on, arrow keys
+moved the ruler instead of the caret.
+
+The fix is one shared predicate, `typingInto(el)`, that also matches
+`[contenteditable]:not([contenteditable=false])`, used by the global shortcut
+handler and by the speech-follow cancel listener that made the same wrong
+assumption. Deliberately *not* changed: `Ctrl+K` (palette) and `Escape` are
+handled above the check and stay global — a modifier chord isn't a character
+you were trying to type.
+
+**Rejected: `e.stopPropagation()` on the editor's own keydown handler.** It
+would have fixed the notes box and left the trap armed for the next
+contenteditable anyone adds — the bug is the *definition of "typing"*, not
+where it fires. Also rejected: listing `#ntarea` by id, same reason.
+
+Verified with the stub-harness pattern (headless Edge, probe asserts
+`defaultPrevented`): 21 assertions pass after, 8 fail against `HEAD` before.
+
+---
+
 ## Feature 62 — DeepSeek as a second provider
 
 *(user-requested: the Anthropic bill had run out, and a per-turn cost roughly
