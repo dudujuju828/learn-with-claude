@@ -5,9 +5,10 @@ rake. Read `README.md` for what the app *does*; this is the operational stuff.
 
 ## Deploying — always manual
 
-**Vercel does not build on `git push`.** There is no Git integration (and the
-repo is private now, so wiring one up would also need repo access granted to
-the Vercel GitHub App). After pushing anything that touches `public/`, `api/`,
+**Vercel does not build on `git push`.** There is no Git integration wired up —
+the repo is public now, so adding one no longer needs private-repo access
+granted to the Vercel GitHub App, but until someone actually connects it the
+deploy stays manual. After pushing anything that touches `public/`, `api/`,
 or `learn_with_claude/`, the hosted app stays on the old build until you run:
 
 ```bash
